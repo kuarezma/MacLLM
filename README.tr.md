@@ -255,6 +255,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.13.1** | Hub’da gerçek GGUF dosya boyutları (HF tree API); “Sıfır KB” hatası giderildi; indirme toplamları doğru |
 | **1.13.0** | Hub dosya arama; tıklanabilir sütun sıralama; yüklü quant için **Kullan**; anlık sonuç filtresi |
 | **1.12.0** | Hub quant filtreleri (Q2–Q8, Mac uyumu), sıralama; README Markdown ve genişletme |
 | **1.11.0** | Model Hub arayüzü: quant tablosu, README + etiketler, indirme yöneticisi popover |

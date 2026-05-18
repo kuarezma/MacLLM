@@ -44,19 +44,22 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.10+)
+### Bu sürümde (1.13.1)
 
-- Markdown başlıklar (`#`–`###`) ve madde işaretli / numaralı listeler
-- Kenar çubuğunda sohbet arama (başlık + mesaj metni)
-- Aktif sohbette mesaj arama (⌘F) ve eşleşmeler arasında gezinme
+- Hub quant tablosunda gerçek dosya boyutları (GB) — Hugging Face tree API
+- “Sıfır KB” gösterimi düzeltildi; indirme ilerlemesi doğru toplam boyut kullanır
 
-### Önceki (1.9)
+### Önceki (1.13)
 
-- Canlı Markdown akışı; video API; GGUF içe aktarma UX
+- Hub arama, sütun sıralama, yüklü model için **Kullan**, canlı sonuç filtresi
 
-### Önceki (1.8)
+### Önceki (1.11–1.12)
 
-- Oturum başına sohbet dosyası; asistan Markdown; GGUF üzerine yazma onayı
+- Model Hub arayüzü, quant filtreleri, README Markdown, indirme popover
+
+### Önceki (1.8–1.10)
+
+- Oturum başına sohbet; asistan Markdown; sohbet arama; canlı akış
 
 ### Kurulum (Terminal gerekmez)
 

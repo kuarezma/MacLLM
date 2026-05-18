@@ -257,6 +257,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.13.1** | Hub shows real GGUF file sizes (HF tree API); fixes “Zero KB” in quant table; reliable download totals |
 | **1.13.0** | Hub file search; clickable column sort; **Kullan** for installed quants; live Hub result filter |
 | **1.12.0** | Hub quant filter chips (Q2–Q8, Mac-fit), sort menu; README Markdown render with expand |
 | **1.11.0** | Model Hub UI: quant table (Model / GGUF / size / download %), README + tags, download manager popover |
