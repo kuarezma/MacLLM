@@ -48,6 +48,7 @@ struct ContextUsageView: View {
             }
         }
         .buttonStyle(ModernScaleButtonStyle())
+        .appHitTarget(minWidth: 36, minHeight: 36)
         .help(isEstimate ? "Bağlam kullanımı (tahmini)" : "Bağlam kullanımı")
         .popover(isPresented: $showDetail, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 10) {

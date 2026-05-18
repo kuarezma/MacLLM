@@ -50,34 +50,6 @@ struct HubQuantRowView: View {
             downloadCell
         }
         .padding(.vertical, 6)
-        .popover(isPresented: $showInfo, arrowEdge: .leading) {
-            let assessment = HubQuantAdvisor.assess(file: file, repoId: repo.repoId, profile: profile)
-            VStack(alignment: .leading, spacing: 10) {
-                Text(file.filename)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                AppTheme.fitBadge(assessment.fit)
-                Text(assessment.fitTitle)
-                    .font(.caption.weight(.medium))
-                Text(assessment.fitNote)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if let quant = assessment.quantLabel {
-                    Text(assessment.quantSummary)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Divider()
-                HStack {
-                    Text("Dosya: \(ModelMetadataParser.formatFileSize(bytes: file.sizeBytes))")
-                    Text("RAM: ~\(assessment.estimatedRamGB) GB")
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-            .padding(12)
-            .frame(maxWidth: 300)
-        }
     }
 
     @ViewBuilder
@@ -96,13 +68,49 @@ struct HubQuantRowView: View {
     @ViewBuilder
     private var infoButton: some View {
         Button {
-            showInfo = true
+            showInfo.toggle()
         } label: {
             Image(systemName: "info.circle")
+                .font(.body)
                 .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
+        .appHitTarget(minWidth: 28, minHeight: 28)
         .help("Model bilgisi")
+        .popover(isPresented: $showInfo, arrowEdge: .bottom) {
+            infoPopoverContent
+        }
+    }
+
+    @ViewBuilder
+    private var infoPopoverContent: some View {
+        let assessment = HubQuantAdvisor.assess(file: file, repoId: repo.repoId, profile: profile)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(file.filename)
+                .font(.caption)
+                .fontWeight(.semibold)
+            AppTheme.fitBadge(assessment.fit)
+            Text(assessment.fitTitle)
+                .font(.caption.weight(.medium))
+            Text(assessment.fitNote)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if assessment.quantLabel != nil {
+                Text(assessment.quantSummary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Divider()
+            HStack {
+                Text("Dosya: \(ModelMetadataParser.formatFileSize(bytes: file.sizeBytes))")
+                Text("RAM: ~\(assessment.estimatedRamGB) GB")
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: 300)
     }
 
     @ViewBuilder

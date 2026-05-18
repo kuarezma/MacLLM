@@ -208,7 +208,8 @@ struct ChatView: View {
                         model.showCatalog = true
                     }
                     .font(.caption.weight(.semibold))
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.plain)
+                    .appHitTarget(minWidth: 44, minHeight: 28)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -228,9 +229,7 @@ struct ChatView: View {
                     maxTokens: Int(model.settings.contextLength),
                     isEstimate: model.contextTokenCountIsEstimate
                 )
-                .frame(width: 32, height: 32)
                 sendButton(model: model)
-                    .frame(width: 36, height: 36)
             }
             .padding(.horizontal, AppTheme.contentPadding)
             .padding(.top, 12)
@@ -305,6 +304,7 @@ struct ChatView: View {
                 .frame(width: 32, height: 32)
         }
         .buttonStyle(AccentIconButtonStyle())
+        .appHitTarget(minWidth: 36, minHeight: 36)
         .help(help)
     }
 
@@ -317,13 +317,14 @@ struct ChatView: View {
                 ZStack {
                     Circle()
                         .fill(Color.red.opacity(0.15))
-                        .frame(width: 38, height: 38)
+                        .frame(width: 36, height: 36)
                     Image(systemName: "stop.fill")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.red)
                 }
             }
             .buttonStyle(ModernScaleButtonStyle())
+            .appHitTarget(minWidth: 40, minHeight: 40)
             .help("Durdur")
             .keyboardShortcut(.escape, modifiers: [])
         } else {
@@ -332,12 +333,12 @@ struct ChatView: View {
                     if canSend {
                         Circle()
                             .fill(AppTheme.accentGradient)
-                            .frame(width: 38, height: 38)
+                            .frame(width: 36, height: 36)
                             .shadow(color: AppTheme.glowAccent, radius: 8, y: 2)
                     } else {
                         Circle()
                             .fill(Color.primary.opacity(0.08))
-                            .frame(width: 38, height: 38)
+                            .frame(width: 36, height: 36)
                     }
                     Image(systemName: "arrow.up")
                         .font(.system(size: 16, weight: .bold))
@@ -345,6 +346,7 @@ struct ChatView: View {
                 }
             }
             .buttonStyle(ModernScaleButtonStyle())
+            .appHitTarget(minWidth: 40, minHeight: 40)
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: [.command])
         }

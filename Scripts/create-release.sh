@@ -44,7 +44,13 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.6)
+### Bu sürümde (1.14.7)
+
+- Composer buton düzeltmesi: + ekle, gönder, durdur, bağlam halkası tıklama alanı
+- İndirme toolbar bildirimi: aç/kapa toggle, badge tıklamayı engellemez
+- Model Hub quant satırı: info popover doğru konumda açılır
+
+### Önceki (1.14.6)
 
 - Modern arayüz: cam efektler, gradient accent, spring animasyonlar
 - Yenilenen sidebar, composer, hızlı promptlar ve durum çubuğu

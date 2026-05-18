@@ -50,8 +50,10 @@ struct DownloadManagerPopover: View {
                     Image(systemName: "xmark")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
+                .appHitTarget(minWidth: 28, minHeight: 28)
                 .help("İndirmeyi iptal et")
             }
 
@@ -89,13 +91,18 @@ struct DownloadToolbarButton: View {
         }.count
     }
 
+    private var shouldShowButton: Bool {
+        downloadService.hasActiveTransfers || inProgressCount > 0 || isPresented
+    }
+
     var body: some View {
-        if downloadService.hasActiveTransfers || inProgressCount > 0 {
+        if shouldShowButton {
             Button {
-                isPresented = true
+                isPresented.toggle()
             } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 18))
                     if inProgressCount > 0 {
                         Text("\(inProgressCount)")
                             .font(.system(size: 9, weight: .bold))
@@ -103,9 +110,13 @@ struct DownloadToolbarButton: View {
                             .padding(3)
                             .background(Circle().fill(.red))
                             .offset(x: 6, y: -6)
+                            .allowsHitTesting(false)
                     }
                 }
+                .padding(4)
             }
+            .buttonStyle(.plain)
+            .appHitTarget(minWidth: 32, minHeight: 32)
             .help("İndirmeler")
             .popover(isPresented: $isPresented, arrowEdge: .bottom) {
                 DownloadManagerPopover(downloadService: downloadService)

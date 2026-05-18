@@ -58,6 +58,12 @@ extension View {
             .ignoresSafeArea()
         }
     }
+
+    /// Minimum tıklama alanı — macOS'ta dar ikon hedeflerini genişletir.
+    func appHitTarget(minWidth: CGFloat = 32, minHeight: CGFloat = 32) -> some View {
+        frame(minWidth: minWidth, minHeight: minHeight)
+            .contentShape(Rectangle())
+    }
 }
 
 // MARK: - Button styles
@@ -67,6 +73,7 @@ struct ModernScaleButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .contentShape(Rectangle())
             .scaleEffect(configuration.isPressed ? pressedScale : 1)
             .animation(AppTheme.springSnappy, value: configuration.isPressed)
     }
@@ -77,6 +84,7 @@ struct SidebarNavButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .contentShape(Rectangle())
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
             .background {
@@ -101,6 +109,7 @@ struct PromptChipButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous))
             .background {
                 RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous)
                     .fill(
@@ -130,6 +139,7 @@ struct AccentIconButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .contentShape(Circle())
             .background {
                 Circle()
                     .fill(
