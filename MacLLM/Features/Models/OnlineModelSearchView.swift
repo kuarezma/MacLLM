@@ -83,7 +83,7 @@ struct OnlineModelSearchView: View {
         }
         .padding(10)
         .background(.quaternary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.searchFieldRadius))
         .padding()
     }
 
@@ -97,11 +97,18 @@ struct OnlineModelSearchView: View {
     }
 
     private func runSearch() async {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.count < 2 {
+            results = []
+            searchError = nil
+            isSearching = false
+            return
+        }
         isSearching = true
         searchError = nil
         defer { isSearching = false }
         do {
-            results = try await HuggingFaceHubService.shared.searchModels(query: searchText)
+            results = try await HuggingFaceHubService.shared.searchModels(query: query)
         } catch {
             searchError = error.localizedDescription
         }
@@ -162,7 +169,7 @@ private struct OnlineModelRow: View {
     let model: HFModelSummary
     let profile: MacSystemProfile
 
-    private var fitBadge: (String, Color)? {
+    private var fitLevel: ModelFitLevel? {
         let entry = CatalogEntry(
             id: model.id,
             name: model.repoId,
@@ -170,16 +177,10 @@ private struct OnlineModelRow: View {
             repoId: model.repoId,
             filename: "model.Q4_K_M.gguf",
             estimatedSizeBytes: 2_000_000_000,
-            chatTemplate: "chatml",
+            chatTemplate: HuggingFaceHubService.guessChatTemplate(repoId: model.repoId, filename: "model.Q4_K_M.gguf"),
             ramHintGB: estimateRamHint()
         )
-        let scored = ModelRecommendationService.shared.recommend(catalog: [entry], profile: profile).first
-        guard let scored else { return nil }
-        switch scored.fit {
-        case .ideal: return ("Uygun", .green)
-        case .workable: return ("Çalışır", .orange)
-        case .notRecommended: return ("Ağır", .red)
-        }
+        return ModelRecommendationService.shared.recommend(catalog: [entry], profile: profile).first?.fit
     }
 
     private func estimateRamHint() -> Int {
@@ -199,12 +200,7 @@ private struct OnlineModelRow: View {
                         .fontWeight(.semibold)
                         .lineLimit(1)
                     if model.gated {
-                        Text("Gated")
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.orange.opacity(0.2))
-                            .clipShape(Capsule())
+                        AppTheme.badge("Gated", color: .orange)
                     }
                 }
                 if let author = ModelMetadataParser.repoAuthor(model.repoId) {
@@ -228,36 +224,18 @@ private struct OnlineModelRow: View {
                 if !model.displayTags.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(model.displayTags, id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(.quaternary)
-                                .clipShape(Capsule())
+                            AppTheme.tagBadge(tag)
                         }
                         if let param = model.parameterSize {
-                            Text(param)
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(.blue.opacity(0.12))
-                                .clipShape(Capsule())
+                            AppTheme.badge(param, color: .blue)
                         }
                     }
                 }
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 6) {
-                if let (label, color) = fitBadge {
-                    Text(label)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(color.opacity(0.15))
-                        .foregroundStyle(color)
-                        .clipShape(Capsule())
+                if let fitLevel {
+                    AppTheme.fitBadge(fitLevel)
                 }
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.tertiary)
@@ -443,7 +421,7 @@ private struct GGUFFileRow: View {
             repoId: repo.repoId,
             filename: file.filename,
             estimatedSizeBytes: max(file.sizeBytes, 1),
-            chatTemplate: "chatml",
+            chatTemplate: HuggingFaceHubService.guessChatTemplate(repoId: repo.repoId, filename: file.filename),
             ramHintGB: Int(ceil(Double(file.sizeBytes) / 1_073_741_824.0 * 1.4))
         )
         return ModelRecommendationService.shared.recommend(catalog: [entry], profile: profile).first?.fitNote
@@ -460,24 +438,12 @@ private struct GGUFFileRow: View {
                     .font(.subheadline)
                     .lineLimit(2)
                 if isRecommended {
-                    Text("Önerilen")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.green.opacity(0.15))
-                        .foregroundStyle(.green)
-                        .clipShape(Capsule())
+                    AppTheme.badge("Önerilen", color: .green)
                 }
             }
             HStack(spacing: 8) {
                 if let quant = file.quantLabel {
-                    Text(quant)
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.quaternary)
-                        .clipShape(Capsule())
+                    AppTheme.tagBadge(quant)
                 }
                 Text(ByteCountFormatter.string(fromByteCount: file.sizeBytes, countStyle: .file))
                     .font(.caption)

@@ -16,7 +16,7 @@ struct ChatView: View {
                 } description: {
                     Text("Sol panelden bir model seçin veya katalogdan yeni model ekleyin.")
                 } actions: {
-                    Button("Model Ekle") { model.showCatalog = true }
+                    Button("Model Ekle…") { model.showCatalog = true }
                 }
             } else if model.isLoadingModel || !inferenceService.isModelLoaded {
                 ContentUnavailableView {
@@ -89,8 +89,15 @@ struct ChatView: View {
             }
         }
         .navigationTitle(model.selectedModel?.name ?? "Sohbet")
-        .navigationSubtitle(model.currentSession.title)
+        .navigationSubtitle(navigationSubtitle)
         .onAppear { inputFocused = true }
+    }
+
+    private var navigationSubtitle: String {
+        if inferenceService.isGenerating {
+            return "Yanıt üretiliyor…"
+        }
+        return appModel.currentSession.title
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool) {

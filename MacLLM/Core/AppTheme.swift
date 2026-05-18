@@ -28,4 +28,37 @@ enum AppTheme {
             .background(color.opacity(0.15))
             .clipShape(Capsule())
     }
+
+    static func fitBadge(_ fit: ModelFitLevel) -> some View {
+        badge(fit.displayName, color: fit.tintColor)
+    }
+
+    static func tagBadge(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .padding(.horizontal, badgeHPadding)
+            .padding(.vertical, badgeVPadding)
+            .background(.quaternary)
+            .clipShape(Capsule())
+    }
+
+    static let searchFieldRadius: CGFloat = 8
+}
+
+extension ModelFitLevel {
+    var displayName: String {
+        switch self {
+        case .ideal: return "En uygun"
+        case .workable: return "Dikkat"
+        case .notRecommended: return "Ağır"
+        }
+    }
+
+    var tintColor: Color {
+        switch self {
+        case .ideal: return .green
+        case .workable: return .orange
+        case .notRecommended: return .red
+        }
+    }
 }

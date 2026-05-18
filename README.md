@@ -235,6 +235,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.5.1** | Unified fit badges, faster download panel cleanup, catalog UX, search debounce, generating subtitle |
 | **1.5.0** | UI polish: shared theme, session delete/selection, auto-save settings, cleaner downloads panel, status auto-dismiss |
 | **1.4.3** | ChatML stop tokens (`im_end`, `im_start`) to prevent control-token leaks in replies |
 | **1.4.2** | Fix Mistral v0.3 chat: map GGUF Jinja to `mistral-v3` builtin (avoid Llama-2 mis-detection) |

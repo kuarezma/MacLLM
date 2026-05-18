@@ -180,41 +180,17 @@ struct CatalogEntryRow: View {
     var recommendation: ScoredCatalogEntry?
     let isInstalled: Bool
 
-    private var fitBadge: (text: String, color: Color)? {
-        guard let recommendation else { return nil }
-        switch recommendation.fit {
-        case .ideal:
-            return ("En uygun", .green)
-        case .workable:
-            return ("Dikkat", .orange)
-        case .notRecommended:
-            return ("Ağır", .red)
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(entry.name)
                     .font(.headline)
                 Spacer()
-                if let fitBadge {
-                    Text(fitBadge.text)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(fitBadge.color.opacity(0.15))
-                        .foregroundStyle(fitBadge.color)
-                        .clipShape(Capsule())
+                if let recommendation {
+                    AppTheme.fitBadge(recommendation.fit)
                 }
                 if isInstalled {
-                    Text("Yüklü")
-                        .font(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(.green.opacity(0.2))
-                        .clipShape(Capsule())
+                    AppTheme.badge("Yüklü", color: .green)
                 }
             }
             Text(entry.description)
@@ -262,7 +238,10 @@ struct CatalogEntryRow: View {
             } else {
                 Button("Kullan") {
                     if let model = appModel.installedModels.first(where: { $0.id == entry.id }) {
-                        Task { await appModel.selectModel(model) }
+                        Task {
+                            await appModel.selectModel(model)
+                            appModel.showCatalog = false
+                        }
                     }
                 }
                 .buttonStyle(.borderedProminent)

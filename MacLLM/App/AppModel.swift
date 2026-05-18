@@ -230,10 +230,14 @@ final class AppModel {
     }
 
     func newChat() {
+        if inferenceService.isGenerating {
+            stopGeneration()
+        }
         if !currentSession.messages.isEmpty {
             Task { try? await saveCurrentSession() }
         }
         currentSession = ChatSession(modelId: selectedModelId)
+        setStatusMessage(nil)
     }
 
     func saveCurrentSession() async throws {

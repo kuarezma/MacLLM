@@ -175,5 +175,8 @@ struct ModelRowView: View {
             }
         }
         .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius))
     }
 }

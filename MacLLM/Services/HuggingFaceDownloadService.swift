@@ -435,9 +435,17 @@ final class HuggingFaceDownloadService: ObservableObject {
         ctx.continuation = nil
     }
 
-    private func scheduleRemoval(entryId: String, after seconds: TimeInterval = 30) {
+    private func scheduleRemoval(entryId: String, after seconds: TimeInterval? = nil) {
+        let delay: TimeInterval
+        if let seconds {
+            delay = seconds
+        } else if let item = activeDownloads.first(where: { $0.id == entryId }) {
+            delay = item.state == .completed ? 8 : 25
+        } else {
+            delay = 15
+        }
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(seconds))
+            try? await Task.sleep(for: .seconds(delay))
             activeDownloads.removeAll { item in
                 item.id == entryId && (item.state == .completed || item.state == .failed || item.state == .cancelled)
             }

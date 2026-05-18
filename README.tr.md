@@ -235,6 +235,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.5.1** | Birleşik uyum rozetleri, indirme paneli temizliği, katalog/arama UX, üretim alt başlığı |
 | **1.5.0** | Arayüz cilası: ortak tema, sohbet silme/seçim, ayarları otomatik kaydetme, indirme paneli, durum çubuğu |
 | **1.4.3** | ChatML stop dizileri (`im_end`, `im_start`) — yanıtta kontrol token sızıntısı giderildi |
 | **1.4.2** | Mistral v0.3 sohbet düzeltmesi: GGUF Jinja → `mistral-v3` (Llama-2 yanlış eşlemesi giderildi) |

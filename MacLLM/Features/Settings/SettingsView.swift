@@ -151,7 +151,7 @@ struct SettingsView: View {
         }
 
         Section {
-            Text("Ayarlar penceresine menü çubuğundan **MacLLM → Ayarlar…** (⌘,) ile de ulaşabilirsiniz.")
+            Text("Değişiklikler pencere kapanırken veya **Kaydet** (⌘S) ile uygulanır; model ayarları değişince seçili model yeniden yüklenir.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
