@@ -177,9 +177,9 @@ actor LlamaContext {
     }
 
     func applyChatTemplate(messages: [ChatMessage], templateName: String) throws -> String {
-        let tmpl = chatTemplate.isEmpty
-            ? ChatTemplateResolver.resolveBuiltin(templateName)
-            : chatTemplate
+        let tmpl = ChatTemplateResolver.resolveBuiltin(
+            chatTemplate.isEmpty ? templateName : chatTemplate
+        )
         var cMessages: [llama_chat_message] = messages.map { msg in
             llama_chat_message(
                 role: (msg.role.rawValue as NSString).utf8String,

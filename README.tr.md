@@ -235,6 +235,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.4.2** | Mistral v0.3 sohbet düzeltmesi: GGUF Jinja → `mistral-v3` (Llama-2 yanlış eşlemesi giderildi) |
 | **1.4.1** | Mistral instruct sohbet şablonu düzeltmesi (`mistral-v3`), modele özel stop dizileri, yüklü modellerde şablon onarımı |
 | **1.4.0** | Paralel HF indirme, aktif indirmeler paneli, zengin çevrimiçi katalog, GGUF doğrulama, RAM’e göre GPU, akış performansı |
 | **1.3.2** | Uygulama içi GitHub güncellemeleri; Settings Swift 6 CI düzeltmesi |
