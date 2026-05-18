@@ -231,10 +231,13 @@ private struct GGUFFileRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            if let download, download.state == .downloading {
-                ProgressView(value: download.progress)
-                Text(String(format: "%.0f%% indiriliyor", download.progress * 100))
-                    .font(.caption2)
+            if let download, download.state == .downloading || download.state == .paused {
+                DownloadProgressView(
+                    download: download,
+                    onPause: { HuggingFaceDownloadService.shared.pauseDownload(id: download.id) },
+                    onResume: { HuggingFaceDownloadService.shared.resumeDownload(id: download.id) },
+                    onCancel: { HuggingFaceDownloadService.shared.cancelDownload(id: download.id) }
+                )
             } else if download?.state == .completed {
                 Label("İndirildi", systemImage: "checkmark.circle.fill")
                     .font(.caption)

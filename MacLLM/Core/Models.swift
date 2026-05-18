@@ -111,7 +111,9 @@ struct DownloadTaskInfo: Identifiable {
     let catalogEntry: CatalogEntry
     var progress: Double
     var bytesReceived: Int64
-    var totalBytes: Int64?
+    var totalBytes: Int64
+    var bytesPerSecond: Double
+    var estimatedSecondsRemaining: TimeInterval?
     var state: DownloadState
     var errorMessage: String?
 }
@@ -119,6 +121,7 @@ struct DownloadTaskInfo: Identifiable {
 enum DownloadState: String {
     case queued
     case downloading
+    case paused
     case completed
     case failed
     case cancelled

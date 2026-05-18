@@ -227,17 +227,13 @@ struct CatalogEntryRow: View {
 
             if !isInstalled {
                 if let download = downloadService.activeDownloads.first(where: { $0.id == entry.id }),
-                   download.state == .downloading {
-                    ProgressView(value: download.progress)
-                    HStack {
-                        Text(String(format: "%.0f%%", download.progress * 100))
-                        Spacer()
-                        Button("İptal") {
-                            downloadService.cancelDownload(id: entry.id)
-                        }
-                        .font(.caption)
-                    }
-                    .font(.caption2)
+                   download.state == .downloading || download.state == .paused {
+                    DownloadProgressView(
+                        download: download,
+                        onPause: { downloadService.pauseDownload(id: entry.id) },
+                        onResume: { downloadService.resumeDownload(id: entry.id) },
+                        onCancel: { downloadService.cancelDownload(id: entry.id) }
+                    )
                 } else if let download = downloadService.activeDownloads.first(where: { $0.id == entry.id }),
                           download.state == .failed {
                     Text(download.errorMessage ?? "İndirme başarısız")

@@ -66,10 +66,15 @@ MacLLM, [llama.cpp](https://github.com/ggml-org/llama.cpp) ve **Metal GPU** ile 
 
 **Son sürüm:** [github.com/kuarezma/MacLLM/releases/latest](https://github.com/kuarezma/MacLLM/releases/latest)
 
-1. [Releases](https://github.com/kuarezma/MacLLM/releases/latest) sayfasından güncel `MacLLM-*-macOS-arm64.zip` dosyasını indirin (yalnızca Apple Silicon)
-2. Açın ve **MacLLM.app** dosyasını Uygulamalar’a taşıyın
-3. İlk açılış: **sağ tık → Aç** (uygulama henüz notarize edilmedi)
-4. **Çevrimiçi Model** ile Hugging Face’ten GGUF indirin, sohbet edin
+### Terminal olmadan kurulum (önerilen)
+
+1. **`MacLLM-*-macOS-arm64.dmg`** dosyasını indirin
+2. DMG’yi açın
+3. **MacLLM** simgesini **Uygulamalar** klasörüne sürükleyin
+4. Uygulamalar’dan **MacLLM**’i açın (ilk sefer: **sağ tık → Aç**)
+5. **Model Ekle** ile GGUF indirin, sohbet edin
+
+İsterseniz `.zip` arşivinden de elle kopyalayabilirsiniz.
 
 > Modeller indirmede **yoktur** (~4 MB uygulama). Modelleri uygulama içinden indirirsiniz.
 

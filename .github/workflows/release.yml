@@ -29,6 +29,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            dist/MacLLM-*-macOS-arm64.dmg
             dist/MacLLM-*-macOS-arm64.zip
             dist/SHA256SUMS.txt
           generate_release_notes: true
@@ -39,8 +40,8 @@ jobs:
 
             ### Install
 
-            1. Download **MacLLM-*-macOS-arm64.zip** below
-            2. Unzip and drag **MacLLM.app** to Applications
+            1. Download **MacLLM-*-macOS-arm64.dmg** (or zip)
+            2. Open DMG and drag **MacLLM** to **Applications**
             3. First launch: **right-click → Open** (unsigned build)
             4. Use **Online Model** to download a GGUF from Hugging Face
 

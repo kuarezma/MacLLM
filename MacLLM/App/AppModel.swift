@@ -111,6 +111,8 @@ final class AppModel {
                 await selectModel(model)
             }
             statusMessage = "\(entry.name) indirildi"
+        } catch is CancellationError {
+            statusMessage = "İndirme iptal edildi"
         } catch {
             statusMessage = "İndirme hatası: \(error.localizedDescription)"
         }

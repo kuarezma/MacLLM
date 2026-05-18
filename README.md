@@ -66,10 +66,15 @@ Typical guidance:
 
 **Latest release:** [github.com/kuarezma/MacLLM/releases/latest](https://github.com/kuarezma/MacLLM/releases/latest)
 
-1. Download the latest `MacLLM-*-macOS-arm64.zip` from [Releases](https://github.com/kuarezma/MacLLM/releases/latest) (Apple Silicon only)
-2. Unzip and move **MacLLM.app** to Applications
-3. First open: **right-click → Open** (app is not notarized yet)
-4. Use **Online Model** to download a GGUF model, then chat
+### Install without Terminal (recommended)
+
+1. Download **`MacLLM-*-macOS-arm64.dmg`**
+2. Open the DMG window
+3. Drag **MacLLM** onto the **Applications** folder alias
+4. Open **MacLLM** from Applications (first time: **right-click → Open**)
+5. Use **Model Add** to download a GGUF model, then chat
+
+A `.zip` is also available if you prefer to copy the app manually.
 
 > Models are **not** included in the download (~4 MB app). You download models from Hugging Face inside the app.
 
