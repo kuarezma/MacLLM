@@ -51,25 +51,32 @@ struct HubQuantRowView: View {
         }
         .padding(.vertical, 6)
         .popover(isPresented: $showInfo, arrowEdge: .leading) {
-            VStack(alignment: .leading, spacing: 8) {
+            let assessment = HubQuantAdvisor.assess(file: file, repoId: repo.repoId, profile: profile)
+            VStack(alignment: .leading, spacing: 10) {
                 Text(file.filename)
                     .font(.caption)
                     .fontWeight(.semibold)
-                if let quant = file.quantLabel {
-                    Text("Quant: \(quant)")
-                        .font(.caption)
-                }
-                if let note = fitNote {
-                    Text(note)
-                        .font(.caption)
+                AppTheme.fitBadge(assessment.fit)
+                Text(assessment.fitTitle)
+                    .font(.caption.weight(.medium))
+                Text(assessment.fitNote)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let quant = assessment.quantLabel {
+                    Text(assessment.quantSummary)
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                Text("~\(catalogEntry.ramHintGB) GB RAM önerilir")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                Divider()
+                HStack {
+                    Text("Dosya: \(ModelMetadataParser.formatFileSize(bytes: file.sizeBytes))")
+                    Text("RAM: ~\(assessment.estimatedRamGB) GB")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
             .padding(12)
-            .frame(maxWidth: 280)
+            .frame(maxWidth: 300)
         }
     }
 

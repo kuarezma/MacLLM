@@ -126,6 +126,8 @@ SOURCES=(
   MacLLM/Features/Models/ActiveDownloadsPanel.swift
   MacLLM/Features/Models/ModelCatalogView.swift
   MacLLM/Features/Models/OnlineModelSearchView.swift
+  MacLLM/Services/HubQuantAdvisor.swift
+  MacLLM/Features/Models/HubQuantFitCard.swift
   MacLLM/Features/Models/ModelHubBrowserView.swift
   MacLLM/Features/Models/ModelHubDetailView.swift
   MacLLM/Features/Models/HubQuantRowView.swift

@@ -338,14 +338,20 @@ struct HubDetailPane: View {
     private var gated: Bool { detail?.gated == true || repo.gated }
 
     private var fitLevelsByFileId: [String: ModelFitLevel] {
-        var map: [String: ModelFitLevel] = [:]
-        for file in files {
-            let entry = catalogEntry(for: file)
-            if let fit = ModelRecommendationService.shared.recommend(catalog: [entry], profile: appModel.systemProfile).first?.fit {
-                map[file.id] = fit
-            }
-        }
-        return map
+        Dictionary(uniqueKeysWithValues: assessmentsByFileId.map { ($0.key, $0.value.fit) })
+    }
+
+    private var assessmentsByFileId: [String: HubQuantAssessment] {
+        Dictionary(uniqueKeysWithValues: files.map { file in
+            (
+                file.id,
+                HubQuantAdvisor.assess(
+                    file: file,
+                    repoId: repo.repoId,
+                    profile: appModel.systemProfile
+                )
+            )
+        })
     }
 
     private var recommendedFile: HFGGUFile? {
@@ -483,10 +489,14 @@ struct HubDetailPane: View {
     @ViewBuilder
     private var downloadSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Download Options")
+            Text("İndirme Seçenekleri")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(AppTheme.secondaryText)
                 .textCase(.uppercase)
+
+            Text("Quant seçin — dosya boyutu ve \(appModel.systemProfile.physicalMemoryGB) GB RAM'inize göre uygunluk gösterilir.")
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
 
             if files.isEmpty {
                 Text("Bu depoda .gguf dosyası bulunamadı.")
@@ -498,6 +508,9 @@ struct HubDetailPane: View {
                     .foregroundStyle(.orange)
             } else {
                 downloadPicker
+                if let file = recommendedFile, let assessment = assessmentsByFileId[file.id] {
+                    HubQuantFitCard(assessment: assessment, profile: appModel.systemProfile)
+                }
                 downloadActions
             }
         }
@@ -510,35 +523,46 @@ struct HubDetailPane: View {
     private var downloadPicker: some View {
         Menu {
             ForEach(files) { file in
+                let assessment = assessmentsByFileId[file.id]
                 Button {
                     selectedFileId = file.id
                 } label: {
-                    HStack {
-                        Text(HubFileListLogic.displayName(for: file))
-                        Spacer()
-                        Text(ModelMetadataParser.formatFileSize(bytes: file.sizeBytes))
-                        if fitLevelsByFileId[file.id] == .notRecommended {
-                            Text("⚠")
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(HubFileListLogic.displayName(for: file))
+                            Spacer()
+                            Text(ModelMetadataParser.formatFileSize(bytes: file.sizeBytes))
+                        }
+                        if let assessment {
+                            HStack(spacing: 6) {
+                                Text(assessment.fitTitle)
+                                Text("· ~\(assessment.estimatedRamGB) GB RAM")
+                            }
+                            .font(.caption2)
                         }
                     }
                 }
             }
         } label: {
             HStack {
-                if let file = recommendedFile {
-                    HStack(spacing: 8) {
-                        AppTheme.badge("GGUF", color: .blue)
-                        Text(HubFileListLogic.displayName(for: file))
-                            .font(.subheadline.weight(.medium))
-                        Spacer()
-                        Text(ModelMetadataParser.formatFileSize(bytes: file.sizeBytes))
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(AppTheme.secondaryText)
-                        if fitLevelsByFileId[file.id] == .notRecommended {
-                            Text("Bu Mac için muhtemelen çok büyük")
-                                .font(.caption2)
-                                .foregroundStyle(.red)
+                if let file = recommendedFile, let assessment = assessmentsByFileId[file.id] {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            AppTheme.badge("GGUF", color: .blue)
+                            if let quant = file.quantLabel {
+                                AppTheme.badge(quant, color: AppTheme.accent)
+                            }
+                            Text(HubFileListLogic.displayName(for: file))
+                                .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
+                            Spacer()
+                            Text(ModelMetadataParser.formatFileSize(bytes: file.sizeBytes))
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundStyle(AppTheme.secondaryText)
                         }
+                        Text(assessment.fitTitle)
+                            .font(.caption)
+                            .foregroundStyle(assessment.fit == .notRecommended ? .red : AppTheme.secondaryText)
                     }
                 }
                 Image(systemName: "chevron.up.chevron.down")
@@ -655,12 +679,33 @@ struct HubDetailPane: View {
             let (fetchedDetail, fetchedReadme) = try await (detailTask, readmeTask)
             detail = fetchedDetail
             readmeText = fetchedReadme
+            if let best = recommendedFileIdAfterLoad(files: fetchedDetail.files) {
+                selectedFileId = best
+            }
             if fetchedDetail.files.isEmpty {
                 loadError = "Bu depoda .gguf dosyası bulunamadı."
             }
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    private func recommendedFileIdAfterLoad(files: [HFGGUFile]) -> String? {
+        guard !files.isEmpty else { return nil }
+        let fitLevels = Dictionary(uniqueKeysWithValues: files.map { file in
+            let fit = HubQuantAdvisor.assess(
+                file: file,
+                repoId: repo.repoId,
+                profile: appModel.systemProfile
+            ).fit
+            return (file.id, fit)
+        })
+        return HubFileListLogic.filterAndSort(
+            files: files,
+            filter: .all,
+            sort: .recommended,
+            fitLevels: fitLevels
+        ).first?.id
     }
 
     private func download(_ file: HFGGUFile) async {
@@ -676,7 +721,7 @@ struct HubDetailPane: View {
             filename: file.filename,
             estimatedSizeBytes: max(file.sizeBytes, 1),
             chatTemplate: HuggingFaceHubService.guessChatTemplate(repoId: repo.repoId, filename: file.filename),
-            ramHintGB: Int(ceil(Double(file.sizeBytes) / 1_073_741_824.0 * 1.4))
+            ramHintGB: HubQuantAdvisor.estimatedRamGB(for: file)
         )
     }
 }
