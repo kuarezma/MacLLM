@@ -21,6 +21,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     }
 }
 
+@MainActor
 struct SettingsView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(AppUpdateController.self) private var appUpdate
