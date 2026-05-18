@@ -187,6 +187,7 @@ final class HuggingFaceHubService: Sendable {
         if haystack.contains("gemma-2") || haystack.contains("gemma2") { return "gemma" }
         if haystack.contains("gemma") { return "gemma" }
         if haystack.contains("qwen2.5") || haystack.contains("qwen2") || haystack.contains("qwen") { return "chatml" }
+        if haystack.contains("qwopus") || haystack.contains("opus") { return "chatml" }
         if haystack.contains("deepseek") { return "chatml" }
         if haystack.contains("granite") { return "chatml" }
         return "chatml"

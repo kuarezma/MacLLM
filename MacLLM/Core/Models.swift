@@ -178,7 +178,7 @@ struct InferenceSettings: Codable, Equatable {
         gpuLayers: Int32 = -1,
         threadCount: Int32 = Int32(max(1, min(8, ProcessInfo.processInfo.processorCount - 2))),
         systemPrompt: String = "",
-        stopSequences: [String] = ["</s>", "<|eot_id|>"]
+        stopSequences: [String] = ["</s>", "<|eot_id|>", "<|" + "im_end" + "|>", "<|" + "im_start" + "|>"]
     ) {
         self.temperature = temperature
         self.topP = topP
@@ -217,7 +217,7 @@ struct InferenceSettings: Codable, Equatable {
             ?? Int32(max(1, min(8, ProcessInfo.processInfo.processorCount - 2)))
         systemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt) ?? ""
         stopSequences = try c.decodeIfPresent([String].self, forKey: .stopSequences)
-            ?? ["</s>", "<|eot_id|>"]
+            ?? ["</s>", "<|eot_id|>", "<|" + "im_end" + "|>", "<|" + "im_start" + "|>"]
     }
 
     /// Ollama varsayılanlarına yakın profil.

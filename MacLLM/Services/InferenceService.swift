@@ -84,27 +84,49 @@ final class InferenceService: ObservableObject {
                     var generated = ""
                     var emittedCount = 0
 
+                    func emitUpToStop() -> Bool {
+                        for stop in stops where generated.contains(stop) {
+                            if let range = generated.range(of: stop) {
+                                let trimmed = ChatTemplateResolver.trimGeneratedLeakage(
+                                    String(generated[..<range.lowerBound]),
+                                    template: resolvedTemplate
+                                )
+                                if trimmed.count > emittedCount {
+                                    let start = trimmed.index(trimmed.startIndex, offsetBy: emittedCount)
+                                    continuation.yield(String(trimmed[start...]))
+                                }
+                                return true
+                            }
+                        }
+                        return false
+                    }
+
                     while await !llamaContext.is_done {
                         try Task.checkCancellation()
                         let chunk = try await llamaContext.completionLoop()
                         guard !chunk.isEmpty else { continue }
 
                         generated += chunk
-                        var hitStop = false
-                        for stop in stops where generated.contains(stop) {
-                            if let range = generated.range(of: stop) {
-                                let trimmed = String(generated[..<range.lowerBound])
-                                if trimmed.count > emittedCount {
-                                    let start = trimmed.index(trimmed.startIndex, offsetBy: emittedCount)
-                                    continuation.yield(String(trimmed[start...]))
-                                }
-                                hitStop = true
-                                break
+                        if emitUpToStop() { break }
+
+                        let safe = ChatTemplateResolver.trimGeneratedLeakage(generated, template: resolvedTemplate)
+                        if safe.count < generated.count {
+                            if safe.count > emittedCount {
+                                let start = safe.index(safe.startIndex, offsetBy: emittedCount)
+                                continuation.yield(String(safe[start...]))
                             }
+                            break
                         }
-                        if hitStop { break }
                         continuation.yield(chunk)
                         emittedCount = generated.count
+                    }
+
+                    if !generated.isEmpty {
+                        let finalText = ChatTemplateResolver.trimGeneratedLeakage(generated, template: resolvedTemplate)
+                        if finalText.count > emittedCount {
+                            let start = finalText.index(finalText.startIndex, offsetBy: emittedCount)
+                            continuation.yield(String(finalText[start...]))
+                        }
                     }
                     continuation.finish()
                 } catch {
