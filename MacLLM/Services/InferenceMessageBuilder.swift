@@ -13,7 +13,7 @@ enum InferenceMessageBuilder {
         messages: [ChatMessage],
         sessionId: UUID
     ) -> InferencePayload {
-        var prepared = messages
+        var prepared = messages.map { expandDocumentText(in: $0) }
         var mediaPaths: [String] = []
 
         guard let userIndex = prepared.lastIndex(where: { $0.role == .user }) else {
@@ -43,5 +43,24 @@ enum InferenceMessageBuilder {
         }
 
         return InferencePayload(messages: prepared, mediaPaths: mediaPaths)
+    }
+
+    /// Çıkarılan belge metnini yalnızca çıkarım isteğine ekler; sohbet geçmişi görünümü değişmez.
+    private static func expandDocumentText(in message: ChatMessage) -> ChatMessage {
+        guard message.role == .user else { return message }
+        var content = message.content
+        for attachment in message.attachments where attachment.kind == .document {
+            guard let docText = attachment.extractedText?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !docText.isEmpty else { continue }
+            content += MediaContentProcessor.documentTextBlock(
+                fileName: attachment.fileName,
+                text: docText
+            )
+        }
+        guard content != message.content else { return message }
+        var expanded = message
+        expanded.content = content
+        return expanded
     }
 }

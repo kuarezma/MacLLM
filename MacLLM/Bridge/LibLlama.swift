@@ -15,7 +15,7 @@ enum LlamaError: Error, LocalizedError {
         case .contextOverflow(let promptTokens, let contextSize):
             return "Bağlam doldu (\(promptTokens) token, limit \(contextSize)). Ayarlardan num_ctx düşürün veya yeni sohbet açın."
         case .decodeFailed:
-            return "Çıkarım hatası. Yeni sohbet deneyin veya modeli yeniden yükleyin."
+            return "Çıkarım hatası (Compute error). Bağlam dolmuş olabilir — yeni sohbet açın veya Ayarlar'dan num_ctx artırın. Vision/mmproj eksikse görüntülü PDF göndermeyin."
         case .templateFailed:
             return "Sohbet şablonu uygulanamadı."
         case .generationCancelled:

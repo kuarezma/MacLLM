@@ -17,6 +17,7 @@ enum MediaProcessingError: LocalizedError {
 enum MediaContentProcessor {
     private static let maxDocumentChars = 24_000
     private static let videoFrameCount = 3
+    private static let pdfPageCount = 3
 
     static func enrich(
         _ attachment: inout MessageAttachment,
@@ -34,6 +35,45 @@ enum MediaContentProcessor {
         case .image, .audio:
             break
         }
+    }
+
+    /// Metin içermeyen (taranmış) PDF sayfalarını görüntü eklerine çevirir.
+    static func pdfPageAttachments(
+        source: MessageAttachment,
+        sessionId: UUID
+    ) async throws -> [MessageAttachment] {
+        let url = AttachmentStore.shared.fileURL(sessionId: sessionId, attachment: source)
+        guard url.pathExtension.lowercased() == "pdf",
+              let doc = PDFDocument(url: url) else { return [] }
+
+        let pageCount = min(doc.pageCount, pdfPageCount)
+        guard pageCount > 0 else {
+            throw MediaProcessingError.extractionFailed("PDF boş.")
+        }
+
+        var attachments: [MessageAttachment] = []
+        let stem = (source.fileName as NSString).deletingPathExtension
+
+        for index in 0..<pageCount {
+            guard let page = doc.page(at: index) else { continue }
+            let thumb = page.thumbnail(of: CGSize(width: 1024, height: 1024), for: .mediaBox)
+            guard let tiff = thumb.tiffRepresentation,
+                  let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:]) else { continue }
+            var frame = try AttachmentStore.shared.writeData(
+                png,
+                sessionId: sessionId,
+                fileName: "\(stem)-sayfa\(index + 1).png",
+                kind: .image
+            )
+            frame.extractedText = "[PDF sayfası \(index + 1)/\(pageCount) — \(source.fileName)]"
+            attachments.append(frame)
+        }
+
+        if attachments.isEmpty {
+            throw MediaProcessingError.extractionFailed("PDF sayfaları görüntüye dönüştürülemedi.")
+        }
+        return attachments
     }
 
     /// Video karelerini ayrı görüntü ekleri olarak döndürür.
@@ -62,10 +102,12 @@ enum MediaContentProcessor {
                 throw MediaProcessingError.extractionFailed("PDF okunamadı.")
             }
             let text = (0..<doc.pageCount).compactMap { doc.page(at: $0)?.string }.joined(separator: "\n")
-            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw MediaProcessingError.extractionFailed("PDF içinde metin bulunamadı.")
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                // Taranmış PDF — sayfa görüntüleri sendMessage içinde üretilir.
+                return ""
             }
-            return String(text.prefix(maxDocumentChars))
+            return String(trimmed.prefix(maxDocumentChars))
         }
 
         let textExtensions = ["txt", "md", "markdown", "json", "csv", "log", "swift", "py", "js", "ts", "html", "xml", "yaml", "yml"]

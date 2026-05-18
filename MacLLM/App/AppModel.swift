@@ -454,7 +454,6 @@ final class AppModel {
 
         let caps = ModelCapabilities.detect(model: model)
         var attachments = pendingAttachments
-        var content = trimmed
 
         for index in attachments.indices {
             do {
@@ -480,12 +479,40 @@ final class AppModel {
             }
         }
 
-        for attachment in attachments where attachment.kind == .document {
-            if let docText = attachment.extractedText {
-                content += MediaContentProcessor.documentTextBlock(
-                    fileName: attachment.fileName,
-                    text: docText
+        for index in attachments.indices.reversed() {
+            let attachment = attachments[index]
+            guard attachment.kind == .document,
+                  attachment.fileName.lowercased().hasSuffix(".pdf"),
+                  attachment.extractedText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+            else { continue }
+            do {
+                let pages = try await MediaContentProcessor.pdfPageAttachments(
+                    source: attachment,
+                    sessionId: currentSession.id
                 )
+                attachments.remove(at: index)
+                attachments.append(contentsOf: pages)
+            } catch {
+                setStatusMessage(error.localizedDescription)
+                return
+            }
+        }
+
+        let pdfPageImages = attachments.filter { Self.isPdfDerivedPage($0) }
+        if !pdfPageImages.isEmpty {
+            if !caps.supportsVision {
+                setStatusMessage(
+                    "Bu PDF taranmış veya şekilli içerik barındırıyor. Görmek için vision model gerekir (Hub → Qwen-VL, LLaVA vb.).",
+                    persistent: true
+                )
+                return
+            }
+            if caps.requiresMmproj, model.mmprojLocalPath == nil {
+                setStatusMessage(
+                    "Vision model için mmproj GGUF gerekli. PDF ile aynı klasöre *mmproj*.gguf ekleyip modeli yeniden yükleyin.",
+                    persistent: true
+                )
+                return
             }
         }
 
@@ -513,7 +540,11 @@ final class AppModel {
                     "Çok modlu model için aynı klasöre mmproj GGUF ekleyip modeli yeniden yükleyin.",
                     persistent: true
                 )
-                if trimmed.isEmpty { return }
+                attachments.removeAll { $0.kind == .image || $0.kind == .audio }
+                if trimmed.isEmpty,
+                   !attachments.contains(where: { $0.kind == .document && !($0.extractedText ?? "").isEmpty }) {
+                    return
+                }
             }
         }
 
@@ -677,6 +708,11 @@ final class AppModel {
             pendingAttachments: userMessage.attachments,
             appendUserMessage: false
         )
+    }
+
+    private static func isPdfDerivedPage(_ attachment: MessageAttachment) -> Bool {
+        attachment.kind == .image
+            && (attachment.extractedText?.contains("[PDF sayfası") ?? false)
     }
 
     private static func trimMessagesForContext(_ messages: [ChatMessage], maxContextTokens: Int) -> [ChatMessage] {

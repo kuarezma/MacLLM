@@ -117,6 +117,7 @@ SOURCES=(
   MacLLM/Features/Chat/SystemPromptSheet.swift
   MacLLM/Features/Chat/ComposerToolsView.swift
   MacLLM/Features/Chat/MessageRow.swift
+  MacLLM/Features/Chat/ChatErrorBanner.swift
   MacLLM/Features/Chat/MessageMarkdownView.swift
   MacLLM/Features/Chat/ProseMarkdownView.swift
   MacLLM/Features/Chat/ChatComposerAttachments.swift

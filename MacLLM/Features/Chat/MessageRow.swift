@@ -130,41 +130,53 @@ struct MessageRow: View {
         }
     }
 
+    private var isErrorReply: Bool {
+        message.role == .assistant && displayContent.hasPrefix("Hata:")
+    }
+
+    private var errorDetail: String {
+        displayContent.dropFirst(5).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     @ViewBuilder
     private var assistantContent: some View {
-        if let thought = contentSplit.thought, !thought.isEmpty {
-            DisclosureGroup(isExpanded: $thoughtExpanded) {
-                Text(thought)
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "brain")
-                        .font(.caption)
-                    if let seconds = contentSplit.thoughtSeconds {
-                        Text("Düşünüldü · \(seconds) sn")
-                    } else {
-                        Text("Düşünme")
+        if isErrorReply {
+            ChatErrorBanner(title: "Yanıt üretilemedi", detail: errorDetail)
+        } else {
+            if let thought = contentSplit.thought, !thought.isEmpty {
+                DisclosureGroup(isExpanded: $thoughtExpanded) {
+                    Text(thought)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "brain")
+                            .font(.caption)
+                        if let seconds = contentSplit.thoughtSeconds {
+                            Text("Düşünüldü · \(seconds) sn")
+                        } else {
+                            Text("Düşünme")
+                        }
                     }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppTheme.secondaryText)
                 }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(AppTheme.secondaryText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(AppTheme.elevatedSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(AppTheme.elevatedSurface)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous))
-        }
 
-        let answer = contentSplit.answer.isEmpty && contentSplit.thought != nil
-            ? ""
-            : (contentSplit.thought != nil ? contentSplit.answer : displayContent)
+            let answer = contentSplit.answer.isEmpty && contentSplit.thought != nil
+                ? ""
+                : (contentSplit.thought != nil ? contentSplit.answer : displayContent)
 
-        if !answer.isEmpty {
-            MessageMarkdownView(text: answer, isStreaming: isStreaming)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if !answer.isEmpty {
+                MessageMarkdownView(text: answer, isStreaming: isStreaming)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
