@@ -1,0 +1,44 @@
+{
+  "models": [
+    {
+      "id": "llama-3.2-3b-instruct-q4",
+      "name": "Llama 3.2 3B Instruct (Q4_K_M)",
+      "description": "Hızlı günlük sohbet — M3 16GB için ideal başlangıç modeli.",
+      "repoId": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+      "filename": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "estimatedSizeBytes": 2100000000,
+      "chatTemplate": "llama3",
+      "ramHintGB": 4
+    },
+    {
+      "id": "phi-3-mini-q4",
+      "name": "Phi-3 Mini 4K Instruct (Q4_K_M)",
+      "description": "Microsoft Phi-3 — verimli ve kompakt.",
+      "repoId": "bartowski/Phi-3-mini-4k-instruct-GGUF",
+      "filename": "Phi-3-mini-4k-instruct-Q4_K_M.gguf",
+      "estimatedSizeBytes": 2400000000,
+      "chatTemplate": "phi3",
+      "ramHintGB": 4
+    },
+    {
+      "id": "mistral-7b-q4",
+      "name": "Mistral 7B Instruct v0.3 (Q4_K_M)",
+      "description": "Daha güçlü yanıtlar — 16GB RAM ile uyumlu.",
+      "repoId": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+      "filename": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+      "estimatedSizeBytes": 4700000000,
+      "chatTemplate": "mistral",
+      "ramHintGB": 8
+    },
+    {
+      "id": "llama-3.1-8b-q4",
+      "name": "Llama 3.1 8B Instruct (Q4_K_M)",
+      "description": "Üst sınır model — diğer uygulamaları kapatın.",
+      "repoId": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+      "filename": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+      "estimatedSizeBytes": 5000000000,
+      "chatTemplate": "llama3",
+      "ramHintGB": 10
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+Vendor/llama.cpp/build-*
+Vendor/build-apple/
+*.dSYM
+
+# Large generated / local only
+MacLLM/Resources/MacLLMIcon-1024-v2.png
+.env
+.env.*
+*.gguf
