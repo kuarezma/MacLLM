@@ -66,15 +66,23 @@ MacLLM, [llama.cpp](https://github.com/ggml-org/llama.cpp) ve **Metal GPU** ile 
 
 **Son sürüm:** [github.com/kuarezma/MacLLM/releases/latest](https://github.com/kuarezma/MacLLM/releases/latest)
 
-### Terminal olmadan kurulum (önerilen)
+### Terminal olmadan kurulum
 
-1. **`MacLLM-*-macOS-arm64.dmg`** dosyasını indirin
-2. DMG’yi açın
-3. **MacLLM** simgesini **Uygulamalar** klasörüne sürükleyin
-4. Uygulamalar’dan **MacLLM**’i açın (ilk sefer: **sağ tık → Aç**)
-5. **Model Ekle** ile GGUF indirin, sohbet edin
+| Paket | Kurulum |
+|-------|---------|
+| **`.dmg`** (önerilen) | DMG aç → **MacLLM**’i **Uygulamalar**’a sürükle |
+| **`.pkg`** | Çift tıkla → kurulum sihirbazını izle |
+| **`.zip`** | Aç → **MacLLM.app**’i Uygulamalar’a kopyala |
 
-İsterseniz `.zip` arşivinden de elle kopyalayabilirsiniz.
+İlk açılış: **sağ tık → Aç**.
+
+### Homebrew
+
+```bash
+brew install --cask https://raw.githubusercontent.com/kuarezma/MacLLM/main/packaging/homebrew/macllm.rb
+```
+
+Ayrıntılar: [packaging/homebrew/README.md](packaging/homebrew/README.md)
 
 > Modeller indirmede **yoktur** (~4 MB uygulama). Modelleri uygulama içinden indirirsiniz.
 

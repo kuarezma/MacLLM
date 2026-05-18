@@ -66,15 +66,23 @@ Typical guidance:
 
 **Latest release:** [github.com/kuarezma/MacLLM/releases/latest](https://github.com/kuarezma/MacLLM/releases/latest)
 
-### Install without Terminal (recommended)
+### Install without Terminal
 
-1. Download **`MacLLM-*-macOS-arm64.dmg`**
-2. Open the DMG window
-3. Drag **MacLLM** onto the **Applications** folder alias
-4. Open **MacLLM** from Applications (first time: **right-click → Open**)
-5. Use **Model Add** to download a GGUF model, then chat
+| Package | How to install |
+|---------|----------------|
+| **`.dmg`** (recommended) | Open DMG → drag **MacLLM** to **Applications** |
+| **`.pkg`** | Double-click → follow the installer |
+| **`.zip`** | Unzip → copy **MacLLM.app** to Applications |
 
-A `.zip` is also available if you prefer to copy the app manually.
+First launch: **right-click MacLLM → Open**.
+
+### Homebrew
+
+```bash
+brew install --cask https://raw.githubusercontent.com/kuarezma/MacLLM/main/packaging/homebrew/macllm.rb
+```
+
+See [packaging/homebrew/README.md](packaging/homebrew/README.md) for tap/local cask options.
 
 > Models are **not** included in the download (~4 MB app). You download models from Hugging Face inside the app.
 

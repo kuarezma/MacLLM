@@ -20,7 +20,7 @@ jobs:
       - name: Install build tools
         run: brew install cmake ninja
 
-      - name: Build release zip
+      - name: Build release packages
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           SKIP_GITHUB=1 ./Scripts/create-release.sh "$VERSION"
@@ -30,24 +30,27 @@ jobs:
         with:
           files: |
             dist/MacLLM-*-macOS-arm64.dmg
+            dist/MacLLM-*-macOS-arm64.pkg
             dist/MacLLM-*-macOS-arm64.zip
             dist/SHA256SUMS.txt
           generate_release_notes: true
           body: |
             ## MacLLM — macOS Apple Silicon
 
-            Native local LLM chat: Metal inference, Hugging Face GGUF downloads, streaming UI.
+            ### Install (no Terminal)
 
-            ### Install
+            | Method | File |
+            |--------|------|
+            | Drag & drop | **MacLLM-*-macOS-arm64.dmg** → Applications |
+            | Installer wizard | **MacLLM-*-macOS-arm64.pkg** |
+            | Manual | **MacLLM-*-macOS-arm64.zip** |
 
-            1. Download **MacLLM-*-macOS-arm64.dmg** (or zip)
-            2. Open DMG and drag **MacLLM** to **Applications**
-            3. First launch: **right-click → Open** (unsigned build)
-            4. Use **Online Model** to download a GGUF from Hugging Face
+            First launch: **right-click → Open**.
 
-            ### Requirements
+            ### Homebrew
 
-            - macOS 14+, Apple Silicon (arm64)
-            - 16 GB RAM recommended for 7B models
+            ```bash
+            brew install --cask https://raw.githubusercontent.com/kuarezma/MacLLM/main/packaging/homebrew/macllm.rb
+            ```
 
             See [README](https://github.com/kuarezma/MacLLM/blob/main/README.md) for details.
