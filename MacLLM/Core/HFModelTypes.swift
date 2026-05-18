@@ -9,6 +9,7 @@ struct HFModelSummary: Identifiable, Hashable {
     let tags: [String]
     let lastModified: Date?
     let gated: Bool
+    let summary: String?
 
     var parameterSize: String? {
         ModelMetadataParser.parseParameterSize(from: "\(repoId) \(tags.joined(separator: " "))")
@@ -24,6 +25,25 @@ struct HFModelSummary: Identifiable, Hashable {
 
     var displayTags: [String] {
         ModelMetadataParser.displayTags(tags)
+    }
+
+    var architecture: String? {
+        ModelMetadataParser.parseArchitecture(from: "\(repoId) \(tags.joined(separator: " "))")
+    }
+
+    var displayName: String {
+        ModelMetadataParser.repoDisplayName(repoId)
+    }
+
+    var author: String? {
+        ModelMetadataParser.repoAuthor(repoId)
+    }
+
+    var shortBlurb: String {
+        if let summary, !summary.isEmpty { return summary }
+        if let pipelineTag { return pipelineTag.capitalized }
+        if let param = parameterSizeDisplay { return param }
+        return displayTags.prefix(2).joined(separator: " · ")
     }
 }
 
@@ -65,7 +85,8 @@ extension HFModelSummary {
             pipelineTag: nil,
             tags: tags,
             lastModified: nil,
-            gated: gated
+            gated: gated,
+            summary: nil
         )
     }
 }

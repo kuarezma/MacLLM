@@ -30,17 +30,24 @@ final class HuggingFaceHubService: Sendable {
         decoder.dateDecodingStrategy = .iso8601
     }
 
-    func searchModels(query: String, limit: Int = 25) async throws -> [HFModelSummary] {
+    func searchModels(
+        query: String,
+        limit: Int = 50,
+        sort: HubSearchSort = .bestMatch
+    ) async throws -> [HFModelSummary] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let searchTerm = q.isEmpty ? "gguf" : "\(q) gguf"
         var components = URLComponents(string: "https://huggingface.co/api/models")!
-        components.queryItems = [
+        var items = [
             URLQueryItem(name: "search", value: searchTerm),
             URLQueryItem(name: "filter", value: "gguf"),
-            URLQueryItem(name: "sort", value: "downloads"),
-            URLQueryItem(name: "direction", value: "-1"),
             URLQueryItem(name: "limit", value: String(limit)),
         ]
+        if let apiSort = sort.apiSort {
+            items.append(URLQueryItem(name: "sort", value: apiSort))
+            items.append(URLQueryItem(name: "direction", value: "-1"))
+        }
+        components.queryItems = items
         guard let url = components.url else { throw HuggingFaceHubError.invalidURL }
 
         var request = URLRequest(url: url)
@@ -49,6 +56,9 @@ final class HuggingFaceHubService: Sendable {
         let (data, response) = try await session.data(for: request)
         try validate(response)
 
+        struct CardData: Decodable {
+            let summary: String?
+        }
         struct Item: Decodable {
             let id: String
             let downloads: Int?
@@ -57,10 +67,11 @@ final class HuggingFaceHubService: Sendable {
             let tags: [String]?
             let lastModified: Date?
             let gated: Bool?
+            let cardData: CardData?
         }
 
-        let items = try decoder.decode([Item].self, from: data)
-        return items
+        let decoded = try decoder.decode([Item].self, from: data)
+        return decoded
             .filter { $0.id.lowercased().contains("gguf") }
             .map {
                 HFModelSummary(
@@ -71,7 +82,8 @@ final class HuggingFaceHubService: Sendable {
                     pipelineTag: $0.pipelineTag,
                     tags: $0.tags ?? [],
                     lastModified: $0.lastModified,
-                    gated: $0.gated ?? false
+                    gated: $0.gated ?? false,
+                    summary: $0.cardData?.summary
                 )
             }
     }
@@ -91,6 +103,7 @@ final class HuggingFaceHubService: Sendable {
         struct CardData: Decodable {
             let license: String?
             let language: [String]?
+            let summary: String?
         }
         struct Sibling: Decodable {
             let rfilename: String
@@ -144,7 +157,7 @@ final class HuggingFaceHubService: Sendable {
             downloads: info.downloads ?? 0,
             likes: info.likes ?? 0,
             gated: info.gated ?? false,
-            description: nil,
+            description: info.cardData?.summary,
             license: info.cardData?.license,
             pipelineTag: info.pipelineTag,
             tags: info.tags ?? [],

@@ -80,4 +80,37 @@ enum ModelMetadataParser {
         guard parts.count >= 2 else { return nil }
         return String(parts[0])
     }
+
+    static func parseArchitecture(from text: String) -> String? {
+        let lower = text.lowercased()
+        let patterns = [
+            "phi-4", "phi-3", "phi4", "phi3",
+            "llama-3.2", "llama-3.1", "llama-3", "llama3",
+            "mistral", "mixtral", "qwen2.5", "qwen2", "qwen3", "qwen",
+            "gemma-2", "gemma2", "gemma-3", "gemma3", "gemma",
+            "deepseek", "granite", "falcon", "mpt", "gpt-oss",
+        ]
+        for pattern in patterns {
+            if lower.contains(pattern) { return pattern }
+        }
+        return nil
+    }
+
+    static func capabilityTags(from tags: [String]) -> [String] {
+        let lower = tags.map { $0.lowercased() }
+        var caps: [String] = []
+        if lower.contains(where: { $0.contains("tool") || $0.contains("function") }) {
+            caps.append("Tool Use")
+        }
+        if lower.contains(where: { $0.contains("reason") || $0.contains("thinking") }) {
+            caps.append("Reasoning")
+        }
+        if lower.contains(where: { $0.contains("vision") || $0.contains("vl") || $0.contains("multimodal") }) {
+            caps.append("Vision")
+        }
+        if lower.contains("conversational") || lower.contains("chat") {
+            caps.append("Chat")
+        }
+        return caps
+    }
 }

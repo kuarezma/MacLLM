@@ -1,5 +1,32 @@
 import Foundation
 
+enum HubSearchSort: String, CaseIterable, Identifiable {
+    case bestMatch
+    case downloads
+    case likes
+    case recent
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .bestMatch: return "En İyi Eşleşme"
+        case .downloads: return "En Çok İndirilen"
+        case .likes: return "En Beğenilen"
+        case .recent: return "En Yeni"
+        }
+    }
+
+    var apiSort: String? {
+        switch self {
+        case .bestMatch: return nil
+        case .downloads: return "downloads"
+        case .likes: return "likes"
+        case .recent: return "lastModified"
+        }
+    }
+}
+
 enum HubQuantSort: String, CaseIterable, Identifiable {
     case recommended
     case sizeAscending

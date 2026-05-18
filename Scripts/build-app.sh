@@ -126,6 +126,7 @@ SOURCES=(
   MacLLM/Features/Models/ActiveDownloadsPanel.swift
   MacLLM/Features/Models/ModelCatalogView.swift
   MacLLM/Features/Models/OnlineModelSearchView.swift
+  MacLLM/Features/Models/ModelHubBrowserView.swift
   MacLLM/Features/Models/ModelHubDetailView.swift
   MacLLM/Features/Models/HubQuantRowView.swift
   MacLLM/Features/Models/DownloadManagerPopover.swift

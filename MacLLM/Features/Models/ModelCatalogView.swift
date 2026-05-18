@@ -47,7 +47,7 @@ struct ModelCatalogView: View {
 
                 switch tab {
                 case .hub:
-                    OnlineModelSearchView()
+                    ModelHubBrowserView()
                 case .recommended:
                     recommendedList(model: model)
                 case .manual:
@@ -56,7 +56,7 @@ struct ModelCatalogView: View {
             }
             .navigationTitle("Model Hub")
             .navigationDestination(for: HFModelSummary.self) { repo in
-                ModelHubDetailView(repo: repo)
+                HubDetailPane(repo: repo)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -112,7 +112,7 @@ struct ModelCatalogView: View {
                 Text("«\(pendingImportName)» klasörde zaten var. Üzerine yazılsın mı?")
             }
         }
-        .frame(minWidth: 640, minHeight: 560)
+        .frame(minWidth: 980, minHeight: 680)
     }
 
     private func handleImportSelection(url: URL, model: AppModel) {
