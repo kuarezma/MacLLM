@@ -1,16 +1,25 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct MacLLMApp: App {
     @State private var appModel = AppModel()
+    @State private var appUpdate = AppUpdateController.shared
     @StateObject private var inferenceService = InferenceService.shared
 
     var body: some Scene {
         WindowGroup {
             MainView()
                 .environment(appModel)
+                .environment(appUpdate)
                 .environmentObject(inferenceService)
                 .frame(minWidth: 960, minHeight: 640)
+                .task {
+                    await requestNotificationPermissionIfNeeded()
+                    if appUpdate.autoCheckEnabled {
+                        await appUpdate.checkForUpdates()
+                    }
+                }
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -30,7 +39,15 @@ struct MacLLMApp: App {
         Settings {
             SettingsView()
                 .environment(appModel)
+                .environment(appUpdate)
                 .environmentObject(inferenceService)
         }
+    }
+
+    private func requestNotificationPermissionIfNeeded() async {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .notDetermined else { return }
+        _ = try? await center.requestAuthorization(options: [.alert, .sound])
     }
 }

@@ -12,7 +12,10 @@ struct MainView: View {
             ModelSidebarView()
                 .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 360)
         } detail: {
-            ChatView()
+            VStack(spacing: 0) {
+                AppUpdateBannerView()
+                ChatView()
+            }
         }
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {

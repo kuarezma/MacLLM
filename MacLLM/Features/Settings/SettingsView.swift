@@ -23,6 +23,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(AppUpdateController.self) private var appUpdate
     @State private var tab: SettingsTab = .general
     @State private var stopText = ""
 
@@ -42,13 +43,13 @@ struct SettingsView: View {
             Form {
                 switch tab {
                 case .general:
-                    generalSection(model: model)
+                    generalSection(model: appModel)
                 case .model:
-                    modelSection(model: model)
+                    modelSection(model: appModel)
                 case .sampling:
-                    samplingSection(model: model)
+                    samplingSection(model: appModel)
                 case .chat:
-                    chatSection(model: model)
+                    chatSection(model: appModel)
                 case .huggingFace:
                     huggingFaceSection()
                 }
@@ -82,10 +83,46 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func generalSection(model: AppModel) -> some View {
+        @Bindable var updates = appUpdate
         Section("Uygulama") {
-            LabeledContent("Sürüm", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+            LabeledContent("Sürüm", value: appUpdate.currentVersion)
             LabeledContent("Bu Mac", value: model.systemProfile.displaySummary)
             LabeledContent("Çıkarım motoru", value: "llama.cpp + Metal")
+        }
+
+        Section("Güncellemeler") {
+            Toggle("Açılışta güncellemeleri kontrol et", isOn: $updates.autoCheckEnabled)
+            if let last = appUpdate.lastCheckDate {
+                LabeledContent("Son kontrol", value: last.formatted(date: .abbreviated, time: .shortened))
+            }
+            HStack {
+                Button {
+                    Task { await appUpdate.checkForUpdates(userInitiated: true) }
+                } label: {
+                    if appUpdate.isChecking {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("Güncellemeleri denetle")
+                    }
+                }
+                .disabled(appUpdate.isChecking || appUpdate.isDownloading)
+
+                if appUpdate.availableUpdate != nil {
+                    Button("İndir ve kur") {
+                        Task { await appUpdate.downloadAndOpenUpdate() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(appUpdate.isDownloading)
+                }
+            }
+            if let update = appUpdate.availableUpdate {
+                Text("Yeni sürüm: \(update.version) (\(update.preferredAssetLabel))")
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+            }
+            if let status = appUpdate.downloadStatus {
+                Text(status).font(.caption).foregroundStyle(.secondary)
+            }
         }
 
         Section("Depolama (Ollama: models dizini)") {
@@ -116,11 +153,9 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func modelSection(model: AppModel) -> some View {
+        let bindable = Bindable(model)
         Section("Bağlam (num_ctx)") {
-            Picker("Bağlam uzunluğu", selection: Binding(
-                get: { Int(model.settings.contextLength) },
-                set: { model.settings.contextLength = UInt32($0) }
-            )) {
+            Picker("Bağlam uzunluğu", selection: bindable.intBinding(\.contextLength)) {
                 Text("2048").tag(2048)
                 Text("4096").tag(4096)
                 Text("8192").tag(8192)
@@ -135,16 +170,14 @@ struct SettingsView: View {
         Section("Donanım (num_gpu, num_thread)") {
             Stepper(
                 "GPU katmanları: \(model.settings.gpuLayers < 0 ? "tümü (-1)" : "\(model.settings.gpuLayers)")",
-                value: Binding(
-                    get: { Int(model.settings.gpuLayers) },
-                    set: { model.settings.gpuLayers = Int32($0) }
-                ),
+                value: bindable.int32Binding(\.gpuLayers),
                 in: -1...128
             )
-            Stepper("CPU iş parçacığı: \(model.settings.threadCount)", value: Binding(
-                get: { Int(model.settings.threadCount) },
-                set: { model.settings.threadCount = Int32($0) }
-            ), in: 1...32)
+            Stepper(
+                "CPU iş parçacığı: \(model.settings.threadCount)",
+                value: bindable.int32Binding(\.threadCount),
+                in: 1...32
+            )
             Text("GPU katmanları -1: tüm katmanlar Metal’de (Ollama’daki varsayılan tam offload).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -159,24 +192,18 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func samplingSection(model: AppModel) -> some View {
-        @Bindable var model = model
+        let bindable = Bindable(model)
         Section("Mirostat (Ollama: mirostat)") {
-            Picker("Mod", selection: $model.settings.mirostat) {
-                Text("Kapalı (0)").tag(Int32(0))
-                Text("Mirostat v1 (1)").tag(Int32(1))
-                Text("Mirostat v2 (2)").tag(Int32(2))
+            Picker("Mod", selection: bindable.int32Binding(\.mirostat)) {
+                Text("Kapalı (0)").tag(0)
+                Text("Mirostat v1 (1)").tag(1)
+                Text("Mirostat v2 (2)").tag(2)
             }
             if model.settings.usesMirostat {
-                Slider(value: Binding(
-                    get: { Double(model.settings.mirostatTau) },
-                    set: { model.settings.mirostatTau = Float($0) }
-                ), in: 0...10, step: 0.1) {
+                Slider(value: bindable.floatBinding(\.mirostatTau), in: 0...10, step: 0.1) {
                     Text("Tau: \(model.settings.mirostatTau, specifier: "%.1f")")
                 }
-                Slider(value: Binding(
-                    get: { Double(model.settings.mirostatEta) },
-                    set: { model.settings.mirostatEta = Float($0) }
-                ), in: 0.01...1, step: 0.01) {
+                Slider(value: bindable.floatBinding(\.mirostatEta), in: 0.01...1, step: 0.01) {
                     Text("Eta: \(model.settings.mirostatEta, specifier: "%.2f")")
                 }
             }
@@ -184,41 +211,31 @@ struct SettingsView: View {
 
         if !model.settings.usesMirostat {
             Section("Sıcaklık ve çekirdek örnekleme") {
-                Slider(value: Binding(
-                    get: { Double(model.settings.temperature) },
-                    set: { model.settings.temperature = Float($0) }
-                ), in: 0...2, step: 0.05) {
+                Slider(value: bindable.floatBinding(\.temperature), in: 0...2, step: 0.05) {
                     Text("Sıcaklık: \(model.settings.temperature, specifier: "%.2f")")
                 }
-                Slider(value: Binding(
-                    get: { Double(model.settings.topP) },
-                    set: { model.settings.topP = Float($0) }
-                ), in: 0.05...1, step: 0.05) {
+                Slider(value: bindable.floatBinding(\.topP), in: 0.05...1, step: 0.05) {
                     Text("Top-p: \(model.settings.topP, specifier: "%.2f")")
                 }
-                Stepper("Top-k: \(model.settings.topK == 0 ? "kapalı" : "\(model.settings.topK)")", value: Binding(
-                    get: { Int(model.settings.topK) },
-                    set: { model.settings.topK = Int32($0) }
-                ), in: 0...200)
-                Slider(value: Binding(
-                    get: { Double(model.settings.minP) },
-                    set: { model.settings.minP = Float($0) }
-                ), in: 0...1, step: 0.01) {
+                Stepper(
+                    "Top-k: \(model.settings.topK == 0 ? "kapalı" : "\(model.settings.topK)")",
+                    value: bindable.int32Binding(\.topK),
+                    in: 0...200
+                )
+                Slider(value: bindable.floatBinding(\.minP), in: 0...1, step: 0.01) {
                     Text("Min-p: \(model.settings.minP == 0 ? "kapalı" : String(format: "%.2f", model.settings.minP))")
                 }
             }
 
             Section("Tekrar cezası (repeat_penalty)") {
-                Slider(value: Binding(
-                    get: { Double(model.settings.repeatPenalty) },
-                    set: { model.settings.repeatPenalty = Float($0) }
-                ), in: 1...2, step: 0.05) {
+                Slider(value: bindable.floatBinding(\.repeatPenalty), in: 1...2, step: 0.05) {
                     Text("Cezası: \(model.settings.repeatPenalty, specifier: "%.2f") (1.0 = kapalı)")
                 }
-                Stepper("Son N token: \(model.settings.repeatLastN)", value: Binding(
-                    get: { Int(model.settings.repeatLastN) },
-                    set: { model.settings.repeatLastN = Int32($0) }
-                ), in: -1...512)
+                Stepper(
+                    "Son N token: \(model.settings.repeatLastN)",
+                    value: bindable.int32Binding(\.repeatLastN),
+                    in: -1...512
+                )
                 Text("repeat_last_n: -1 = tüm bağlam, 0 = kapalı")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -228,10 +245,7 @@ struct SettingsView: View {
         Section("Tohum (seed)") {
             Stepper(
                 "Seed: \(model.settings.seed == 0 ? "rastgele" : "\(model.settings.seed)")",
-                value: Binding(
-                    get: { Int(model.settings.seed) },
-                    set: { model.settings.seed = UInt32(max(0, $0)) }
-                ),
+                value: bindable.uint32Binding(\.seed),
                 in: 0...999_999
             )
             Button("Rastgele tohum (0)") {
@@ -243,16 +257,18 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func chatSection(model: AppModel) -> some View {
-        @Bindable var model = model
+        let bindable = Bindable(model)
         Section("Üretim limiti (num_predict)") {
-            Stepper("Maks. üretilecek token: \(model.settings.maxTokens)", value: Binding(
-                get: { Int(model.settings.maxTokens) },
-                set: { model.settings.maxTokens = Int32($0) }
-            ), in: 64...8192, step: 64)
+            Stepper(
+                "Maks. üretilecek token: \(model.settings.maxTokens)",
+                value: bindable.int32Binding(\.maxTokens),
+                in: 64...8192,
+                step: 64
+            )
         }
 
         Section("Sistem mesajı (system)") {
-            TextEditor(text: $model.settings.systemPrompt)
+            TextEditor(text: bindable.stringBinding(\.systemPrompt))
                 .font(.body)
                 .frame(minHeight: 80, maxHeight: 140)
             Text("Her sohbete eklenir; model şablonuna göre system rolü olarak iletilir.")
@@ -264,7 +280,7 @@ struct SettingsView: View {
             TextEditor(text: $stopText)
                 .font(.system(.body, design: .monospaced))
                 .frame(minHeight: 72, maxHeight: 120)
-            Text("Her satır bir stop dizisi (Ollama stop). Örn. </s>, ")
+            Text("Her satır bir stop dizisi (Ollama stop). Örn. </s>")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Button("Varsayılan stop listesi") {
@@ -289,5 +305,45 @@ struct SettingsView: View {
 
     private func syncStopText(from settings: InferenceSettings) {
         stopText = settings.stopSequencesText
+    }
+}
+
+// MARK: - Bindable helpers (MainActor-safe settings bindings)
+
+@MainActor
+private extension Bindable where Value == AppModel {
+    func intBinding(_ keyPath: WritableKeyPath<InferenceSettings, UInt32>) -> Binding<Int> {
+        Binding(
+            get: { Int(wrappedValue.settings[keyPath: keyPath]) },
+            set: { wrappedValue.settings[keyPath: keyPath] = UInt32($0) }
+        )
+    }
+
+    func int32Binding(_ keyPath: WritableKeyPath<InferenceSettings, Int32>) -> Binding<Int> {
+        Binding(
+            get: { Int(wrappedValue.settings[keyPath: keyPath]) },
+            set: { wrappedValue.settings[keyPath: keyPath] = Int32($0) }
+        )
+    }
+
+    func uint32Binding(_ keyPath: WritableKeyPath<InferenceSettings, UInt32>) -> Binding<Int> {
+        Binding(
+            get: { Int(wrappedValue.settings[keyPath: keyPath]) },
+            set: { wrappedValue.settings[keyPath: keyPath] = UInt32($0) }
+        )
+    }
+
+    func floatBinding(_ keyPath: WritableKeyPath<InferenceSettings, Float>) -> Binding<Float> {
+        Binding(
+            get: { wrappedValue.settings[keyPath: keyPath] },
+            set: { wrappedValue.settings[keyPath: keyPath] = $0 }
+        )
+    }
+
+    func stringBinding(_ keyPath: WritableKeyPath<InferenceSettings, String>) -> Binding<String> {
+        Binding(
+            get: { wrappedValue.settings[keyPath: keyPath] },
+            set: { wrappedValue.settings[keyPath: keyPath] = $0 }
+        )
     }
 }

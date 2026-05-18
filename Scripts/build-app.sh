@@ -53,6 +53,8 @@ SOURCES=(
   MacLLM/App/MacLLMApp.swift
   MacLLM/App/AppModel.swift
   MacLLM/Core/Models.swift
+  MacLLM/Core/AppVersion.swift
+  MacLLM/Services/AppUpdateService.swift
   MacLLM/Services/ModelStore.swift
   MacLLM/Services/ModelCatalogService.swift
   MacLLM/Services/MacSystemProfile.swift
@@ -65,6 +67,7 @@ SOURCES=(
   MacLLM/Services/InferenceService.swift
   MacLLM/Bridge/LibLlama.swift
   MacLLM/Features/Main/MainView.swift
+  MacLLM/Features/Main/AppUpdateBannerView.swift
   MacLLM/Features/Chat/ChatView.swift
   MacLLM/Features/Chat/MessageRow.swift
   MacLLM/Features/Models/DownloadProgressView.swift
