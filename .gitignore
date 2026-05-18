@@ -3,6 +3,7 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 build/
+dist/
 Vendor/llama.cpp/build-*
 Vendor/build-apple/
 *.dSYM

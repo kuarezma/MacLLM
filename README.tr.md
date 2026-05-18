@@ -11,6 +11,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kuarezma/MacLLM/releases/latest">
+    <img src="https://img.shields.io/github/v/release/kuarezma/MacLLM?label=İndir&style=for-the-badge" alt="Son sürüm">
+  </a>
+</p>
+
+<p align="center">
   <img src="MacLLM/Resources/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="128" height="128" alt="MacLLM simgesi">
 </p>
 
@@ -48,7 +54,18 @@ MacLLM, [llama.cpp](https://github.com/ggml-org/llama.cpp) ve **Metal GPU** ile 
 | Mistral 7B Instruct | ~4.5 GB | Daha güçlü, 16 GB’a uygun |
 | Llama 3.1 8B Instruct | ~5 GB | Üst sınır — diğer uygulamaları kapatın |
 
-## Hızlı başlangıç
+## İndir (hazır uygulama)
+
+**Son sürüm:** [github.com/kuarezma/MacLLM/releases/latest](https://github.com/kuarezma/MacLLM/releases/latest)
+
+1. `MacLLM-1.0.0-macOS-arm64.zip` dosyasını indirin (yalnızca Apple Silicon)
+2. Açın ve **MacLLM.app** dosyasını Uygulamalar’a taşıyın
+3. İlk açılış: **sağ tık → Aç** (uygulama henüz notarize edilmedi)
+4. **Çevrimiçi Model** ile Hugging Face’ten GGUF indirin, sohbet edin
+
+> Modeller indirmede **yoktur** (~4 MB uygulama). Modelleri uygulama içinden indirirsiniz.
+
+## Kaynaktan derleme
 
 ### 1. Klonlayın ve alt modülü alın
 

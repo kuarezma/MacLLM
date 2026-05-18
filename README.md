@@ -11,6 +11,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kuarezma/MacLLM/releases/latest">
+    <img src="https://img.shields.io/github/v/release/kuarezma/MacLLM?label=Download&style=for-the-badge" alt="Latest release">
+  </a>
+</p>
+
+<p align="center">
   <img src="MacLLM/Resources/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="128" height="128" alt="MacLLM icon">
 </p>
 
@@ -48,7 +54,18 @@ Built for **Apple Silicon** (M1/M2/M3/M4) with **16 GB RAM** in mind — sensibl
 | Mistral 7B Instruct | ~4.5 GB | Stronger, still fits 16 GB |
 | Llama 3.1 8B Instruct | ~5 GB | Upper limit — close other apps |
 
-## Quick start
+## Download (pre-built)
+
+**Latest release:** [github.com/kuarezma/MacLLM/releases/latest](https://github.com/kuarezma/MacLLM/releases/latest)
+
+1. Download `MacLLM-1.0.0-macOS-arm64.zip` (Apple Silicon only)
+2. Unzip and move **MacLLM.app** to Applications
+3. First open: **right-click → Open** (app is not notarized yet)
+4. Use **Online Model** to download a GGUF model, then chat
+
+> Models are **not** included in the download (~4 MB app). You download models from Hugging Face inside the app.
+
+## Build from source
 
 ### 1. Clone and init submodule
 
