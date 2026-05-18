@@ -49,10 +49,29 @@ xcrun actool "$ROOT/MacLLM/Resources/Assets.xcassets" \
     /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$APP/Contents/Info.plist"
 }
 
+MTMD_CC_FLAGS=(
+  -Xcc -I"$ROOT/Vendor/llama.cpp/include"
+  -Xcc -I"$ROOT/Vendor/llama.cpp/ggml/include"
+  -Xcc -I"$ROOT/Vendor/llama.cpp/tools/mtmd"
+  -Xcc -I"$ROOT/MacLLM/Bridge"
+)
+
+MTMD_SHIM_O="$ROOT/build/mtmd_shim.o"
+clang -c "$ROOT/MacLLM/Bridge/mtmd_shim.c" -o "$MTMD_SHIM_O" -O2 \
+  -I "$ROOT/Vendor/llama.cpp/include" \
+  -I "$ROOT/Vendor/llama.cpp/ggml/include" \
+  -I "$ROOT/Vendor/llama.cpp/tools/mtmd" \
+  -I "$ROOT/MacLLM/Bridge" \
+  -isysroot "$SDK" \
+  -target arm64-apple-macos14.0
+
 SOURCES=(
   MacLLM/App/MacLLMApp.swift
+  MacLLM/App/AppDelegate.swift
+  MacLLM/App/AppShutdown.swift
   MacLLM/App/AppModel.swift
   MacLLM/Core/Models.swift
+  MacLLM/Core/MessageAttachment.swift
   MacLLM/Core/AppVersion.swift
   MacLLM/Core/AppTheme.swift
   MacLLM/Services/AppUpdateService.swift
@@ -67,15 +86,23 @@ SOURCES=(
   MacLLM/Services/GGUFFileValidator.swift
   MacLLM/Services/ModelMetadataParser.swift
   MacLLM/Services/ChatTemplateResolver.swift
+  MacLLM/Services/GenerationOutputFilter.swift
   MacLLM/Services/HuggingFaceHubService.swift
   MacLLM/Services/HuggingFaceCredentials.swift
   MacLLM/Services/ChatHistoryStore.swift
   MacLLM/Services/InferenceService.swift
+  MacLLM/Services/InferenceMessageBuilder.swift
+  MacLLM/Services/AttachmentStore.swift
+  MacLLM/Services/MediaContentProcessor.swift
+  MacLLM/Services/ModelCapabilities.swift
   MacLLM/Bridge/LibLlama.swift
+  MacLLM/Bridge/LibMtmd.swift
   MacLLM/Features/Main/MainView.swift
   MacLLM/Features/Main/AppUpdateBannerView.swift
   MacLLM/Features/Chat/ChatView.swift
   MacLLM/Features/Chat/MessageRow.swift
+  MacLLM/Features/Chat/ChatComposerAttachments.swift
+  MacLLM/Features/Chat/MessageAttachmentsView.swift
   MacLLM/Features/Models/DownloadProgressView.swift
   MacLLM/Features/Models/ActiveDownloadsPanel.swift
   MacLLM/Features/Models/ModelCatalogView.swift
@@ -102,8 +129,12 @@ swiftc \
   -framework AppKit \
   -framework Combine \
   -framework UniformTypeIdentifiers \
+  -framework AVFoundation \
+  -framework PDFKit \
+  -framework CoreMedia \
   -o "$BIN" \
-  "${SOURCES[@]}"
+  "${SOURCES[@]}" \
+  "$MTMD_SHIM_O"
 
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$BIN" 2>/dev/null || true
 

@@ -27,7 +27,8 @@ cmake -S . -B "$BUILD_DIR" -G Ninja \
   -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOS_MIN" \
   -DBUILD_SHARED_LIBS=OFF \
   -DLLAMA_BUILD_EXAMPLES=OFF \
-  -DLLAMA_BUILD_TOOLS=OFF \
+  -DLLAMA_BUILD_TOOLS=ON \
+  -DLLAMA_BUILD_COMMON=ON \
   -DLLAMA_BUILD_TESTS=OFF \
   -DLLAMA_BUILD_SERVER=OFF \
   -DGGML_METAL=ON \
@@ -36,12 +37,14 @@ cmake -S . -B "$BUILD_DIR" -G Ninja \
   -DGGML_NATIVE=OFF \
   -DGGML_OPENMP=OFF
 
-cmake --build "$BUILD_DIR" -j "$JOBS"
+cmake --build "$BUILD_DIR" -j "$JOBS" --target mtmd
 
 FW_DIR="$OUT_DIR/llama.framework"
 mkdir -p "$FW_DIR/Versions/A/Headers" "$FW_DIR/Resources"
 
 cp include/llama.h "$FW_DIR/Versions/A/Headers/"
+cp tools/mtmd/mtmd.h tools/mtmd/mtmd-helper.h "$FW_DIR/Versions/A/Headers/" 2>/dev/null || true
+cp "$ROOT/MacLLM/Bridge/mtmd_shim.h" "$FW_DIR/Versions/A/Headers/" 2>/dev/null || true
 for h in ggml/include/*.h; do
   cp "$h" "$FW_DIR/Versions/A/Headers/" 2>/dev/null || true
 done
@@ -53,6 +56,7 @@ LIBS=(
   "$BUILD_DIR/ggml/src/libggml-cpu.a"
   "$BUILD_DIR/ggml/src/ggml-metal/libggml-metal.a"
   "$BUILD_DIR/ggml/src/ggml-blas/libggml-blas.a"
+  "$BUILD_DIR/tools/mtmd/libmtmd.a"
 )
 
 # Ninja çıktı yolları farklıysa bul
@@ -60,7 +64,7 @@ if [[ ! -f "${LIBS[0]}" ]]; then
   LIBS=()
   while IFS= read -r lib; do
     LIBS+=("$lib")
-  done < <(find "$BUILD_DIR" -name 'libllama.a' -o -name 'libggml.a' -o -name 'libggml-base.a' -o -name 'libggml-cpu.a' -o -name 'libggml-metal.a' -o -name 'libggml-blas.a' | sort -u)
+  done < <(find "$BUILD_DIR" -name 'libllama.a' -o -name 'libggml.a' -o -name 'libggml-base.a' -o -name 'libggml-cpu.a' -o -name 'libggml-metal.a' -o -name 'libggml-blas.a' -o -name 'libmtmd.a' | sort -u)
 fi
 
 TEMP="$BUILD_DIR/temp-combined"
@@ -72,7 +76,7 @@ xcrun -sdk macosx clang++ -dynamiclib \
   -mmacosx-version-min="$MACOS_MIN" \
   -isysroot "$(xcrun --sdk macosx --show-sdk-path)" \
   -Wl,-force_load,"$TEMP/combined.a" \
-  -framework Foundation -framework Metal -framework Accelerate \
+  -framework Foundation -framework Metal -framework Accelerate -lc++ \
   -install_name "@rpath/llama.framework/Versions/A/llama" \
   -o "$FW_DIR/Versions/A/llama"
 

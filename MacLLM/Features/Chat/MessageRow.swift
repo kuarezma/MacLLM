@@ -2,11 +2,12 @@ import SwiftUI
 
 struct MessageRow: View {
     let message: ChatMessage
+    var sessionId: UUID
 
     private var displayContent: String {
-        let raw = message.content.isEmpty ? "…" : message.content
+        let raw = message.displayPreviewText.isEmpty ? "…" : message.displayPreviewText
         if message.role == .assistant {
-            return ChatTemplateResolver.sanitizeDisplayedText(raw)
+            return ControlTokenSanitizer.sanitizeForDisplay(raw)
         }
         return raw
     }
@@ -24,9 +25,15 @@ struct MessageRow: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
 
-                Text(displayContent)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !message.attachments.isEmpty {
+                    MessageAttachmentsView(attachments: message.attachments, sessionId: sessionId)
+                }
+
+                if !message.content.isEmpty || message.role == .assistant {
+                    Text(displayContent)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .padding(AppTheme.rowSpacing)

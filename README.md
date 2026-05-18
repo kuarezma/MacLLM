@@ -42,7 +42,11 @@ Built for **Apple Silicon** (M1/M2/M3/M4). The app reads your **chip and physica
 | **Manual install** | Paste `repo-id` + `.gguf` filename, or import a local file |
 | **Adaptive defaults** | First-run inference settings tuned to your RAM (8 / 16 / 24 GB+) |
 | **Ollama-style settings** | Full settings window (⌘,) — sampling, context, system prompt, stop sequences |
-| **Privacy** | Models and chats in `~/Library/Application Support/MacLLM/` |
+| **Multimodal chat** | Attach **images**, **audio**, **video** (frame extract), and **documents** (PDF/text) in chat |
+| **Vision models (mtmd)** | llama.cpp `libmtmd` + **mmproj** GGUF for Qwen-VL, LLaVA, Gemma 3 vision, etc. |
+| **Clean replies** | Streaming filter strips ChatML/Mistral control tokens (`im_end`, `[INST]`, …) |
+| **Graceful quit** | Safe shutdown: save chat, cancel downloads, unload model before exit |
+| **Privacy** | Models, chats, and attachments in `~/Library/Application Support/MacLLM/` |
 | **Easy distribution** | Release ships **DMG**, **PKG**, **ZIP**, and a **Homebrew cask** |
 
 ## Requirements
@@ -86,6 +90,19 @@ Local cask file: [packaging/homebrew/README.md](packaging/homebrew/README.md)
 3. **Recommended** tab — pick a model suited to your Mac → **Download online**.
 4. Wait for the download (watch speed, ETA in the **Downloads** panel; tune parallel connections in Settings).
 5. Select the model in the sidebar → chat.
+
+### Chat with attachments
+
+Use the **paperclip** in the message bar (or drag files into the input area):
+
+| Type | Text-only models | Vision model + mmproj |
+|------|------------------|------------------------|
+| **Document** (PDF, TXT, MD, RTF…) | Text extracted into the prompt | Same |
+| **Image** | Warning — text-only | Sent to the vision encoder |
+| **Audio** (WAV, MP3, FLAC…) | Warning | Supported on audio-capable VL models |
+| **Video** | — | Up to 3 frames extracted as images |
+
+**Vision setup:** place `*mmproj*.gguf` in the **same folder** as the main `.gguf` (auto-detected on import). Example pairs: Qwen2-VL / LLaVA / MiniCPM-V + matching mmproj.
 
 ### Model Add window
 
@@ -150,13 +167,13 @@ git submodule update --init --recursive   # if already cloned
 
 ### 2. Build llama.cpp (Metal XCFramework)
 
-First run ~**1–5 minutes**:
+First run ~**2–6 minutes** (includes **libmtmd** for vision/audio):
 
 ```bash
 ./Scripts/build-llama-xcframework.sh
 ```
 
-Output: `Vendor/build-apple/llama.xcframework`
+Output: `Vendor/build-apple/llama.xcframework` (llama + ggml + Metal + **mtmd**)
 
 ### 3. Build the app
 
@@ -171,8 +188,8 @@ open build/MacLLM.app
 
 ```bash
 ./Scripts/build-packages.sh          # zip + dmg + pkg + update Homebrew cask
-./Scripts/create-release.sh 1.4.0    # build all + GitHub release (needs gh auth)
-SKIP_GITHUB=1 ./Scripts/create-release.sh 1.4.0   # artifacts only, under dist/
+./Scripts/create-release.sh 1.6.0    # build all + GitHub release (needs gh auth)
+SKIP_GITHUB=1 ./Scripts/create-release.sh 1.6.0   # artifacts only, under dist/
 ```
 
 Tag push (`v*`) also triggers [.github/workflows/release.yml](.github/workflows/release.yml) on GitHub Actions.
@@ -182,16 +199,18 @@ Tag push (`v*`) also triggers [.github/workflows/release.yml](.github/workflows/
 ```
 MacLLM/
 ├── MacLLM/
-│   ├── App/                    # MacLLMApp, AppModel
-│   ├── Bridge/                 # llama.cpp Swift bridge
-│   ├── Core/                   # Models, settings types
+│   ├── App/                    # MacLLMApp, AppModel, AppDelegate (graceful quit)
+│   ├── Bridge/                 # LibLlama, LibMtmd, mtmd_shim (llama.cpp + vision)
+│   ├── Core/                   # Models, MessageAttachment, settings
 │   ├── Features/
-│   │   ├── Chat/               # Streaming chat UI
+│   │   ├── Chat/               # Streaming chat, attachments UI
 │   │   ├── Main/               # NavigationSplitView shell
 │   │   ├── Models/             # Catalog, online search, download UI
 │   │   └── Settings/           # Ollama-style settings window
 │   ├── Services/
 │   │   ├── HuggingFaceDownloadService.swift
+│   │   ├── AttachmentStore.swift / MediaContentProcessor.swift
+│   │   ├── GenerationOutputFilter.swift / ChatTemplateResolver.swift
 │   │   ├── ModelRecommendationService.swift
 │   │   ├── MacSystemProfile.swift
 │   │   └── …
@@ -212,7 +231,8 @@ MacLLM/
 | Item | Path |
 |------|------|
 | Models | `~/Library/Application Support/MacLLM/models/` |
-| Chat history | `~/Library/Application Support/MacLLM/chats/` |
+| Chat history | `~/Library/Application Support/MacLLM/chat-sessions-index.json` |
+| Message attachments | `~/Library/Application Support/MacLLM/attachments/<session-id>/` |
 | Settings | UserDefaults (`inferenceSettings`, HF token) |
 
 Legacy **MacSistem** data is migrated automatically on first launch.
@@ -227,14 +247,20 @@ flowchart LR
     AppModel --> HF[HuggingFace Hub / Download]
     Rec --> Profile[MacSystemProfile]
     Inference --> Llama[llama.cpp Metal]
+    Inference --> Mtmd[libmtmd vision/audio]
     HF --> CDN[Hugging Face CDN]
     AppModel --> Store[ModelStore]
+    AppModel --> Attach[AttachmentStore]
 ```
 
 ## Changelog (recent)
 
 | Version | Highlights |
 |---------|------------|
+| **1.6.0** | Chat attachments (image, audio, video, documents); **libmtmd** + mmproj for vision models; reply token sanitization; graceful app quit; model eject & chat delete UI |
+| **1.5.4** | `GenerationOutputFilter` — stop sequences and ChatML token leaks fixed during streaming |
+| **1.5.3** | Graceful shutdown on quit (unload model, cancel downloads) |
+| **1.5.2** | Model unload button, visible chat delete, wider message input |
 | **1.5.1** | Unified fit badges, faster download panel cleanup, catalog UX, search debounce, generating subtitle |
 | **1.5.0** | UI polish: shared theme, session delete/selection, auto-save settings, cleaner downloads panel, status auto-dismiss |
 | **1.4.3** | ChatML stop tokens (`im_end`, `im_start`) to prevent control-token leaks in replies |
@@ -264,6 +290,8 @@ Full history: [Releases](https://github.com/kuarezma/MacLLM/releases)
 | Download stuck | **Cancel** and retry; check firewall/VPN |
 | `no such module 'llama'` | Rebuild XCFramework; symlink `Modules` in framework if needed |
 | Homebrew SHA mismatch | Cask SHA matches release DMG — use [latest release](https://github.com/kuarezma/MacLLM/releases/latest) URL |
+| Image not understood | Use a **vision** GGUF + **mmproj** in the same folder; text-only models only get document text |
+| `im_end` in replies | Update to **1.5.4+**; older builds lacked streaming token filters |
 
 ## Contributing
 

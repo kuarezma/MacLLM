@@ -42,7 +42,11 @@ MacLLM, [llama.cpp](https://github.com/ggml-org/llama.cpp) ve **Metal GPU** ile 
 | **Manuel kurulum** | `repo-id` + dosya adı veya yerel `.gguf` içe aktarma |
 | **Uyarlanan varsayılanlar** | İlk açılışta RAM’e göre bağlam ve token limiti |
 | **Ollama tarzı ayarlar** | Tam ayarlar penceresi (⌘,) — örnekleme, bağlam, sistem, stop |
-| **Gizlilik** | Veriler `~/Library/Application Support/MacLLM/` altında |
+| **Çok modlu sohbet** | Sohbete **görüntü**, **ses**, **video** (kare çıkarma), **belge** (PDF/metin) ekleme |
+| **Vision modelleri (mtmd)** | llama.cpp **libmtmd** + **mmproj** GGUF (Qwen-VL, LLaVA, Gemma 3 vision vb.) |
+| **Temiz yanıtlar** | Akış filtresi — ChatML/Mistral kontrol token’ları (`im_end`, `[INST]` …) arayüzde gösterilmez |
+| **Güvenli kapanış** | Çıkışta sohbet kaydı, indirme iptali, model bellekten boşaltma |
+| **Gizlilik** | Modeller, sohbetler ve ekler `~/Library/Application Support/MacLLM/` altında |
 | **Kolay dağıtım** | Release: **DMG**, **PKG**, **ZIP**, **Homebrew cask** |
 
 ## Gereksinimler
@@ -86,6 +90,19 @@ Yerel cask: [packaging/homebrew/README.md](packaging/homebrew/README.md)
 3. **Önerilen** sekmesi — Mac’inize uygun model → **Çevrimiçi indir**.
 4. İndirmeyi izleyin (üst panelde hız/kalan süre; Ayarlar’dan paralel bağlantı sayısı).
 5. Sol panelden modeli seçin → sohbet edin.
+
+### Eklerle sohbet
+
+Mesaj çubuğundaki **ataç** simgesini kullanın veya dosyayı giriş alanına **sürükleyin**:
+
+| Tür | Yalnızca metin modeli | Vision model + mmproj |
+|-----|----------------------|------------------------|
+| **Belge** (PDF, TXT, MD, RTF…) | Metin çıkarılıp mesaja eklenir | Aynı |
+| **Görüntü** | Uyarı — yalnızca metin | Vision kodlayıcıya gider |
+| **Ses** (WAV, MP3, FLAC…) | Uyarı | Ses destekli VL modellerde |
+| **Video** | — | En fazla 3 kare görüntü olarak işlenir |
+
+**Vision kurulumu:** ana `.gguf` ile **aynı klasöre** `*mmproj*.gguf` koyun (içe aktarmada otomatik bulunur).
 
 ### Model Ekle penceresi
 
@@ -150,13 +167,13 @@ git submodule update --init --recursive
 
 ### 2. llama.cpp (Metal XCFramework)
 
-İlk sefer ~**1–5 dakika**:
+İlk sefer ~**2–6 dakika** (vision/ses için **libmtmd** dahil):
 
 ```bash
 ./Scripts/build-llama-xcframework.sh
 ```
 
-Çıktı: `Vendor/build-apple/llama.xcframework`
+Çıktı: `Vendor/build-apple/llama.xcframework` (llama + ggml + Metal + **mtmd**)
 
 ### 3. Uygulamayı derle
 
@@ -171,8 +188,8 @@ open build/MacLLM.app
 
 ```bash
 ./Scripts/build-packages.sh          # zip + dmg + pkg + Homebrew cask güncelle
-./Scripts/create-release.sh 1.4.0    # derle + GitHub release (gh gerekir)
-SKIP_GITHUB=1 ./Scripts/create-release.sh 1.4.0   # yalnızca dist/ altında artefaktlar
+./Scripts/create-release.sh 1.6.0    # derle + GitHub release (gh gerekir)
+SKIP_GITHUB=1 ./Scripts/create-release.sh 1.6.0   # yalnızca dist/ altında artefaktlar
 ```
 
 `v*` etiketi push edilince [.github/workflows/release.yml](.github/workflows/release.yml) CI release oluşturur.
@@ -212,7 +229,8 @@ MacLLM/
 | Öğe | Yol |
 |-----|-----|
 | Modeller | `~/Library/Application Support/MacLLM/models/` |
-| Sohbet geçmişi | `~/Library/Application Support/MacLLM/chats/` |
+| Sohbet geçmişi | `~/Library/Application Support/MacLLM/chat-sessions-index.json` |
+| Mesaj ekleri | `~/Library/Application Support/MacLLM/attachments/<oturum-id>/` |
 | Ayarlar | UserDefaults (`inferenceSettings`, HF token) |
 
 Eski **MacSistem** klasörü ilk açılışta **MacLLM**’e taşınır.
@@ -227,14 +245,20 @@ flowchart LR
     AppModel --> HF[Hugging Face]
     Rec --> Profile[MacSystemProfile]
     Inference --> Llama[llama.cpp Metal]
+    Inference --> Mtmd[libmtmd vision/ses]
     HF --> CDN[HF CDN]
     AppModel --> Store[ModelStore]
+    AppModel --> Attach[AttachmentStore]
 ```
 
 ## Sürüm notları (son güncellemeler)
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.6.0** | Sohbet ekleri (görüntü, ses, video, belge); **libmtmd** + mmproj; yanıt token temizliği; güvenli çıkış; model çıkarma ve sohbet silme |
+| **1.5.4** | `GenerationOutputFilter` — ChatML stop ve kontrol token sızıntısı düzeltmesi |
+| **1.5.3** | Çıkışta güvenli kapanış (model boşaltma, indirme iptali) |
+| **1.5.2** | Modeli bellekten çıkar, sohbet sil, geniş mesaj alanı |
 | **1.5.1** | Birleşik uyum rozetleri, indirme paneli temizliği, katalog/arama UX, üretim alt başlığı |
 | **1.5.0** | Arayüz cilası: ortak tema, sohbet silme/seçim, ayarları otomatik kaydetme, indirme paneli, durum çubuğu |
 | **1.4.3** | ChatML stop dizileri (`im_end`, `im_start`) — yanıtta kontrol token sızıntısı giderildi |
@@ -264,6 +288,8 @@ Tüm sürümler: [Releases](https://github.com/kuarezma/MacLLM/releases)
 | İndirme takıldı | **İptal** ve tekrar deneyin; VPN/güvenlik duvarı |
 | `no such module 'llama'` | XCFramework’ü yeniden derleyin |
 | Homebrew SHA uyuşmazlığı | [Son release](https://github.com/kuarezma/MacLLM/releases/latest) DMG’si ile cask eşleşmeli |
+| Görüntü anlaşılmıyor | **Vision** GGUF + aynı klasörde **mmproj**; metin modelleri yalnızca belge metnini alır |
+| Yanıtta `im_end` | **1.5.4+** sürüme güncelleyin |
 
 ## Katkı
 

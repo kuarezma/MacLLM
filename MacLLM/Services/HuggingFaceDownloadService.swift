@@ -272,6 +272,12 @@ final class HuggingFaceDownloadService: ObservableObject {
         ctx.onUpdate(info)
     }
 
+    func cancelAllDownloads() {
+        for id in activeDownloads.map(\.id) {
+            cancelDownload(id: id)
+        }
+    }
+
     func cancelDownload(id: String) {
         if let pctx = parallelContexts[id] {
             pctx.cancelled = true

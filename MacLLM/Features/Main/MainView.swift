@@ -33,12 +33,28 @@ struct MainView: View {
                     Label("Model Ekle", systemImage: "plus.circle")
                 }
                 .help("Katalogdan indir veya GGUF içe aktar")
+                if inferenceService.isModelLoaded {
+                    Button {
+                        Task { await model.unloadCurrentModel() }
+                    } label: {
+                        Label("Modeli Çıkar", systemImage: "eject")
+                    }
+                    .help("Modeli bellekten çıkarır; dosya diskte kalır")
+                }
                 Button {
                     model.newChat()
                 } label: {
                     Label("Yeni Sohbet", systemImage: "square.and.pencil")
                 }
                 .keyboardShortcut("n", modifiers: .command)
+                if model.canDeleteCurrentSession {
+                    Button(role: .destructive) {
+                        model.deleteSession(model.currentSession)
+                    } label: {
+                        Label("Sohbeti Sil", systemImage: "trash")
+                    }
+                    .help("Geçerli sohbeti kalıcı olarak siler")
+                }
                 SettingsLink {
                     Label("Ayarlar", systemImage: "gearshape")
                 }
@@ -81,16 +97,36 @@ struct ModelSidebarView: View {
                     }
                 } else {
                     ForEach(model.installedModels) { installed in
-                        ModelRowView(model: installed, isSelected: model.selectedModelId == installed.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
+                        let isSelected = model.selectedModelId == installed.id
+                        let isLoaded = isSelected
+                            && inferenceService.isModelLoaded
+                            && inferenceService.loadedModelId == installed.id
+                        ModelRowView(
+                            model: installed,
+                            isSelected: isSelected,
+                            isLoadedInMemory: isLoaded,
+                            onUnload: { Task { await model.unloadCurrentModel() } }
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if isSelected && !inferenceService.isModelLoaded {
+                                Task { await model.selectModel(installed) }
+                            } else {
                                 model.selectedModelId = installed.id
                             }
-                            .contextMenu {
-                                Button("Sil", role: .destructive) {
-                                    Task { await model.deleteModel(installed) }
+                        }
+                        .contextMenu {
+                            if isLoaded {
+                                Button {
+                                    Task { await model.unloadCurrentModel() }
+                                } label: {
+                                    Label("Bellekten Çıkar", systemImage: "eject")
                                 }
                             }
+                            Button("Diskten Sil", role: .destructive) {
+                                Task { await model.deleteModel(installed) }
+                            }
+                        }
                     }
                 }
             }
@@ -102,19 +138,28 @@ struct ModelSidebarView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(model.sessions) { session in
-                        HStack {
+                        HStack(spacing: 8) {
                             Text(session.title)
                                 .lineLimit(1)
-                            Spacer(minLength: 0)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    model.loadSession(session)
+                                }
                             if session.id == model.currentSession.id {
                                 Image(systemName: "checkmark")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            model.loadSession(session)
+                            Button {
+                                model.deleteSession(session)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(.secondary)
+                            .help("Sohbeti sil")
                         }
                         .contextMenu {
                             Button("Sil", role: .destructive) {
@@ -143,6 +188,8 @@ struct ModelSidebarView: View {
 struct ModelRowView: View {
     let model: InstalledModel
     let isSelected: Bool
+    var isLoadedInMemory: Bool = false
+    var onUnload: (() -> Void)?
 
     private var subtitle: String {
         let repo = model.repoId == "imported"
@@ -168,7 +215,17 @@ struct ModelRowView: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
-            if isSelected {
+            if isLoadedInMemory {
+                Button {
+                    onUnload?()
+                } label: {
+                    Image(systemName: "eject.fill")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.orange)
+                .help("Bellekten çıkar")
+            } else if isSelected {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .symbolRenderingMode(.hierarchical)

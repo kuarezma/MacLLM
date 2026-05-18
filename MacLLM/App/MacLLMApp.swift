@@ -3,6 +3,7 @@ import UserNotifications
 
 @main
 struct MacLLMApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appModel = AppModel()
     @State private var appUpdate = AppUpdateController.shared
     @StateObject private var inferenceService = InferenceService.shared
@@ -14,6 +15,9 @@ struct MacLLMApp: App {
                 .environment(appUpdate)
                 .environmentObject(inferenceService)
                 .frame(minWidth: 960, minHeight: 640)
+                .onAppear {
+                    AppDelegate.appModel = appModel
+                }
                 .task {
                     await requestNotificationPermissionIfNeeded()
                     if appUpdate.autoCheckEnabled {

@@ -79,44 +79,9 @@ enum ChatTemplateResolver {
         return ["</s>"]
     }
 
-    /// Üretilen metinde şablon sızıntısını keser (stop kaçarsa).
-    static func trimGeneratedLeakage(_ text: String, template: String) -> String {
-        let lower = resolveBuiltin(template).lowercased()
-        var cutMarkers: [String]
-        if lower.hasPrefix("mistral") {
-            cutMarkers = ["[INST]", "[/INST]", "</s>"]
-        } else if lower.contains("llama3") {
-            cutMarkers = ["<|eot_id|>", "<|start_header_id|>"]
-        } else if lower == "chatml" || lower.contains("qwen") {
-            cutMarkers = [chatmlEnd, chatmlStart]
-        } else if lower.contains("phi") {
-            cutMarkers = ["<|end|>"]
-        } else {
-            cutMarkers = ["</s>"]
-        }
-        var result = text
-        for marker in cutMarkers {
-            if let range = result.range(of: marker) {
-                result = String(result[..<range.lowerBound])
-            }
-        }
-        return result.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     /// Arayüzde gösterilecek metinden kontrol token sızıntısını temizler.
     static func sanitizeDisplayedText(_ text: String) -> String {
-        let markers = [
-            chatmlEnd, chatmlStart,
-            "<|eot_id|>", "<|start_header_id|>",
-            "[INST]", "[/INST]", "</s>", "<|end|>",
-        ]
-        var result = text
-        for marker in markers where !marker.isEmpty {
-            if let range = result.range(of: marker) {
-                result = String(result[..<range.lowerBound])
-            }
-        }
-        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+        ControlTokenSanitizer.sanitizeForDisplay(text)
     }
 
     static func mergedStopSequences(settings: InferenceSettings, template: String) -> [String] {

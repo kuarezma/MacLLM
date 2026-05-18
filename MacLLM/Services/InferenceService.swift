@@ -13,24 +13,34 @@ final class InferenceService: ObservableObject {
     private var generationTask: Task<Void, Never>?
 
     func loadModel(_ model: InstalledModel) async throws {
-        unloadModel()
+        await unloadModel()
         llamaContext = try await LlamaContext.createContext(
             path: model.localPath,
             settings: settings,
-            chatTemplateHint: model.chatTemplate
+            chatTemplateHint: model.chatTemplate,
+            mmprojPath: model.mmprojLocalPath
         )
         isModelLoaded = true
         loadedModelId = model.id
         try ModelStore.shared.touchLastUsed(id: model.id)
     }
 
-    func unloadModel() {
+    func unloadModel() async {
         generationTask?.cancel()
+        await llamaContext?.cancel()
+
+        if let generationTask {
+            await generationTask.value
+        }
         generationTask = nil
+        isGenerating = false
+
+        if let llamaContext {
+            await llamaContext.shutdown()
+        }
         llamaContext = nil
         isModelLoaded = false
         loadedModelId = nil
-        isGenerating = false
     }
 
     func stopGeneration() {
@@ -51,9 +61,12 @@ final class InferenceService: ObservableObject {
 
     func streamResponse(
         messages: [ChatMessage],
-        chatTemplate: String
+        chatTemplate: String,
+        sessionId: UUID
     ) -> AsyncThrowingStream<String, Error> {
-        let promptMessages = Self.messagesWithSystem(messages, systemPrompt: settings.systemPrompt)
+        let payload = InferenceMessageBuilder.build(messages: messages, sessionId: sessionId)
+        let promptMessages = Self.messagesWithSystem(payload.messages, systemPrompt: settings.systemPrompt)
+        let mediaPaths = payload.mediaPaths
         guard let llamaContext else {
             return AsyncThrowingStream { $0.finish(throwing: LlamaError.couldNotInitializeContext) }
         }
@@ -63,70 +76,39 @@ final class InferenceService: ObservableObject {
                 do {
                     await MainActor.run { self.isGenerating = true }
                     defer {
-                        Task {
-                            await MainActor.run { self.isGenerating = false }
-                            await llamaContext.clear()
+                        Task { @MainActor in
+                            self.isGenerating = false
                         }
                     }
 
                     let resolvedTemplate = await llamaContext.resolvedChatTemplate()
+                    let inferenceSettings = await MainActor.run { self.settings }
                     let stops = ChatTemplateResolver.mergedStopSequences(
-                        settings: await MainActor.run { self.settings },
+                        settings: inferenceSettings,
                         template: resolvedTemplate
                     )
+                    var outputFilter = GenerationOutputFilter(stopSequences: stops)
 
                     let prompt = try await llamaContext.applyChatTemplate(
                         messages: promptMessages,
                         templateName: chatTemplate
                     )
-                    try await llamaContext.completionInit(text: prompt)
-
-                    var generated = ""
-                    var emittedCount = 0
-
-                    func emitUpToStop() -> Bool {
-                        for stop in stops where generated.contains(stop) {
-                            if let range = generated.range(of: stop) {
-                                let trimmed = ChatTemplateResolver.trimGeneratedLeakage(
-                                    String(generated[..<range.lowerBound]),
-                                    template: resolvedTemplate
-                                )
-                                if trimmed.count > emittedCount {
-                                    let start = trimmed.index(trimmed.startIndex, offsetBy: emittedCount)
-                                    continuation.yield(String(trimmed[start...]))
-                                }
-                                return true
-                            }
-                        }
-                        return false
-                    }
+                    try await llamaContext.completionInit(text: prompt, mediaPaths: mediaPaths)
 
                     while await !llamaContext.is_done {
                         try Task.checkCancellation()
                         let chunk = try await llamaContext.completionLoop()
                         guard !chunk.isEmpty else { continue }
 
-                        generated += chunk
-                        if emitUpToStop() { break }
-
-                        let safe = ChatTemplateResolver.trimGeneratedLeakage(generated, template: resolvedTemplate)
-                        if safe.count < generated.count {
-                            if safe.count > emittedCount {
-                                let start = safe.index(safe.startIndex, offsetBy: emittedCount)
-                                continuation.yield(String(safe[start...]))
-                            }
-                            break
+                        let safe = outputFilter.push(chunk)
+                        if !safe.isEmpty {
+                            continuation.yield(safe)
                         }
-                        continuation.yield(chunk)
-                        emittedCount = generated.count
                     }
 
-                    if !generated.isEmpty {
-                        let finalText = ChatTemplateResolver.trimGeneratedLeakage(generated, template: resolvedTemplate)
-                        if finalText.count > emittedCount {
-                            let start = finalText.index(finalText.startIndex, offsetBy: emittedCount)
-                            continuation.yield(String(finalText[start...]))
-                        }
+                    let tail = outputFilter.finish()
+                    if !tail.isEmpty {
+                        continuation.yield(tail)
                     }
                     continuation.finish()
                 } catch {

@@ -82,6 +82,7 @@ struct SettingsView: View {
             syncStopText(from: model.settings)
         }
         .onDisappear {
+            guard !AppShutdown.isShuttingDown else { return }
             model.settings.stopSequencesText = stopText
             model.saveSettings()
         }

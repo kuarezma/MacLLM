@@ -53,8 +53,62 @@ struct InstalledModel: Codable, Identifiable, Hashable {
     var fileSizeBytes: Int64
     var downloadedAt: Date
     var lastUsedAt: Date?
+    /// Görüntü/ses için vision projeksiyon GGUF yolu (Qwen-VL, LLaVA vb.).
+    var mmprojLocalPath: String?
+    var mmprojFilename: String?
 
     var fileURL: URL { URL(fileURLWithPath: localPath) }
+    var mmprojURL: URL? {
+        guard let mmprojLocalPath else { return nil }
+        return URL(fileURLWithPath: mmprojLocalPath)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, repoId, filename, localPath, chatTemplate
+        case fileSizeBytes, downloadedAt, lastUsedAt
+        case mmprojLocalPath, mmprojFilename
+    }
+
+    init(
+        id: String,
+        name: String,
+        repoId: String,
+        filename: String,
+        localPath: String,
+        chatTemplate: String,
+        fileSizeBytes: Int64,
+        downloadedAt: Date,
+        lastUsedAt: Date? = nil,
+        mmprojLocalPath: String? = nil,
+        mmprojFilename: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.repoId = repoId
+        self.filename = filename
+        self.localPath = localPath
+        self.chatTemplate = chatTemplate
+        self.fileSizeBytes = fileSizeBytes
+        self.downloadedAt = downloadedAt
+        self.lastUsedAt = lastUsedAt
+        self.mmprojLocalPath = mmprojLocalPath
+        self.mmprojFilename = mmprojFilename
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        repoId = try c.decode(String.self, forKey: .repoId)
+        filename = try c.decode(String.self, forKey: .filename)
+        localPath = try c.decode(String.self, forKey: .localPath)
+        chatTemplate = try c.decode(String.self, forKey: .chatTemplate)
+        fileSizeBytes = try c.decode(Int64.self, forKey: .fileSizeBytes)
+        downloadedAt = try c.decode(Date.self, forKey: .downloadedAt)
+        lastUsedAt = try c.decodeIfPresent(Date.self, forKey: .lastUsedAt)
+        mmprojLocalPath = try c.decodeIfPresent(String.self, forKey: .mmprojLocalPath)
+        mmprojFilename = try c.decodeIfPresent(String.self, forKey: .mmprojFilename)
+    }
 }
 
 // MARK: - Chat
@@ -64,12 +118,33 @@ struct ChatMessage: Codable, Identifiable, Hashable {
     var role: ChatRole
     var content: String
     var createdAt: Date
+    var attachments: [MessageAttachment]
 
-    init(id: UUID = UUID(), role: ChatRole, content: String, createdAt: Date = .now) {
+    init(
+        id: UUID = UUID(),
+        role: ChatRole,
+        content: String,
+        createdAt: Date = .now,
+        attachments: [MessageAttachment] = []
+    ) {
         self.id = id
         self.role = role
         self.content = content
         self.createdAt = createdAt
+        self.attachments = attachments
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, role, content, createdAt, attachments
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        role = try c.decode(ChatRole.self, forKey: .role)
+        content = try c.decode(String.self, forKey: .content)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        attachments = try c.decodeIfPresent([MessageAttachment].self, forKey: .attachments) ?? []
     }
 }
 

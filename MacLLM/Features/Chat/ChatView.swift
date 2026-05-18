@@ -4,6 +4,8 @@ struct ChatView: View {
     @Environment(AppModel.self) private var appModel
     @EnvironmentObject private var inferenceService: InferenceService
     @State private var inputText = ""
+    @State private var pendingAttachments: [MessageAttachment] = []
+    @State private var showFileImporter = false
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -18,13 +20,26 @@ struct ChatView: View {
                 } actions: {
                     Button("Model Ekle…") { model.showCatalog = true }
                 }
-            } else if model.isLoadingModel || !inferenceService.isModelLoaded {
+            } else if model.isLoadingModel {
                 ContentUnavailableView {
                     Label("Model hazırlanıyor", systemImage: "cpu")
                 } description: {
                     Text("Çıkarım motoru yükleniyor. Birkaç saniye sürebilir.")
                 } actions: {
                     ProgressView().controlSize(.regular)
+                }
+            } else if !inferenceService.isModelLoaded {
+                ContentUnavailableView {
+                    Label("Model bellekte değil", systemImage: "eject")
+                } description: {
+                    Text("\(model.selectedModel?.name ?? "Model") diskte yüklü; sohbet için belleğe alın.")
+                } actions: {
+                    if let selected = model.selectedModel {
+                        Button("Yeniden Yükle") {
+                            Task { await model.selectModel(selected) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
             } else {
                 ScrollViewReader { proxy in
@@ -40,11 +55,12 @@ struct ChatView: View {
                                 .padding(.top, 40)
                             }
                             ForEach(model.currentSession.messages) { message in
-                                MessageRow(message: message)
+                                MessageRow(message: message, sessionId: model.currentSession.id)
                                     .id(message.id)
                             }
                         }
                         .padding(AppTheme.contentPadding)
+                        .frame(maxWidth: .infinity)
                     }
                     .onChange(of: model.currentSession.messages.count) { _, _ in
                         scrollToBottom(proxy: proxy, animated: true)
@@ -56,41 +72,127 @@ struct ChatView: View {
 
                 Divider()
 
-                HStack(alignment: .bottom, spacing: AppTheme.rowSpacing) {
-                    TextField("Mesajınızı yazın…", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...8)
-                        .focused($inputFocused)
-                        .onSubmit { send() }
-
-                    if inferenceService.isGenerating {
-                        Button("Durdur") {
-                            model.stopGeneration()
-                        }
-                        .keyboardShortcut(.escape, modifiers: [])
-                    } else {
-                        Button {
-                            send()
-                        } label: {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.title2)
-                        }
-                        .accessibilityLabel("Gönder")
-                        .help("Gönder (⌘↩)")
-                        .disabled(
-                            inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                || model.isLoadingModel
-                                || !inferenceService.isModelLoaded
-                        )
-                        .keyboardShortcut(.return, modifiers: [.command])
-                    }
-                }
-                .padding(AppTheme.contentPadding)
+                chatInputBar(model: model)
             }
         }
         .navigationTitle(model.selectedModel?.name ?? "Sohbet")
         .navigationSubtitle(navigationSubtitle)
         .onAppear { inputFocused = true }
+    }
+
+    @ViewBuilder
+    private func chatInputBar(model: AppModel) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !pendingAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pendingAttachments) { attachment in
+                            PendingAttachmentChip(attachment: attachment) {
+                                pendingAttachments.removeAll { $0.id == attachment.id }
+                            }
+                        }
+                    }
+                }
+            }
+
+            HStack(alignment: .bottom, spacing: 10) {
+            Button {
+                showFileImporter = true
+            } label: {
+                Image(systemName: "paperclip")
+                    .font(.title2)
+            }
+            .buttonStyle(.plain)
+            .help("Dosya ekle (görüntü, ses, video, belge)")
+
+            TextField("Mesajınızı yazın…", text: $inputText, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(1...12)
+                .focused($inputFocused)
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .topLeading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.panelRadius)
+                        .fill(Color(nsColor: .textBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.panelRadius)
+                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                )
+                .onSubmit { send() }
+
+            VStack(spacing: 8) {
+                if inferenceService.isGenerating {
+                    Button("Durdur") {
+                        model.stopGeneration()
+                    }
+                    .keyboardShortcut(.escape, modifiers: [])
+                } else {
+                    Button {
+                        send()
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Gönder")
+                    .help("Gönder (⌘↩)")
+                    .disabled(
+                        (inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            && pendingAttachments.isEmpty)
+                            || model.isLoadingModel
+                            || !inferenceService.isModelLoaded
+                    )
+                    .keyboardShortcut(.return, modifiers: [.command])
+                }
+            }
+            .frame(width: 72)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(.bar)
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            handleDrop(providers, model: model)
+        }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: ChatAttachmentImporter.contentTypes,
+            allowsMultipleSelection: true
+        ) { result in
+            importFiles(result, model: model)
+        }
+    }
+
+    private func importFiles(_ result: Result<[URL], Error>, model: AppModel) {
+        guard case .success(let urls) = result else { return }
+        for url in urls {
+            guard let kind = ChatAttachmentImporter.kind(for: url) else { continue }
+            do {
+                var attachment = try AttachmentStore.shared.importFile(
+                    from: url,
+                    sessionId: model.currentSession.id,
+                    kind: kind
+                )
+                try MediaContentProcessor.enrich(&attachment, sessionId: model.currentSession.id)
+                pendingAttachments.append(attachment)
+            } catch {
+                model.setStatusMessage(error.localizedDescription)
+            }
+        }
+    }
+
+    private func handleDrop(_ providers: [NSItemProvider], model: AppModel) -> Bool {
+        for provider in providers {
+            _ = provider.loadObject(ofClass: URL.self) { object, _ in
+                guard let url = object else { return }
+                Task { @MainActor in
+                    importFiles(.success([url]), model: model)
+                }
+            }
+        }
+        return true
     }
 
     private var navigationSubtitle: String {
@@ -113,10 +215,12 @@ struct ChatView: View {
 
     private func send() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
+        let attachments = pendingAttachments
         inputText = ""
+        pendingAttachments = []
         Task {
-            await appModel.sendMessage(text)
+            await appModel.sendMessage(text, pendingAttachments: attachments)
         }
     }
 }

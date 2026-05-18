@@ -76,7 +76,8 @@ final class ModelStore: Sendable {
         repoId: String,
         filename: String,
         localURL: URL,
-        chatTemplate: String
+        chatTemplate: String,
+        mmprojURL: URL? = nil
     ) throws -> InstalledModel {
         var models = try loadInstalledModels()
         let attrs = try fileManager.attributesOfItem(atPath: localURL.path)
@@ -91,7 +92,9 @@ final class ModelStore: Sendable {
             chatTemplate: chatTemplate,
             fileSizeBytes: size,
             downloadedAt: .now,
-            lastUsedAt: nil
+            lastUsedAt: nil,
+            mmprojLocalPath: mmprojURL?.path,
+            mmprojFilename: mmprojURL?.lastPathComponent
         )
 
         models.removeAll { $0.id == id }

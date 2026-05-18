@@ -29,6 +29,15 @@ final class AppModel {
         installedModels.first { $0.id == selectedModelId }
     }
 
+    var isModelLoadedInMemory: Bool {
+        inferenceService.isModelLoaded
+    }
+
+    var canDeleteCurrentSession: Bool {
+        !currentSession.messages.isEmpty
+            || sessions.contains(where: { $0.id == currentSession.id })
+    }
+
     var diskUsageFormatted: String {
         let used = (try? modelStore.totalDiskUsageBytes()) ?? 0
         return ByteCountFormatter.string(fromByteCount: used, countStyle: .file)
@@ -59,6 +68,7 @@ final class AppModel {
                 settings = InferenceSettings.defaults(for: systemProfile)
                 inferenceService.settings = settings
             }
+            mergeDefaultStopSequences()
             if selectedModelId == nil, let first = installedModels.first {
                 await selectModel(first)
             }
@@ -100,6 +110,21 @@ final class AppModel {
         }
     }
 
+    /// Kayıtlı ayarlara şablon stop dizilerini ekler (eski kurulumlar için).
+    private func mergeDefaultStopSequences() {
+        let merged = ChatTemplateResolver.mergedStopSequences(
+            settings: settings,
+            template: selectedModel?.chatTemplate ?? "chatml"
+        )
+        if merged != settings.stopSequences {
+            settings.stopSequences = merged
+            inferenceService.settings = settings
+            if let data = try? JSONEncoder().encode(settings) {
+                UserDefaults.standard.set(data, forKey: "inferenceSettings")
+            }
+        }
+    }
+
     private func repairInstalledModelTemplates() {
         var changed = false
         for index in installedModels.indices {
@@ -134,6 +159,18 @@ final class AppModel {
         } catch {
             setStatusMessage("Yükleme hatası: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    func unloadCurrentModel() async {
+        if inferenceService.isGenerating {
+            stopGeneration()
+        }
+        await inferenceService.unloadModel()
+        if let name = selectedModel?.name {
+            setStatusMessage("\(name) bellekten çıkarıldı")
+        } else {
+            setStatusMessage("Model bellekten çıkarıldı")
         }
     }
 
@@ -182,7 +219,7 @@ final class AppModel {
 
     func deleteModel(_ model: InstalledModel) async {
         if selectedModelId == model.id {
-            inferenceService.unloadModel()
+            await inferenceService.unloadModel()
             selectedModelId = nil
         }
         do {
@@ -209,13 +246,15 @@ final class AppModel {
             }
             try FileManager.default.copyItem(at: url, to: dest)
             try GGUFFileValidator.validateDownload(at: dest, expectedBytes: 0)
+            let mmproj = MmprojDiscovery.findSibling(to: dest)
             _ = try modelStore.registerModel(
                 id: id,
                 name: filename,
                 repoId: "imported",
                 filename: filename,
                 localURL: dest,
-                chatTemplate: HuggingFaceHubService.guessChatTemplate(repoId: filename, filename: filename)
+                chatTemplate: HuggingFaceHubService.guessChatTemplate(repoId: filename, filename: filename),
+                mmprojURL: mmproj
             )
             refreshModels()
             if let model = installedModels.first(where: { $0.id == id }) {
@@ -267,9 +306,9 @@ final class AppModel {
         }
     }
 
-    func sendMessage(_ text: String) async {
+    func sendMessage(_ text: String, pendingAttachments: [MessageAttachment] = []) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty || !pendingAttachments.isEmpty else { return }
         guard let model = selectedModel else {
             setStatusMessage("Önce bir model seçin veya indirin")
             return
@@ -282,7 +321,70 @@ final class AppModel {
             return
         }
 
-        currentSession.messages.append(ChatMessage(role: .user, content: trimmed))
+        let caps = ModelCapabilities.detect(model: model)
+        var attachments = pendingAttachments
+        var content = trimmed
+
+        for index in attachments.indices {
+            do {
+                try MediaContentProcessor.enrich(&attachments[index], sessionId: currentSession.id)
+            } catch {
+                setStatusMessage(error.localizedDescription)
+                return
+            }
+        }
+
+        if let videoIndex = attachments.firstIndex(where: { $0.kind == .video }) {
+            let video = attachments[videoIndex]
+            do {
+                let frames = try MediaContentProcessor.videoFrameAttachments(
+                    source: video,
+                    sessionId: currentSession.id
+                )
+                attachments.remove(at: videoIndex)
+                attachments.append(contentsOf: frames)
+            } catch {
+                setStatusMessage(error.localizedDescription)
+                return
+            }
+        }
+
+        for attachment in attachments where attachment.kind == .document {
+            if let docText = attachment.extractedText {
+                content += MediaContentProcessor.documentTextBlock(
+                    fileName: attachment.fileName,
+                    text: docText
+                )
+            }
+        }
+
+        let mediaAttachments = attachments.filter { $0.kind == .image || $0.kind == .audio }
+        if !mediaAttachments.isEmpty {
+            if !caps.supportsVision && mediaAttachments.contains(where: { $0.kind == .image }) {
+                setStatusMessage(
+                    "Görüntü/video için vision modeli ve mmproj GGUF gerekir. Belgeler metin olarak gönderilebilir."
+                )
+                if trimmed.isEmpty, attachments.allSatisfy({ $0.kind == .image || $0.kind == .video }) {
+                    return
+                }
+            }
+            if mediaAttachments.contains(where: { $0.kind == .audio }), !caps.supportsAudio {
+                setStatusMessage("Ses için ses destekli vision modeli gerekir.")
+            }
+            if caps.requiresMmproj, model.mmprojLocalPath == nil {
+                setStatusMessage(
+                    "Bu model çok modlu — aynı klasöre mmproj GGUF dosyasını ekleyip modeli yeniden yükleyin."
+                )
+                if mediaAttachments.allSatisfy({ $0.kind == .image || $0.kind == .audio }) && trimmed.isEmpty {
+                    return
+                }
+            }
+        }
+
+        let displayText = trimmed.isEmpty ? attachments.map(\.fileName).joined(separator: ", ") : trimmed
+        currentSession.messages.append(
+            ChatMessage(role: .user, content: displayText, attachments: attachments)
+        )
         let assistantIndex = currentSession.messages.count
         currentSession.messages.append(ChatMessage(role: .assistant, content: ""))
 
@@ -291,7 +393,11 @@ final class AppModel {
             currentSession.messages.dropLast().map { $0 },
             maxContextTokens: Int(settings.contextLength)
         )
-        let stream = inferenceService.streamResponse(messages: messagesForInference, chatTemplate: template)
+        let stream = inferenceService.streamResponse(
+            messages: messagesForInference,
+            chatTemplate: template,
+            sessionId: currentSession.id
+        )
 
         do {
             var pending = ""
@@ -300,15 +406,19 @@ final class AppModel {
                 pending += chunk
                 let now = Date()
                 if now.timeIntervalSince(lastFlush) >= 0.06 {
-                    currentSession.messages[assistantIndex].content += pending
+                    let combined = currentSession.messages[assistantIndex].content + pending
+                    currentSession.messages[assistantIndex].content =
+                        ControlTokenSanitizer.sanitizeForDisplay(combined)
                     pending = ""
                     lastFlush = now
                 }
             }
             if !pending.isEmpty {
-                currentSession.messages[assistantIndex].content += pending
+                let combined = currentSession.messages[assistantIndex].content + pending
+                currentSession.messages[assistantIndex].content =
+                    ControlTokenSanitizer.sanitizeForDisplay(combined)
             }
-            currentSession.messages[assistantIndex].content = ChatTemplateResolver.sanitizeDisplayedText(
+            currentSession.messages[assistantIndex].content = ControlTokenSanitizer.sanitizeForDisplay(
                 currentSession.messages[assistantIndex].content
             )
             try await saveCurrentSession()

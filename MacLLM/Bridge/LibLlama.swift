@@ -71,9 +71,19 @@ actor LlamaContext {
     var n_decode: Int32 = 0
 
     private var cancelled = false
+    private var shutDown = false
     private var chatTemplate: String = "chatml"
+    private let mtmdShim = MtmdShim()
+    private var multimodalPrefill = false
+    private var threadCount: Int32 = 4
 
-    init(model: OpaquePointer, context: OpaquePointer, settings: InferenceSettings, chatTemplateHint: String) {
+    init(
+        model: OpaquePointer,
+        context: OpaquePointer,
+        settings: InferenceSettings,
+        chatTemplateHint: String,
+        mmprojPath: String? = nil
+    ) throws {
         self.model = model
         self.context = context
         self.chatTemplate = ChatTemplateResolver.templateForModel(model, hint: chatTemplateHint)
@@ -81,11 +91,16 @@ actor LlamaContext {
         self.batch = llama_batch_init(512, 0, 1)
         self.temporary_invalid_cchars = []
         self.n_len = settings.maxTokens
+        self.threadCount = settings.threadCount
         vocab = llama_model_get_vocab(model)
 
         let sparams = llama_sampler_chain_default_params()
         sampling = llama_sampler_chain_init(sparams)
         Self.configureSamplerChain(sampling, vocab: vocab, settings: settings)
+
+        if let path = mmprojPath, !path.isEmpty, FileManager.default.fileExists(atPath: path) {
+            try mtmdShim.load(mmprojPath: path, model: model, nThreads: threadCount)
+        }
     }
 
     private static func configureSamplerChain(
@@ -131,6 +146,21 @@ actor LlamaContext {
     }
 
     deinit {
+        if !shutDown {
+            shutDown = true
+            llama_sampler_free(sampling)
+            llama_batch_free(batch)
+            llama_model_free(model)
+            llama_free(context)
+            LlamaBackend.release()
+        }
+    }
+
+    /// Belleği serbest bırakır; uygulama kapanırken önce bu çağrılmalıdır.
+    func shutdown() {
+        guard !shutDown else { return }
+        shutDown = true
+        cancelled = true
         llama_sampler_free(sampling)
         llama_batch_free(batch)
         llama_model_free(model)
@@ -138,7 +168,21 @@ actor LlamaContext {
         LlamaBackend.release()
     }
 
-    static func createContext(path: String, settings: InferenceSettings, chatTemplateHint: String = "chatml") throws -> LlamaContext {
+    func loadMmproj(path: String?) throws {
+        guard let path, !path.isEmpty, FileManager.default.fileExists(atPath: path) else { return }
+        try mtmdShim.load(mmprojPath: path, model: model, nThreads: threadCount)
+    }
+
+    var hasMultimodalEncoder: Bool {
+        mtmdShim.supportsVision || mtmdShim.supportsAudio
+    }
+
+    static func createContext(
+        path: String,
+        settings: InferenceSettings,
+        chatTemplateHint: String = "chatml",
+        mmprojPath: String? = nil
+    ) throws -> LlamaContext {
         LlamaBackend.retain()
         var model_params = llama_model_default_params()
 
@@ -165,7 +209,13 @@ actor LlamaContext {
             throw LlamaError.couldNotInitializeContext
         }
 
-        return LlamaContext(model: model, context: context, settings: settings, chatTemplateHint: chatTemplateHint)
+        return try LlamaContext(
+            model: model,
+            context: context,
+            settings: settings,
+            chatTemplateHint: chatTemplateHint,
+            mmprojPath: mmprojPath
+        )
     }
 
     func resolvedChatTemplate() -> String {
@@ -211,9 +261,29 @@ actor LlamaContext {
         throw LlamaError.templateFailed
     }
 
-    func completionInit(text: String) throws {
+    func completionInit(text: String, mediaPaths: [String] = []) throws {
         cancelled = false
         is_done = false
+        multimodalPrefill = false
+
+        if !mediaPaths.isEmpty, hasMultimodalEncoder {
+            multimodalPrefill = true
+            tokens_list = []
+            temporary_invalid_cchars = []
+            llama_batch_clear(&batch)
+
+            let nPast = try mtmdShim.evalPrompt(
+                prompt: text,
+                mediaPaths: mediaPaths,
+                llamaContext: context,
+                nPast: 0,
+                nBatch: 512
+            )
+            n_cur = nPast
+            n_decode = 0
+            return
+        }
+
         tokens_list = tokenize(text: text, add_bos: true)
         temporary_invalid_cchars = []
 
@@ -241,7 +311,8 @@ actor LlamaContext {
             throw LlamaError.generationCancelled
         }
 
-        let new_token_id = llama_sampler_sample(sampling, context, batch.n_tokens - 1)
+        let logitsIdx: Int32 = batch.n_tokens > 0 ? batch.n_tokens - 1 : -1
+        let new_token_id = llama_sampler_sample(sampling, context, logitsIdx)
 
         if llama_vocab_is_eog(vocab, new_token_id) || n_cur >= n_len {
             is_done = true
@@ -278,6 +349,7 @@ actor LlamaContext {
         temporary_invalid_cchars.removeAll()
         is_done = false
         cancelled = false
+        multimodalPrefill = false
         llama_memory_clear(llama_get_memory(context), true)
     }
 
