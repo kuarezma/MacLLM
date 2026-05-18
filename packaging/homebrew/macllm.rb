@@ -1,9 +1,9 @@
-# Homebrew Cask — MacLLM 1.14.1
+# Homebrew Cask — MacLLM 1.14.2
 # Kurulum: brew install --cask ./packaging/homebrew/macllm.rb
 
 cask "macllm" do
-  version "1.14.1"
-  sha256 "f4f8f7e881e350e2c56463301bc3940389dbbe85cef722f532ac30aeddd7a1c5"
+  version "1.14.2"
+  sha256 "3de7cadc7857bb6c07125cd899e0f6c8943397642d06dd80c9adae1c070b3833"
 
   url "https://github.com/kuarezma/MacLLM/releases/download/v\#{version}/MacLLM-\#{version}-macOS-arm64.dmg"
   name "MacLLM"
