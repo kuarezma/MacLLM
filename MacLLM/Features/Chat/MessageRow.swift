@@ -80,10 +80,14 @@ struct MessageRow: View {
                     .textSelection(.enabled)
                     .font(.body)
                     .foregroundStyle(AppTheme.primaryText)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(AppTheme.userBubbleBackground())
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.bubbleRadius, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(AppTheme.userBubbleBackground(), in: RoundedRectangle(cornerRadius: AppTheme.bubbleRadius, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: AppTheme.bubbleRadius, style: .continuous)
+                            .strokeBorder(AppTheme.accent.opacity(0.15), lineWidth: 0.5)
+                    }
+                    .appFloatingShadow(radius: 8, y: 3)
             } else {
                 assistantContent
             }

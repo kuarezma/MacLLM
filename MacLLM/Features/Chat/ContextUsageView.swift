@@ -12,7 +12,13 @@ struct ContextUsageView: View {
     }
 
     private var percentText: String {
-        String(format: "%.1f%%", fraction * 100)
+        String(format: "%.0f%%", fraction * 100)
+    }
+
+    private var ringColor: Color {
+        if fraction > 0.85 { return .orange }
+        if fraction > 0.6 { return AppTheme.accent }
+        return AppTheme.accentTertiary
     }
 
     var body: some View {
@@ -21,23 +27,27 @@ struct ContextUsageView: View {
         } label: {
             ZStack {
                 Circle()
-                    .stroke(AppTheme.border, lineWidth: 2)
-                    .frame(width: 28, height: 28)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 3)
+                    .frame(width: 36, height: 36)
                 Circle()
                     .trim(from: 0, to: fraction)
                     .stroke(
-                        fraction > 0.85 ? Color.orange : AppTheme.accent,
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                        AngularGradient(
+                            colors: [ringColor.opacity(0.5), ringColor, AppTheme.accentSecondary],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
                     )
                     .rotationEffect(.degrees(-90))
-                    .frame(width: 28, height: 28)
+                    .frame(width: 36, height: 36)
+                    .animation(AppTheme.springSoft, value: fraction)
                 Text(percentText)
-                    .font(.system(size: 7, weight: .medium))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(AppTheme.secondaryText)
                     .minimumScaleFactor(0.5)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ModernScaleButtonStyle())
         .help(isEstimate ? "Bağlam kullanımı (tahmini)" : "Bağlam kullanımı")
         .popover(isPresented: $showDetail, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 10) {
@@ -46,7 +56,7 @@ struct ContextUsageView: View {
                         .font(.title3.weight(.semibold))
                     Spacer()
                     ProgressView(value: fraction)
-                        .tint(fraction > 0.85 ? .orange : AppTheme.accent)
+                        .tint(ringColor)
                         .frame(width: 80)
                 }
                 Text("\(formatTokens(usedTokens)) / \(formatTokens(maxTokens))")

@@ -38,21 +38,26 @@ struct ActiveDownloadsPanel: View {
 
     @ViewBuilder
     private var compactBody: some View {
-        DisclosureGroup {
-            downloadList
-        } label: {
-            Label {
-                Text("Aktif indirmeler (\(inProgressCount))")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            } icon: {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
                 Image(systemName: "arrow.down.circle.fill")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(AppTheme.accentTertiary)
+                Text("Aktif indirmeler (\(inProgressCount))")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
             }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            downloadList
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(height: 0.5)
+        }
     }
 
     @ViewBuilder

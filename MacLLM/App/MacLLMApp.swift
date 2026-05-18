@@ -15,6 +15,7 @@ struct MacLLMApp: App {
                 .environment(appUpdate)
                 .environmentObject(inferenceService)
                 .frame(minWidth: 960, minHeight: 640)
+                .tint(AppTheme.accent)
                 .onAppear {
                     AppDelegate.appModel = appModel
                 }

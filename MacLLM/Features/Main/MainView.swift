@@ -96,14 +96,11 @@ struct MainView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let status = model.statusMessage, !status.isEmpty {
-                Text(status)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 28)
-                    .background(.bar.opacity(0.95))
+                AppStatusBar(message: status)
+                    .animation(AppTheme.springSoft, value: status)
             }
         }
+        .tint(AppTheme.accent)
     }
 }
 
@@ -200,7 +197,14 @@ struct JanSidebarView: View {
 
             Section("Sohbetler") {
                 TextField("Sohbetlerde ara…", text: $sessionSearchText)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: AppTheme.searchFieldRadius, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: AppTheme.searchFieldRadius, style: .continuous)
+                            .strokeBorder(AppTheme.border, lineWidth: 1)
+                    }
                     .focused($sessionSearchFocused)
                     .onChange(of: sessionSearchText) { _, query in
                         performSessionSearch(query: query)
@@ -226,9 +230,9 @@ struct JanSidebarView: View {
                                     Task { await model.loadSession(session) }
                                 }
                             if session.id == model.currentSession.id {
-                                Circle()
-                                    .fill(AppTheme.accent)
-                                    .frame(width: 6, height: 6)
+                                Capsule(style: .continuous)
+                                    .fill(AppTheme.accentGradient)
+                                    .frame(width: 3, height: 16)
                             }
                         }
                         .contextMenu {
@@ -282,7 +286,21 @@ struct JanSidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("MacLLM")
+        .navigationTitle("")
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                HStack(spacing: 10) {
+                    BrandMark(size: 26)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("MacLLM")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Yerel AI")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                }
+            }
+        }
         .background(AppTheme.sidebarBackground)
         .onChange(of: model.sessions.count) { _, _ in
             if !sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -313,23 +331,30 @@ struct JanSidebarView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .frame(width: 20)
-                    .foregroundStyle(AppTheme.secondaryText)
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(AppTheme.accent.opacity(0.12))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                }
                 Text(title)
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppTheme.primaryText)
                 Spacer()
                 if let shortcut {
                     Text(shortcut)
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.secondaryText.opacity(0.7))
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(AppTheme.secondaryText.opacity(0.65))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.primary.opacity(0.06), in: Capsule())
                 }
             }
-            .padding(.vertical, 2)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SidebarNavButtonStyle())
     }
 
     private func performSessionSearch(query: String) {
@@ -382,9 +407,7 @@ struct ModelRowView: View {
             }
             Spacer(minLength: 0)
             if isLoadedInMemory {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 6, height: 6)
+                AnimatedStatusDot(color: .green, pulse: true)
             }
         }
         .padding(.vertical, 2)

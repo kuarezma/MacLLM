@@ -44,7 +44,13 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.5)
+### Bu sürümde (1.14.6)
+
+- Modern arayüz: cam efektler, gradient accent, spring animasyonlar
+- Yenilenen sidebar, composer, hızlı promptlar ve durum çubuğu
+- Gradient kullanıcı baloncukları ve bağlam halkası
+
+### Önceki (1.14.5)
 
 - Vision model rehberi: composer uyarısı, Hub üzerinden otomatik mmproj indirme
 - mmproj dosyası otomatik bulma ve modele bağlama
@@ -54,7 +60,6 @@ gh release create "$TAG" \
 
 - Model Hub arama listesi: yayıncı avatarları, sabit satır düzeni
 - Quant uygunluk kartı ve Mac RAM rehberi (Q4_K_M vb.)
-- CI derleme düzeltmesi (MainActor izolasyonu)
 
 ### Önceki (1.14.3)
 

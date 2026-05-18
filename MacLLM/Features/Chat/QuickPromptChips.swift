@@ -6,37 +6,36 @@ struct QuickPromptChips: View {
 
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 140), spacing: 10)],
+            columns: [GridItem(.adaptive(minimum: 148), spacing: 10)],
             spacing: 10
         ) {
             ForEach(prompts, id: \.0) { icon, text in
                 Button {
                     onSelect(text)
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: icon)
-                            .font(.caption)
-                            .foregroundStyle(AppTheme.accent)
+                    HStack(spacing: 10) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(AppTheme.accent.opacity(0.12))
+                                .frame(width: 28, height: 28)
+                            Image(systemName: icon)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.accent)
+                        }
                         Text(text)
-                            .font(.subheadline)
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(AppTheme.primaryText)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(AppTheme.elevatedSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous)
-                            .strokeBorder(AppTheme.border, lineWidth: 1)
-                    )
+                    .padding(.vertical, 11)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PromptChipButtonStyle())
             }
         }
-        .frame(maxWidth: 520)
+        .frame(maxWidth: 540)
     }
 
     static let defaults: [(String, String)] = [

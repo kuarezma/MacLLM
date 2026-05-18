@@ -46,7 +46,7 @@ struct ChatView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppTheme.chatBackground)
+        .appCanvasBackground()
         .navigationTitle("")
         .searchable(text: $messageSearchText, prompt: "Bu sohbette ara")
         .toolbar {
@@ -84,20 +84,38 @@ struct ChatView: View {
 
     @ViewBuilder
     private func emptyChatHero(model: AppModel) -> some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
             Spacer(minLength: 0)
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 40))
-                .foregroundStyle(AppTheme.secondaryText.opacity(0.5))
-            Text("Bir şey sorun…")
-                .font(.title2.weight(.medium))
-                .foregroundStyle(AppTheme.primaryText)
-            Text("Yanıtlar cihazınızda yerel olarak üretilir.")
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.secondaryText)
+
+            ZStack {
+                Circle()
+                    .fill(AppTheme.accent.opacity(0.12))
+                    .frame(width: 120, height: 120)
+                    .blur(radius: 24)
+                Circle()
+                    .fill(AppTheme.accentSecondary.opacity(0.08))
+                    .frame(width: 80, height: 80)
+                    .blur(radius: 16)
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundStyle(AppTheme.accentGradient)
+                    .symbolRenderingMode(.hierarchical)
+            }
+
+            VStack(spacing: 8) {
+                Text("Bir şey sorun…")
+                    .font(.system(size: 28, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.primaryText)
+                Text("Yanıtlar cihazınızda yerel olarak üretilir.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+
             QuickPromptChips(prompts: QuickPromptChips.defaults) { prompt in
                 Task { await model.sendMessage(prompt) }
             }
+            .padding(.top, 4)
+
             Spacer(minLength: 0)
         }
         .frame(maxWidth: AppTheme.maxChatContentWidth)
@@ -179,22 +197,28 @@ struct ChatView: View {
             if let warning = model.visionAttachmentWarning(for: pendingAttachments) {
                 HStack(spacing: 8) {
                     Image(systemName: "eye.slash")
-                        .font(.caption)
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.orange)
                     Text(warning)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
                         .lineLimit(2)
                     Spacer(minLength: 0)
                     Button("Hub") {
                         model.showCatalog = true
                     }
-                    .font(.caption.weight(.medium))
+                    .font(.caption.weight(.semibold))
                     .buttonStyle(.borderless)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.orange.opacity(0.25), lineWidth: 1)
+                }
                 .padding(.horizontal, AppTheme.contentPadding)
-                .padding(.vertical, 6)
-                .background(Color.orange.opacity(0.08))
+                .padding(.bottom, 6)
             }
 
             HStack(alignment: .bottom, spacing: 12) {
@@ -209,15 +233,21 @@ struct ChatView: View {
                     .frame(width: 36, height: 36)
             }
             .padding(.horizontal, AppTheme.contentPadding)
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
             .frame(minHeight: AppTheme.composerMinHeight)
         }
         .frame(maxWidth: .infinity)
-        .background(AppTheme.chatBackground)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(AppTheme.border)
-                .frame(height: 1)
+        .background {
+            LinearGradient(
+                colors: [
+                    AppTheme.chatBackground.opacity(0),
+                    AppTheme.chatBackground.opacity(0.92)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers, model: model)
@@ -261,22 +291,20 @@ struct ChatView: View {
             .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.composerBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.composerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.composerRadius, style: .continuous)
-                .strokeBorder(AppTheme.border, lineWidth: 1)
-        )
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .appGlassCard(cornerRadius: AppTheme.composerRadius, material: .regularMaterial)
+        .appFloatingShadow(radius: 18, y: 6)
     }
 
     private func composerIconButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(AppTheme.secondaryText)
-                .frame(width: 28, height: 28)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 32, height: 32)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AccentIconButtonStyle())
         .help(help)
     }
 
@@ -286,20 +314,37 @@ struct ChatView: View {
             Button {
                 Task { await model.stopGenerationAndWait() }
             } label: {
-                Image(systemName: "stop.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(AppTheme.accent)
+                ZStack {
+                    Circle()
+                        .fill(Color.red.opacity(0.15))
+                        .frame(width: 38, height: 38)
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.red)
+                }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ModernScaleButtonStyle())
             .help("Durdur")
             .keyboardShortcut(.escape, modifiers: [])
         } else {
             Button(action: send) {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(canSend ? AppTheme.accent : AppTheme.secondaryText.opacity(0.4))
+                ZStack {
+                    if canSend {
+                        Circle()
+                            .fill(AppTheme.accentGradient)
+                            .frame(width: 38, height: 38)
+                            .shadow(color: AppTheme.glowAccent, radius: 8, y: 2)
+                    } else {
+                        Circle()
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(width: 38, height: 38)
+                    }
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(canSend ? .white : AppTheme.secondaryText.opacity(0.4))
+                }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ModernScaleButtonStyle())
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: [.command])
         }

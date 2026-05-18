@@ -14,27 +14,25 @@ struct ChatHeaderView: View {
                 AppSettingsOpener.open()
             } label: {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppTheme.secondaryText)
+                    .frame(width: 32, height: 32)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(AccentIconButtonStyle())
             .help("Ayarlar")
 
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
-                .help(statusHelp)
+            AnimatedStatusDot(color: statusColor, pulse: shouldPulse)
 
             Spacer(minLength: 0)
         }
         .padding(.horizontal, AppTheme.contentPadding)
         .padding(.vertical, 10)
         .frame(height: AppTheme.chatHeaderHeight)
-        .background(AppTheme.chatBackground)
+        .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(AppTheme.border)
-                .frame(height: 1)
+                .frame(height: 0.5)
         }
     }
 
@@ -65,26 +63,26 @@ struct ChatHeaderView: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "cpu")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.accent)
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.14))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "cpu")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppTheme.accent)
+                }
                 Text(appModel.selectedModel?.name ?? "Model seçin")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
                     .foregroundStyle(AppTheme.primaryText)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(AppTheme.secondaryText)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(AppTheme.elevatedSurface)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .strokeBorder(AppTheme.border, lineWidth: 1)
-            )
+            .padding(.vertical, 7)
+            .appGlassCard(cornerRadius: 20, material: .ultraThinMaterial)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -97,10 +95,7 @@ struct ChatHeaderView: View {
         return AppTheme.secondaryText.opacity(0.5)
     }
 
-    private var statusHelp: String {
-        if appModel.isLoadingModel { return "Model yükleniyor" }
-        if inferenceService.isGenerating { return "Yanıt üretiliyor" }
-        if inferenceService.isModelLoaded { return "Model hazır" }
-        return "Model yüklü değil"
+    private var shouldPulse: Bool {
+        appModel.isLoadingModel || inferenceService.isGenerating || inferenceService.isModelLoaded
     }
 }

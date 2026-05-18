@@ -75,6 +75,7 @@ SOURCES=(
   MacLLM/Core/UserErrorFormatter.swift
   MacLLM/Core/AppVersion.swift
   MacLLM/Core/AppTheme.swift
+  MacLLM/Core/AppThemeComponents.swift
   MacLLM/Core/MarkdownContentParser.swift
   MacLLM/Core/HubFileListLogic.swift
   MacLLM/Core/HFModelTypes.swift
