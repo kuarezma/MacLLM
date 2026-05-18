@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build tools
+        run: brew install cmake ninja
+
+      - name: Build release zip
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SKIP_GITHUB=1 ./Scripts/create-release.sh "$VERSION"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/MacLLM-*-macOS-arm64.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+          body: |
+            ## MacLLM — macOS Apple Silicon
+
+            Native local LLM chat: Metal inference, Hugging Face GGUF downloads, streaming UI.
+
+            ### Install
+
+            1. Download **MacLLM-*-macOS-arm64.zip** below
+            2. Unzip and drag **MacLLM.app** to Applications
+            3. First launch: **right-click → Open** (unsigned build)
+            4. Use **Online Model** to download a GGUF from Hugging Face
+
+            ### Requirements
+
+            - macOS 14+, Apple Silicon (arm64)
+            - 16 GB RAM recommended for 7B models
+
+            See [README](https://github.com/kuarezma/MacLLM/blob/main/README.md) for details.

@@ -27,11 +27,22 @@ echo "Paket: $DIST/$ZIP_NAME ($(du -h "$DIST/$ZIP_NAME" | awk '{print $1}'))"
 
 if [[ "${SKIP_GITHUB:-}" == "1" ]]; then
   echo "SKIP_GITHUB=1 — yükleme atlandı."
+  echo "GitHub'a yüklemek için: git push origin main && git push origin $TAG --force"
+  echo "veya tag push ile CI: git tag -f $TAG && git push origin $TAG --force"
   exit 0
 fi
 
+if ! gh auth status -h github.com &>/dev/null; then
+  echo "Hata: gh oturumu yok. Çalıştırın: gh auth login -h github.com"
+  echo "Alternatif: SKIP_GITHUB=1 ile zip üretin, sonra tag push ile CI release kullanın."
+  exit 1
+fi
+
 git tag -f "$TAG" 2>/dev/null || true
-git push origin "$TAG" --force
+if ! git push origin "$TAG" --force; then
+  echo "Uyarı: tag push başarısız (ağ?). CI için önce: git push origin main"
+  exit 1
+fi
 
 gh release view "$TAG" 2>/dev/null && gh release delete "$TAG" --yes || true
 
