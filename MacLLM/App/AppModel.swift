@@ -74,7 +74,8 @@ final class AppModel {
         }
     }
 
-    func selectModel(_ model: InstalledModel) async {
+    @discardableResult
+    func selectModel(_ model: InstalledModel) async -> Bool {
         isLoadingModel = true
         statusMessage = "\(model.name) yükleniyor..."
         defer { isLoadingModel = false }
@@ -85,19 +86,30 @@ final class AppModel {
             currentSession.modelId = model.id
             statusMessage = "\(model.name) hazır"
             refreshModels()
+            return true
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = "Yükleme hatası: \(error.localizedDescription)"
+            return false
         }
     }
 
     func downloadModel(_ entry: CatalogEntry) async {
-        statusMessage = "\(entry.name) indiriliyor..."
+        statusMessage = "\(entry.name) indiriliyor…"
         do {
             let localURL = try await downloadService.download(entry: entry) { info in
                 Task { @MainActor in
-                    self.statusMessage = String(format: "%.0f%% — %@", info.progress * 100, entry.name)
+                    let eta = info.estimatedSecondsRemaining.map {
+                        DownloadMetrics.formatETA(seconds: $0)
+                    } ?? "—"
+                    self.statusMessage = String(
+                        format: "%.0f%% · %@ · kalan %@",
+                        info.progress * 100,
+                        entry.name,
+                        eta
+                    )
                 }
             }
+            try GGUFFileValidator.validateDownload(at: localURL, expectedBytes: entry.estimatedSizeBytes)
             _ = try modelStore.registerModel(
                 id: entry.id,
                 name: entry.name,
@@ -107,10 +119,16 @@ final class AppModel {
                 chatTemplate: entry.chatTemplate
             )
             refreshModels()
-            if let model = installedModels.first(where: { $0.id == entry.id }) {
-                await selectModel(model)
+            guard let model = installedModels.first(where: { $0.id == entry.id }) else {
+                statusMessage = "\(entry.name) kaydedildi ancak listede bulunamadı."
+                return
             }
-            statusMessage = "\(entry.name) indirildi"
+            let loaded = await selectModel(model)
+            if loaded {
+                statusMessage = "\(entry.name) indirildi ve kullanıma hazır"
+            } else {
+                statusMessage = "\(entry.name) indirildi; yüklenemedi — soldan «Yükle» veya tekrar deneyin."
+            }
         } catch is CancellationError {
             statusMessage = "İndirme iptal edildi"
         } catch {
@@ -136,6 +154,7 @@ final class AppModel {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
 
+        statusMessage = "Model kopyalanıyor…"
         do {
             let filename = url.lastPathComponent
             let id = filename.replacingOccurrences(of: ".gguf", with: "")
@@ -145,21 +164,24 @@ final class AppModel {
                 try FileManager.default.removeItem(at: dest)
             }
             try FileManager.default.copyItem(at: url, to: dest)
+            try GGUFFileValidator.validateDownload(at: dest, expectedBytes: 0)
             _ = try modelStore.registerModel(
                 id: id,
                 name: filename,
                 repoId: "imported",
                 filename: filename,
                 localURL: dest,
-                chatTemplate: "chatml"
+                chatTemplate: HuggingFaceHubService.guessChatTemplate(repoId: filename, filename: filename)
             )
             refreshModels()
             if let model = installedModels.first(where: { $0.id == id }) {
-                await selectModel(model)
+                let loaded = await selectModel(model)
+                statusMessage = loaded ? "Model içe aktarıldı ve hazır" : "Model içe aktarıldı; yüklenemedi"
+            } else {
+                statusMessage = "Model içe aktarıldı"
             }
-            statusMessage = "Model içe aktarıldı"
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = "İçe aktarma hatası: \(error.localizedDescription)"
         }
     }
 
@@ -192,8 +214,15 @@ final class AppModel {
     func sendMessage(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard let model = selectedModel, inferenceService.isModelLoaded else {
+        guard let model = selectedModel else {
             statusMessage = "Önce bir model seçin veya indirin"
+            return
+        }
+        guard inferenceService.isModelLoaded, inferenceService.loadedModelId == model.id else {
+            statusMessage = isLoadingModel ? "Model yükleniyor…" : "Model henüz hazır değil — soldan seçin veya yükleyin"
+            if !isLoadingModel {
+                Task { _ = await selectModel(model) }
+            }
             return
         }
 
@@ -202,11 +231,26 @@ final class AppModel {
         currentSession.messages.append(ChatMessage(role: .assistant, content: ""))
 
         let template = model.chatTemplate
-        let stream = inferenceService.streamResponse(messages: currentSession.messages.dropLast().map { $0 }, chatTemplate: template)
+        let messagesForInference = Self.trimMessagesForContext(
+            currentSession.messages.dropLast().map { $0 },
+            maxContextTokens: Int(settings.contextLength)
+        )
+        let stream = inferenceService.streamResponse(messages: messagesForInference, chatTemplate: template)
 
         do {
+            var pending = ""
+            var lastFlush = Date()
             for try await chunk in stream {
-                currentSession.messages[assistantIndex].content += chunk
+                pending += chunk
+                let now = Date()
+                if now.timeIntervalSince(lastFlush) >= 0.06 {
+                    currentSession.messages[assistantIndex].content += pending
+                    pending = ""
+                    lastFlush = now
+                }
+            }
+            if !pending.isEmpty {
+                currentSession.messages[assistantIndex].content += pending
             }
             try await saveCurrentSession()
         } catch is CancellationError {
@@ -221,6 +265,26 @@ final class AppModel {
 
     func stopGeneration() {
         inferenceService.stopGeneration()
+    }
+
+    private static func trimMessagesForContext(_ messages: [ChatMessage], maxContextTokens: Int) -> [ChatMessage] {
+        let budget = max(512, Int(Double(maxContextTokens) * 0.82))
+        var estimated = 0
+        var kept: [ChatMessage] = []
+        for message in messages.reversed() {
+            let cost = max(1, message.content.count / 4)
+            if estimated + cost > budget, !kept.isEmpty { break }
+            estimated += cost
+            kept.insert(message, at: 0)
+        }
+        if kept.isEmpty, let last = messages.last {
+            return [last]
+        }
+        if let system = messages.first(where: { $0.role == .system }),
+           !kept.contains(where: { $0.id == system.id }) {
+            kept.insert(system, at: 0)
+        }
+        return kept
     }
 
     func saveSettings() {

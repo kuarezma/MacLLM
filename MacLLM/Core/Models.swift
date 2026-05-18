@@ -233,15 +233,19 @@ struct InferenceSettings: Codable, Equatable {
         case ..<10:
             settings.contextLength = 2048
             settings.maxTokens = 768
+            settings.gpuLayers = 20
         case 10..<18:
             settings.contextLength = 4096
             settings.maxTokens = 1024
+            settings.gpuLayers = 40
         case 18..<26:
             settings.contextLength = 6144
             settings.maxTokens = 1536
+            settings.gpuLayers = 60
         default:
             settings.contextLength = 8192
             settings.maxTokens = 2048
+            settings.gpuLayers = -1
         }
         settings.threadCount = Int32(max(1, min(8, profile.processorCount - 2)))
         return settings

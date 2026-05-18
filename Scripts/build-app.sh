@@ -60,7 +60,11 @@ SOURCES=(
   MacLLM/Services/MacSystemProfile.swift
   MacLLM/Services/ModelRecommendationService.swift
   MacLLM/Services/DownloadMetrics.swift
+  MacLLM/Services/DownloadPreferences.swift
+  MacLLM/Services/RangeDownloadEngine.swift
   MacLLM/Services/HuggingFaceDownloadService.swift
+  MacLLM/Services/GGUFFileValidator.swift
+  MacLLM/Services/ModelMetadataParser.swift
   MacLLM/Services/HuggingFaceHubService.swift
   MacLLM/Services/HuggingFaceCredentials.swift
   MacLLM/Services/ChatHistoryStore.swift
@@ -71,6 +75,7 @@ SOURCES=(
   MacLLM/Features/Chat/ChatView.swift
   MacLLM/Features/Chat/MessageRow.swift
   MacLLM/Features/Models/DownloadProgressView.swift
+  MacLLM/Features/Models/ActiveDownloadsPanel.swift
   MacLLM/Features/Models/ModelCatalogView.swift
   MacLLM/Features/Models/OnlineModelSearchView.swift
   MacLLM/Features/Settings/SettingsView.swift

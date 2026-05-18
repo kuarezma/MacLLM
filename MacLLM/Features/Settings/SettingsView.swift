@@ -293,6 +293,20 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func huggingFaceSection() -> some View {
+        Section("İndirme hızı") {
+            Stepper(
+                "Paralel bağlantı: \(DownloadPreferences.parallelConnections)",
+                value: Binding(
+                    get: { DownloadPreferences.parallelConnections },
+                    set: { DownloadPreferences.parallelConnections = $0 }
+                ),
+                in: 1...8
+            )
+            Text("50 MB üzeri modellerde aynı anda birden fazla HTTP bağlantısı kullanılır (varsayılan 6). 1 = tek bağlantı, duraklat/devam destekli.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
         Section("Çevrimiçi indirme") {
             SecureField("Access Token (opsiyonel)", text: Binding(
                 get: { HuggingFaceCredentials.token ?? "" },

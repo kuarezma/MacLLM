@@ -49,21 +49,23 @@ final class InferenceService: ObservableObject {
         messages: [ChatMessage],
         chatTemplate: String
     ) -> AsyncThrowingStream<String, Error> {
-        AsyncThrowingStream { continuation in
-            generationTask = Task {
+        let promptMessages = Self.messagesWithSystem(messages, systemPrompt: settings.systemPrompt)
+        let stops = settings.stopSequences.filter { !$0.isEmpty }
+        guard let llamaContext else {
+            return AsyncThrowingStream { $0.finish(throwing: LlamaError.couldNotInitializeContext) }
+        }
+
+        return AsyncThrowingStream { continuation in
+            generationTask = Task.detached(priority: .userInitiated) {
                 do {
-                    guard let llamaContext else {
-                        continuation.finish(throwing: LlamaError.couldNotInitializeContext)
-                        return
-                    }
-
-                    isGenerating = true
+                    await MainActor.run { self.isGenerating = true }
                     defer {
-                        isGenerating = false
-                        Task { await llamaContext.clear() }
+                        Task {
+                            await MainActor.run { self.isGenerating = false }
+                            await llamaContext.clear()
+                        }
                     }
 
-                    let promptMessages = Self.messagesWithSystem(messages, systemPrompt: settings.systemPrompt)
                     let prompt = try await llamaContext.applyChatTemplate(
                         messages: promptMessages,
                         templateName: chatTemplate
@@ -72,7 +74,6 @@ final class InferenceService: ObservableObject {
 
                     var generated = ""
                     var emittedCount = 0
-                    let stops = settings.stopSequences.filter { !$0.isEmpty }
 
                     while await !llamaContext.is_done {
                         try Task.checkCancellation()

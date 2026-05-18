@@ -5,9 +5,14 @@ struct DownloadProgressView: View {
     let onPause: () -> Void
     let onResume: () -> Void
     let onCancel: () -> Void
+    var supportsPause: Bool = true
 
     private var isActive: Bool {
         download.state == .downloading || download.state == .paused
+    }
+
+    private var isParallel: Bool {
+        !supportsPause && download.state == .downloading
     }
 
     var body: some View {
@@ -30,6 +35,12 @@ struct DownloadProgressView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
+                if isParallel {
+                    Text("Paralel indirme (\(DownloadPreferences.parallelConnections) bağlantı)")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                }
+
                 if download.state == .paused {
                     Label("Duraklatıldı", systemImage: "pause.circle.fill")
                         .font(.caption)
@@ -37,20 +48,22 @@ struct DownloadProgressView: View {
                 }
 
                 HStack(spacing: 10) {
-                    if download.state == .paused {
-                        Button {
-                            onResume()
-                        } label: {
-                            Label("Devam", systemImage: "play.fill")
+                    if supportsPause {
+                        if download.state == .paused {
+                            Button {
+                                onResume()
+                            } label: {
+                                Label("Devam", systemImage: "play.fill")
+                            }
+                            .controlSize(.small)
+                        } else {
+                            Button {
+                                onPause()
+                            } label: {
+                                Label("Durdur", systemImage: "pause.fill")
+                            }
+                            .controlSize(.small)
                         }
-                        .controlSize(.small)
-                    } else {
-                        Button {
-                            onPause()
-                        } label: {
-                            Label("Durdur", systemImage: "pause.fill")
-                        }
-                        .controlSize(.small)
                     }
 
                     Button(role: .destructive) {

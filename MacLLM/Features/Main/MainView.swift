@@ -3,6 +3,7 @@ import SwiftUI
 struct MainView: View {
     @Environment(AppModel.self) private var appModel
     @EnvironmentObject private var inferenceService: InferenceService
+    @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
@@ -14,6 +15,9 @@ struct MainView: View {
         } detail: {
             VStack(spacing: 0) {
                 AppUpdateBannerView()
+                if !downloadService.activeDownloads.isEmpty {
+                    ActiveDownloadsPanel(downloadService: downloadService, style: .compact)
+                }
                 ChatView()
             }
         }
@@ -22,6 +26,11 @@ struct MainView: View {
                 if model.isLoadingModel || inferenceService.isGenerating {
                     ProgressView()
                         .controlSize(.small)
+                }
+                if downloadService.hasActiveTransfers {
+                    Label("\(downloadService.activeDownloads.filter { $0.state == .downloading || $0.state == .paused }.count) indirme", systemImage: "arrow.down.circle.fill")
+                        .foregroundStyle(.blue)
+                        .help("İndirmeler sohbet üstündeki panelde")
                 }
                 Button {
                     model.showCatalog = true
@@ -117,15 +126,26 @@ struct ModelRowView: View {
     let model: InstalledModel
     let isSelected: Bool
 
+    private var subtitle: String {
+        let repo = model.repoId.split(separator: "/").suffix(2).joined(separator: "/")
+        let size = ByteCountFormatter.string(fromByteCount: model.fileSizeBytes, countStyle: .file)
+        let quant = ModelMetadataParser.parseQuant(from: model.filename) ?? ""
+        if quant.isEmpty {
+            return "\(repo) · \(size)"
+        }
+        return "\(repo) · \(quant) · \(size)"
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.name)
                     .fontWeight(isSelected ? .semibold : .regular)
                     .lineLimit(2)
-                Text(ByteCountFormatter.string(fromByteCount: model.fileSizeBytes, countStyle: .file))
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
             Spacer()
             if isSelected {

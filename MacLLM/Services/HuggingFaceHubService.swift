@@ -4,14 +4,39 @@ struct HFModelSummary: Identifiable, Hashable {
     let id: String
     let repoId: String
     let downloads: Int
+    let likes: Int
     let pipelineTag: String?
     let tags: [String]
+    let lastModified: Date?
+    let gated: Bool
+
+    var parameterSize: String? {
+        ModelMetadataParser.parseParameterSize(from: "\(repoId) \(tags.joined(separator: " "))")
+    }
+
+    var displayTags: [String] {
+        ModelMetadataParser.displayTags(tags)
+    }
+}
+
+struct HFRepoDetail: Hashable {
+    let repoId: String
+    let downloads: Int
+    let likes: Int
+    let gated: Bool
+    let description: String?
+    let license: String?
+    let pipelineTag: String?
+    let tags: [String]
+    let files: [HFGGUFile]
 }
 
 struct HFGGUFile: Identifiable, Hashable {
     let id: String
     let filename: String
     let sizeBytes: Int64
+
+    var quantLabel: String? { ModelMetadataParser.parseQuant(from: filename) }
 }
 
 enum HuggingFaceHubError: LocalizedError {
@@ -41,6 +66,7 @@ final class HuggingFaceHubService: Sendable {
         session = URLSession(configuration: config)
         decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
     }
 
     func searchModels(query: String, limit: Int = 25) async throws -> [HFModelSummary] {
@@ -65,8 +91,11 @@ final class HuggingFaceHubService: Sendable {
         struct Item: Decodable {
             let id: String
             let downloads: Int?
+            let likes: Int?
             let pipelineTag: String?
             let tags: [String]?
+            let lastModified: Date?
+            let gated: Bool?
         }
 
         let items = try decoder.decode([Item].self, from: data)
@@ -77,13 +106,16 @@ final class HuggingFaceHubService: Sendable {
                     id: $0.id,
                     repoId: $0.id,
                     downloads: $0.downloads ?? 0,
+                    likes: $0.likes ?? 0,
                     pipelineTag: $0.pipelineTag,
-                    tags: $0.tags ?? []
+                    tags: $0.tags ?? [],
+                    lastModified: $0.lastModified,
+                    gated: $0.gated ?? false
                 )
             }
     }
 
-    func listGGUFFiles(repoId: String) async throws -> [HFGGUFile] {
+    func fetchRepoDetail(repoId: String) async throws -> HFRepoDetail {
         let encoded = repoId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? repoId
         guard let url = URL(string: "https://huggingface.co/api/models/\(encoded)") else {
             throw HuggingFaceHubError.invalidURL
@@ -95,20 +127,29 @@ final class HuggingFaceHubService: Sendable {
         let (data, response) = try await session.data(for: request)
         try validate(response)
 
+        struct CardData: Decodable {
+            let license: String?
+            let language: [String]?
+        }
         struct Sibling: Decodable {
             let rfilename: String
             let size: Int64?
         }
         struct ModelInfo: Decodable {
+            let id: String?
+            let downloads: Int?
+            let likes: Int?
+            let gated: Bool?
+            let pipelineTag: String?
+            let tags: [String]?
+            let cardData: CardData?
             let siblings: [Sibling]?
         }
 
         let info = try decoder.decode(ModelInfo.self, from: data)
-        return (info.siblings ?? [])
+        let files = (info.siblings ?? [])
             .filter { $0.rfilename.lowercased().hasSuffix(".gguf") }
-            .sorted { lhs, rhs in
-                quantSortRank(lhs.rfilename) < quantSortRank(rhs.rfilename)
-            }
+            .sorted { quantSortRank($0.rfilename) < quantSortRank($1.rfilename) }
             .map {
                 HFGGUFile(
                     id: "\(repoId)/\($0.rfilename)",
@@ -116,16 +157,40 @@ final class HuggingFaceHubService: Sendable {
                     sizeBytes: $0.size ?? 0
                 )
             }
+
+        return HFRepoDetail(
+            repoId: repoId,
+            downloads: info.downloads ?? 0,
+            likes: info.likes ?? 0,
+            gated: info.gated ?? false,
+            description: nil,
+            license: info.cardData?.license,
+            pipelineTag: info.pipelineTag,
+            tags: info.tags ?? [],
+            files: files
+        )
+    }
+
+    func listGGUFFiles(repoId: String) async throws -> [HFGGUFile] {
+        try await fetchRepoDetail(repoId: repoId).files
     }
 
     static func guessChatTemplate(repoId: String, filename: String) -> String {
         let haystack = "\(repoId) \(filename)".lowercased()
+        if haystack.contains("llama-3.1") || haystack.contains("llama3.1") { return "llama3" }
         if haystack.contains("llama-3") || haystack.contains("llama3") { return "llama3" }
         if haystack.contains("mistral") || haystack.contains("mixtral") { return "mistral" }
         if haystack.contains("phi-3") || haystack.contains("phi3") { return "phi3" }
+        if haystack.contains("gemma-2") || haystack.contains("gemma2") { return "gemma" }
         if haystack.contains("gemma") { return "gemma" }
-        if haystack.contains("qwen") { return "chatml" }
+        if haystack.contains("qwen2.5") || haystack.contains("qwen2") || haystack.contains("qwen") { return "chatml" }
+        if haystack.contains("deepseek") { return "chatml" }
+        if haystack.contains("granite") { return "chatml" }
         return "chatml"
+    }
+
+    static func huggingFaceURL(repoId: String) -> URL? {
+        URL(string: "https://huggingface.co/\(repoId)")
     }
 
     private func validate(_ response: URLResponse) throws {

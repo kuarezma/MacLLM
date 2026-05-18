@@ -18,6 +18,14 @@ struct ChatView: View {
                 } actions: {
                     Button("Model Kataloğu") { model.showCatalog = true }
                 }
+            } else if model.isLoadingModel || !inferenceService.isModelLoaded {
+                ContentUnavailableView {
+                    Label("Model hazırlanıyor", systemImage: "cpu")
+                } description: {
+                    Text("Çıkarım motoru yükleniyor. Birkaç saniye sürebilir.")
+                } actions: {
+                    ProgressView().controlSize(.regular)
+                }
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -32,6 +40,11 @@ struct ChatView: View {
                     .onChange(of: model.currentSession.messages.count) { _, _ in
                         if let last = model.currentSession.messages.last {
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
+                    }
+                    .onChange(of: model.currentSession.messages.last?.content) { _, _ in
+                        if let last = model.currentSession.messages.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
                         }
                     }
                 }
@@ -57,7 +70,12 @@ struct ChatView: View {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.title2)
                         }
-                        .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isLoadingModel)
+                        .disabled(
+                            inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                || model.isLoadingModel
+                                || !inferenceService.isModelLoaded
+                                || inferenceService.isGenerating
+                        )
                         .keyboardShortcut(.return, modifiers: [.command])
                     }
                 }

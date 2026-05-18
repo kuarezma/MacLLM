@@ -31,10 +31,14 @@ MacLLM, [llama.cpp](https://github.com/ggml-org/llama.cpp) ve **Metal GPU** ile 
 | Özellik | Açıklama |
 |--------|----------|
 | **Native arayüz** | SwiftUI — model listesi, akışlı sohbet, ayarlar, sohbet geçmişi |
-| **Metal çıkarım** | llama.cpp ile tam GPU offload (`GPU katmanları = -1`) |
+| **Metal çıkarım** | llama.cpp GPU offload; RAM’e göre varsayılanlar (8 GB’da kısmi katman) |
 | **Donanıma göre katalog** | GGUF listesi: *En uygun* / *Çalışabilir* / *Uygun değil* grupları |
-| **HF çevrimiçi** | Model arama, repo dosyaları, ilerlemeli indirme |
+| **HF çevrimiçi** | Model arama, detaylı repo kartları (etiket, beğeni, Mac uyumu), quant grupları |
+| **Paralel indirme** | Büyük GGUF dosyalarında **8’e kadar HTTP bağlantısı** (Ayarlar → Hugging Face); doğrudan CDN |
+| **Aktif indirmeler paneli** | Tüm indirmeler: hız, kalan süre, duraklat/iptal — katalog kapalıyken de görünür |
 | **Gelişmiş indirme** | % ilerleme, boyut, **MB/s**, kalan süre, **durdur**, **devam**, **iptal** |
+| **Uygulama içi güncelleme** | GitHub release kontrolü, DMG/PKG/ZIP indirme |
+| **GGUF doğrulama** | İndirme sonrası bütünlük kontrolü; gated/bozuk dosya için net hata |
 | **Manuel kurulum** | `repo-id` + dosya adı veya yerel `.gguf` içe aktarma |
 | **Uyarlanan varsayılanlar** | İlk açılışta RAM’e göre bağlam ve token limiti |
 | **Ollama tarzı ayarlar** | Tam ayarlar penceresi (⌘,) — örnekleme, bağlam, sistem, stop |
@@ -80,7 +84,7 @@ Yerel cask: [packaging/homebrew/README.md](packaging/homebrew/README.md)
 1. MacLLM’i kurun (DMG, PKG, zip veya Homebrew).
 2. Uygulamayı açın → araç çubuğu **Çevrimiçi Model** (bulut).
 3. **Önerilen** sekmesi — Mac’inize uygun model → **Çevrimiçi indir**.
-4. İndirmeyi izleyin (hız, kalan süre; gerekirse duraklatın).
+4. İndirmeyi izleyin (üst panelde hız/kalan süre; Ayarlar’dan paralel bağlantı sayısı).
 5. Sol panelden modeli seçin → sohbet edin.
 
 ### Model Ekle penceresi
@@ -88,7 +92,7 @@ Yerel cask: [packaging/homebrew/README.md](packaging/homebrew/README.md)
 | Sekme | İşlev |
 |-------|--------|
 | **Önerilen** | Donanıma göre puanlanmış katalog (Llama 3.2 1B/3B, Qwen 2.5 1.5B, Phi-3 Mini, Mistral 7B, Llama 3.1 8B, …) |
-| **Çevrimiçi** | Hugging Face arama, repo dosyaları, `.gguf` indirme |
+| **Çevrimiçi** | Hugging Face arama — model kartları, quant grupları, Mac rozeti, repo detayı |
 | **Manuel** | Yerel `.gguf` veya `repo-id` + dosya adı |
 
 ### Model önerileri (otomatik)
@@ -167,8 +171,8 @@ open build/MacLLM.app
 
 ```bash
 ./Scripts/build-packages.sh          # zip + dmg + pkg + Homebrew cask güncelle
-./Scripts/create-release.sh 1.3.0    # derle + GitHub release (gh gerekir)
-SKIP_GITHUB=1 ./Scripts/create-release.sh 1.3.0   # yalnızca dist/ altında artefaktlar
+./Scripts/create-release.sh 1.4.0    # derle + GitHub release (gh gerekir)
+SKIP_GITHUB=1 ./Scripts/create-release.sh 1.4.0   # yalnızca dist/ altında artefaktlar
 ```
 
 `v*` etiketi push edilince [.github/workflows/release.yml](.github/workflows/release.yml) CI release oluşturur.
@@ -231,6 +235,8 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.4.0** | Paralel HF indirme, aktif indirmeler paneli, zengin çevrimiçi katalog, GGUF doğrulama, RAM’e göre GPU, akış performansı |
+| **1.3.2** | Uygulama içi GitHub güncellemeleri; Settings Swift 6 CI düzeltmesi |
 | **1.3.0** | Ayarlar penceresi (⌘,) — Ollama uyumlu parametreler (top_k, repeat_penalty, mirostat, system, stop) |
 | **1.2.2** | Dokümantasyon güncellemesi; DMG, PKG, ZIP, Homebrew paketleri |
 | **1.2.1** | PKG kurulum paketi, Homebrew cask, `build-packages.sh` |
@@ -247,8 +253,9 @@ Tüm sürümler: [Releases](https://github.com/kuarezma/MacLLM/releases)
 | Uygulama açılmıyor | Sağ tık → **Aç**; Gizlilik ve Güvenlik |
 | `llama.xcframework` yok | `./Scripts/build-llama-xcframework.sh` |
 | Bellek yetersiz | Küçük model (1B/3B); bağlamı düşürün; uygulamaları kapatın |
-| Yavaş yanıt | Ayarlar → GPU katmanları = **-1** |
-| İndirme hatası | Disk alanı; ağ; gated modeller için HF token |
+| Yavaş indirme | Ayarlar → Hugging Face → **Paralel bağlantı** (6–8 deneyin); VPN/güvenlik duvarı |
+| Yavaş yanıt | Ayarlarda bağlamı düşürün; 8 GB Mac’lerde GPU katmanları otomatik sınırlı |
+| İndirme hatası | Disk alanı; ağ; gated modeller için HF token; doğrulama hatasından sonra tekrar deneyin |
 | İndirme takıldı | **İptal** ve tekrar deneyin; VPN/güvenlik duvarı |
 | `no such module 'llama'` | XCFramework’ü yeniden derleyin |
 | Homebrew SHA uyuşmazlığı | [Son release](https://github.com/kuarezma/MacLLM/releases/latest) DMG’si ile cask eşleşmeli |

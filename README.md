@@ -31,10 +31,14 @@ Built for **Apple Silicon** (M1/M2/M3/M4). The app reads your **chip and physica
 | Feature | Description |
 |--------|-------------|
 | **Native UI** | SwiftUI — model sidebar, streaming chat, settings, chat history |
-| **Metal inference** | Full GPU offload via llama.cpp (`GPU layers = -1` for all layers) |
+| **Metal inference** | llama.cpp with GPU offload; RAM-tier defaults (partial layers on 8 GB Macs) |
 | **Hardware-aware catalog** | Curated GGUF list sorted into *Best fit* / *Workable* / *Not recommended* for your Mac |
-| **Hugging Face online** | Search models, browse repo files, download with progress |
+| **Hugging Face online** | Search models, rich repo details (tags, likes, Mac fit), download with progress |
+| **Parallel downloads** | Up to **8 HTTP connections** on large GGUF files (Settings → Hugging Face); CDN direct |
+| **Active download panel** | See all in-progress models, speed, ETA, pause/cancel — even with catalog closed |
 | **Rich download UI** | Progress %, downloaded/total size, speed (MB/s), ETA, **pause**, **resume**, **cancel** |
+| **In-app updates** | GitHub release check, download DMG/PKG/ZIP from the app |
+| **GGUF validation** | Post-download integrity check; clear errors for gated/broken files |
 | **Manual install** | Paste `repo-id` + `.gguf` filename, or import a local file |
 | **Adaptive defaults** | First-run inference settings tuned to your RAM (8 / 16 / 24 GB+) |
 | **Ollama-style settings** | Full settings window (⌘,) — sampling, context, system prompt, stop sequences |
@@ -80,7 +84,7 @@ Local cask file: [packaging/homebrew/README.md](packaging/homebrew/README.md)
 1. Install MacLLM (DMG, PKG, zip, or Homebrew).
 2. Open the app → toolbar **Online Model** (cloud icon).
 3. **Recommended** tab — pick a model suited to your Mac → **Download online**.
-4. Wait for the download (watch speed, ETA; pause/resume if needed).
+4. Wait for the download (watch speed, ETA in the **Downloads** panel; tune parallel connections in Settings).
 5. Select the model in the sidebar → chat.
 
 ### Model Add window
@@ -88,7 +92,7 @@ Local cask file: [packaging/homebrew/README.md](packaging/homebrew/README.md)
 | Tab | Purpose |
 |-----|---------|
 | **Recommended** | Hardware-scored catalog (Llama 3.2 1B/3B, Qwen 2.5 1.5B, Phi-3 Mini, Mistral 7B, Llama 3.1 8B, …) |
-| **Online** | Search Hugging Face, open a repo, download any listed `.gguf` |
+| **Online** | Search Hugging Face — model cards, quant groups, Mac fit badge, repo details |
 | **Manual** | Import a local `.gguf` or enter `bartowski/…` repo + filename |
 
 ### Model recommendations (adaptive)
@@ -167,8 +171,8 @@ open build/MacLLM.app
 
 ```bash
 ./Scripts/build-packages.sh          # zip + dmg + pkg + update Homebrew cask
-./Scripts/create-release.sh 1.3.0    # build all + GitHub release (needs gh auth)
-SKIP_GITHUB=1 ./Scripts/create-release.sh 1.3.0   # artifacts only, under dist/
+./Scripts/create-release.sh 1.4.0    # build all + GitHub release (needs gh auth)
+SKIP_GITHUB=1 ./Scripts/create-release.sh 1.4.0   # artifacts only, under dist/
 ```
 
 Tag push (`v*`) also triggers [.github/workflows/release.yml](.github/workflows/release.yml) on GitHub Actions.
@@ -231,6 +235,8 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.4.0** | Parallel HF downloads (multi-connection), active downloads panel, rich online model catalog, GGUF validation, RAM-tier GPU defaults, streaming perf |
+| **1.3.2** | In-app GitHub updates; Swift 6 CI fix for Settings |
 | **1.3.0** | Settings window (⌘,) with Ollama-compatible parameters (top_k, repeat_penalty, mirostat, system, stop) |
 | **1.2.2** | Documentation update; DMG, PKG, ZIP, Homebrew packages |
 | **1.2.1** | PKG installer, Homebrew cask, `build-packages.sh` |
@@ -247,8 +253,9 @@ Full history: [Releases](https://github.com/kuarezma/MacLLM/releases)
 | App won’t open | Right-click → **Open**; check Privacy & Security |
 | `llama.xcframework` missing | `./Scripts/build-llama-xcframework.sh` |
 | Out of memory | Smaller model (1B/3B); lower context in Settings; close other apps |
-| Slow replies | Settings → GPU layers = **-1** |
-| Download fails | Disk space; network; HF token for gated models |
+| Slow download | Settings → Hugging Face → **Parallel connections** (try 6–8); check VPN/firewall |
+| Slow replies | Lower context in Settings; on 8 GB Macs GPU layers are capped automatically |
+| Download fails | Disk space; network; HF token for gated models; retry after validation error |
 | Download stuck | **Cancel** and retry; check firewall/VPN |
 | `no such module 'llama'` | Rebuild XCFramework; symlink `Modules` in framework if needed |
 | Homebrew SHA mismatch | Cask SHA matches release DMG — use [latest release](https://github.com/kuarezma/MacLLM/releases/latest) URL |
