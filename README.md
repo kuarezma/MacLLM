@@ -257,6 +257,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.14.3** | LM Studio–style Hub (split search + detail, metadata chips, quant picker); download progress fix; PDF attachment support with scanned-page vision fallback; CI build fixes |
 | **1.14.2** | Stable chat layout: pinned composer, centered messages, reduced scroll jump during streaming |
 | **1.14.1** | Jan-style Settings redesign; Hub search shows parameter size (e.g. 7B, “7 billion params”) in info bar |
 | **1.14.0** | Jan.ai–style UI: sidebar nav, header model picker, chat bubbles, context ring (real tokens); message edit/regenerate/copy; projects (⌘P); quick prompts; code copy; Markdown export |

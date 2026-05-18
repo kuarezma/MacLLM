@@ -44,13 +44,14 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.2)
+### Bu sürümde (1.14.3)
 
-- Sohbet düzeni sabitlendi: composer alta pinli, mesajlar ortada
-- Akış sırasında ekran kayması / zıplama azaltıldı
-- Sabit başlık, composer ve durum çubuğu yükseklikleri
+- LM Studio tarzı Model Hub: split arama + detay paneli, metadata, quant seçici
+- Paralel indirme ilerleme düzeltmesi (0% takılması giderildi)
+- PDF ekleri: metin çıkarımı, taranmış PDF sayfa görüntüleri, hata banner'ı
+- CI derleme düzeltmeleri (openSettings, MainActor)
 
-### Önceki (1.14.1)
+### Önceki (1.14.2)
 
 - Jan tarzı Ayarlar; Hub parametre boyutu gösterimi
 
