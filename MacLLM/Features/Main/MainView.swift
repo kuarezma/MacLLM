@@ -28,6 +28,7 @@ struct MainView: View {
                     ActiveDownloadsPanel(downloadService: downloadService, style: .compact)
                 }
                 ChatView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .toolbar {
@@ -93,15 +94,14 @@ struct MainView: View {
         } message: { installed in
             Text("\(installed.name) dosyası silinecek. Bu işlem geri alınamaz.")
         }
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if let status = model.statusMessage, !status.isEmpty {
                 Text(status)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 12)
-                    .background(.bar)
+                    .frame(height: 28)
+                    .background(.bar.opacity(0.95))
             }
         }
     }

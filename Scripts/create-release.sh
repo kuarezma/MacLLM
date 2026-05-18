@@ -44,22 +44,19 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.1)
+### Bu sürümde (1.14.2)
 
-- Ayarlar penceresi Jan tarzı: sol nav, kart düzeni, turuncu vurgu
-- Hub model arama ve detay bilgi barında parametre boyutu (7B, 7 milyar param.)
+- Sohbet düzeni sabitlendi: composer alta pinli, mesajlar ortada
+- Akış sırasında ekran kayması / zıplama azaltıldı
+- Sabit başlık, composer ve durum çubuğu yükseklikleri
+
+### Önceki (1.14.1)
+
+- Jan tarzı Ayarlar; Hub parametre boyutu gösterimi
 
 ### Önceki (1.14)
 
-- Jan.ai tarzı sohbet arayüzü, projeler, bağlam halkası, mesaj işlemleri
-
-### Önceki (1.13)
-
-- Hub dosya boyutları (HF tree API); arama, sıralama, **Kullan**
-
-### Önceki (1.11–1.12)
-
-- Model Hub arayüzü, quant filtreleri, README Markdown
+- Jan.ai tarzı sohbet arayüzü, projeler, bağlam halkası
 
 ### Kurulum (Terminal gerekmez)
 

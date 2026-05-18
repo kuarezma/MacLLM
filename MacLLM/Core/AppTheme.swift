@@ -13,6 +13,10 @@ enum AppTheme {
     static let badgeVPadding: CGFloat = 2
     static let searchFieldRadius: CGFloat = 8
     static let maxChatContentWidth: CGFloat = 720
+    static let chatHeaderHeight: CGFloat = 48
+    static let composerMinHeight: CGFloat = 76
+    static let composerAccessoryHeight: CGFloat = 44
+    static let messageStatsHeight: CGFloat = 18
 
     static var chatBackground: Color { Color(nsColor: .windowBackgroundColor) }
     static var sidebarBackground: Color { Color(nsColor: .underPageBackgroundColor) }

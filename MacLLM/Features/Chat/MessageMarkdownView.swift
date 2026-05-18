@@ -25,7 +25,7 @@ struct MessageMarkdownView: View {
                 }
             }
 
-            if isStreaming {
+            if isStreaming, text.isEmpty {
                 HStack(spacing: 6) {
                     ProgressView()
                         .controlSize(.small)
@@ -33,6 +33,7 @@ struct MessageMarkdownView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .frame(height: 20, alignment: .leading)
                 .padding(.top, 2)
             }
         }

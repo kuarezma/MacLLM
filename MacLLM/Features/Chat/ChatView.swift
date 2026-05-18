@@ -45,6 +45,7 @@ struct ChatView: View {
                 chatContent(model: model)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.chatBackground)
         .navigationTitle("")
         .searchable(text: $messageSearchText, prompt: "Bu sohbette ara")
@@ -68,30 +69,47 @@ struct ChatView: View {
 
     @ViewBuilder
     private func chatContent(model: AppModel) -> some View {
+        Group {
+            if model.currentSession.messages.isEmpty {
+                emptyChatHero(model: model)
+            } else {
+                messageScrollView(model: model)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            janComposer(model: model)
+        }
+    }
+
+    @ViewBuilder
+    private func emptyChatHero(model: AppModel) -> some View {
+        VStack(spacing: 20) {
+            Spacer(minLength: 0)
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 40))
+                .foregroundStyle(AppTheme.secondaryText.opacity(0.5))
+            Text("Bir şey sorun…")
+                .font(.title2.weight(.medium))
+                .foregroundStyle(AppTheme.primaryText)
+            Text("Yanıtlar cihazınızda yerel olarak üretilir.")
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.secondaryText)
+            QuickPromptChips(prompts: QuickPromptChips.defaults) { prompt in
+                Task { await model.sendMessage(prompt) }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: AppTheme.maxChatContentWidth)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, AppTheme.contentPadding)
+    }
+
+    @ViewBuilder
+    private func messageScrollView(model: AppModel) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: AppTheme.messageSpacing) {
-                    if model.currentSession.messages.isEmpty {
-                        VStack(spacing: 20) {
-                            Image(systemName: "bubble.left.and.bubble.right")
-                                .font(.system(size: 40))
-                                .foregroundStyle(AppTheme.secondaryText.opacity(0.5))
-                            Text("Bir şey sorun…")
-                                .font(.title2.weight(.medium))
-                                .foregroundStyle(AppTheme.primaryText)
-                            Text("Yanıtlar cihazınızda yerel olarak üretilir.")
-                                .font(.subheadline)
-                                .foregroundStyle(AppTheme.secondaryText)
-
-                            QuickPromptChips(prompts: QuickPromptChips.defaults) { prompt in
-                                Task { await model.sendMessage(prompt) }
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 48)
-                        .padding(.bottom, 40)
-                    }
-
                     ForEach(messagesToShow(model: model)) { message in
                         let isLastAssistant = message.role == .assistant
                             && message.id == model.currentSession.messages.last?.id
@@ -101,23 +119,26 @@ struct ChatView: View {
                             sessionId: model.currentSession.id,
                             showsTypingIndicator: isGeneratingReply && message.content.isEmpty,
                             isStreaming: isGeneratingReply && !message.content.isEmpty,
-                            generationStats: stats(for: message, isLastAssistant: isLastAssistant)
+                            generationStats: stats(for: message, isLastAssistant: isLastAssistant),
+                            reserveStatsSpace: isLastAssistant && message.role == .assistant
                         )
                         .id(message.id)
                     }
                 }
                 .padding(.horizontal, AppTheme.contentPadding)
                 .padding(.vertical, 16)
+                .frame(maxWidth: AppTheme.maxChatContentWidth)
                 .frame(maxWidth: .infinity)
             }
+            .defaultScrollAnchor(.bottom)
+            .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onChange(of: model.currentSession.messages.count) { _, _ in
-                scrollToBottom(proxy: proxy, animated: true)
                 model.scheduleContextTokenRefresh()
+                guard messageSearchNeedle.isEmpty else { return }
+                scrollToBottom(proxy: proxy, animated: true)
             }
             .onChange(of: model.currentSession.messages.last?.content) { _, _ in
-                if messageSearchNeedle.isEmpty {
-                    scrollToBottom(proxy: proxy, animated: false)
-                }
                 model.scheduleContextTokenRefresh()
             }
             .onChange(of: messageSearchText) { _, _ in
@@ -136,8 +157,6 @@ struct ChatView: View {
                 await model.refreshContextTokenCount()
             }
         }
-
-        janComposer(model: model)
     }
 
     @ViewBuilder
@@ -153,8 +172,8 @@ struct ChatView: View {
                         }
                     }
                     .padding(.horizontal, AppTheme.contentPadding)
-                    .padding(.top, 10)
                 }
+                .frame(height: AppTheme.composerAccessoryHeight)
             }
 
             HStack(alignment: .bottom, spacing: 12) {
@@ -164,11 +183,15 @@ struct ChatView: View {
                     maxTokens: Int(model.settings.contextLength),
                     isEstimate: model.contextTokenCountIsEstimate
                 )
+                .frame(width: 32, height: 32)
                 sendButton(model: model)
+                    .frame(width: 36, height: 36)
             }
             .padding(.horizontal, AppTheme.contentPadding)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
+            .frame(minHeight: AppTheme.composerMinHeight)
         }
+        .frame(maxWidth: .infinity)
         .background(AppTheme.chatBackground)
         .overlay(alignment: .top) {
             Rectangle()

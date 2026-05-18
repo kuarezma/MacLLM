@@ -30,6 +30,7 @@ struct ChatHeaderView: View {
         }
         .padding(.horizontal, AppTheme.contentPadding)
         .padding(.vertical, 10)
+        .frame(height: AppTheme.chatHeaderHeight)
         .background(AppTheme.chatBackground)
         .overlay(alignment: .bottom) {
             Rectangle()

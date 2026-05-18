@@ -10,6 +10,7 @@ struct MessageRow: View {
     var showsTypingIndicator: Bool = false
     var isStreaming: Bool = false
     var generationStats: GenerationStats?
+    var reserveStatsSpace: Bool = false
 
     @State private var thoughtExpanded = false
     @State private var hovered = false
@@ -34,23 +35,23 @@ struct MessageRow: View {
     }
 
     var body: some View {
-        HStack {
-            if isUser { Spacer(minLength: 48) }
-
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
             VStack(alignment: isUser ? .trailing : .leading, spacing: 8) {
                 messageBody
                 if !showsTypingIndicator, !isEditing {
                     messageActions
                 }
-                if let stats = generationStats, !stats.formattedSummary.isEmpty, message.role == .assistant {
-                    Text(stats.formattedSummary)
+                if message.role == .assistant, reserveStatsSpace || generationStats != nil {
+                    Text(generationStats?.formattedSummary ?? " ")
                         .font(.caption)
                         .foregroundStyle(AppTheme.secondaryText)
+                        .opacity(generationStats != nil ? 1 : 0)
+                        .frame(height: AppTheme.messageStatsHeight, alignment: .leading)
                 }
             }
             .frame(maxWidth: AppTheme.maxChatContentWidth, alignment: isUser ? .trailing : .leading)
-
-            if !isUser { Spacer(minLength: 48) }
+            Spacer(minLength: 0)
         }
         .onHover { hovered = $0 }
     }
@@ -187,7 +188,6 @@ struct MessageRow: View {
             }
         }
         .opacity(hovered ? 1 : 0.35)
-        .animation(.easeOut(duration: 0.15), value: hovered)
         .disabled(actionsDisabled)
     }
 
