@@ -9,6 +9,7 @@ on:
 jobs:
   smoke:
     runs-on: macos-14
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,6 +18,9 @@ jobs:
 
       - name: Install build tools
         run: brew install cmake ninja
+
+      - name: Prepare build directory
+        run: mkdir -p build
 
       - name: Unit tests
         run: ./Scripts/run-unit-tests.sh

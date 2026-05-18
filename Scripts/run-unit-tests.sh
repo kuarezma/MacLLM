@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+mkdir -p "$ROOT/build"
+
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
 BIN="$ROOT/build/unit-test-markdown"
 
