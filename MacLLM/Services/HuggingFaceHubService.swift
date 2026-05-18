@@ -179,7 +179,10 @@ final class HuggingFaceHubService: Sendable {
         let haystack = "\(repoId) \(filename)".lowercased()
         if haystack.contains("llama-3.1") || haystack.contains("llama3.1") { return "llama3" }
         if haystack.contains("llama-3") || haystack.contains("llama3") { return "llama3" }
-        if haystack.contains("mistral") || haystack.contains("mixtral") { return "mistral" }
+        if haystack.contains("mistral") || haystack.contains("mixtral") {
+            if haystack.contains("v0.3") || haystack.contains("instruct-v0.3") { return "mistral-v3" }
+            return "mistral-v1"
+        }
         if haystack.contains("phi-3") || haystack.contains("phi3") { return "phi3" }
         if haystack.contains("gemma-2") || haystack.contains("gemma2") { return "gemma" }
         if haystack.contains("gemma") { return "gemma" }

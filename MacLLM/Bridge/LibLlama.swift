@@ -71,10 +71,12 @@ actor LlamaContext {
     var n_decode: Int32 = 0
 
     private var cancelled = false
+    private var chatTemplate: String = "chatml"
 
-    init(model: OpaquePointer, context: OpaquePointer, settings: InferenceSettings) {
+    init(model: OpaquePointer, context: OpaquePointer, settings: InferenceSettings, chatTemplateHint: String) {
         self.model = model
         self.context = context
+        self.chatTemplate = ChatTemplateResolver.templateForModel(model, hint: chatTemplateHint)
         self.tokens_list = []
         self.batch = llama_batch_init(512, 0, 1)
         self.temporary_invalid_cchars = []
@@ -136,7 +138,7 @@ actor LlamaContext {
         LlamaBackend.release()
     }
 
-    static func createContext(path: String, settings: InferenceSettings) throws -> LlamaContext {
+    static func createContext(path: String, settings: InferenceSettings, chatTemplateHint: String = "chatml") throws -> LlamaContext {
         LlamaBackend.retain()
         var model_params = llama_model_default_params()
 
@@ -163,7 +165,11 @@ actor LlamaContext {
             throw LlamaError.couldNotInitializeContext
         }
 
-        return LlamaContext(model: model, context: context, settings: settings)
+        return LlamaContext(model: model, context: context, settings: settings, chatTemplateHint: chatTemplateHint)
+    }
+
+    func resolvedChatTemplate() -> String {
+        chatTemplate
     }
 
     func cancel() {
@@ -171,7 +177,9 @@ actor LlamaContext {
     }
 
     func applyChatTemplate(messages: [ChatMessage], templateName: String) throws -> String {
-        let tmpl = templateName.isEmpty ? "chatml" : templateName
+        let tmpl = chatTemplate.isEmpty
+            ? ChatTemplateResolver.resolveBuiltin(templateName)
+            : chatTemplate
         var cMessages: [llama_chat_message] = messages.map { msg in
             llama_chat_message(
                 role: (msg.role.rawValue as NSString).utf8String,

@@ -51,7 +51,7 @@
       "repoId": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
       "filename": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
       "estimatedSizeBytes": 4700000000,
-      "chatTemplate": "mistral",
+      "chatTemplate": "mistral-v3",
       "ramHintGB": 8,
       "minPhysicalRamGB": 12
     },

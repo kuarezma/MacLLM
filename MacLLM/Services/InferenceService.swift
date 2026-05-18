@@ -14,7 +14,11 @@ final class InferenceService: ObservableObject {
 
     func loadModel(_ model: InstalledModel) async throws {
         unloadModel()
-        llamaContext = try await LlamaContext.createContext(path: model.localPath, settings: settings)
+        llamaContext = try await LlamaContext.createContext(
+            path: model.localPath,
+            settings: settings,
+            chatTemplateHint: model.chatTemplate
+        )
         isModelLoaded = true
         loadedModelId = model.id
         try ModelStore.shared.touchLastUsed(id: model.id)
@@ -50,7 +54,6 @@ final class InferenceService: ObservableObject {
         chatTemplate: String
     ) -> AsyncThrowingStream<String, Error> {
         let promptMessages = Self.messagesWithSystem(messages, systemPrompt: settings.systemPrompt)
-        let stops = settings.stopSequences.filter { !$0.isEmpty }
         guard let llamaContext else {
             return AsyncThrowingStream { $0.finish(throwing: LlamaError.couldNotInitializeContext) }
         }
@@ -65,6 +68,12 @@ final class InferenceService: ObservableObject {
                             await llamaContext.clear()
                         }
                     }
+
+                    let resolvedTemplate = await llamaContext.resolvedChatTemplate()
+                    let stops = ChatTemplateResolver.mergedStopSequences(
+                        settings: await MainActor.run { self.settings },
+                        template: resolvedTemplate
+                    )
 
                     let prompt = try await llamaContext.applyChatTemplate(
                         messages: promptMessages,

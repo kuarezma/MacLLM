@@ -43,6 +43,7 @@ final class AppModel {
         do {
             try modelStore.ensureDirectories()
             installedModels = try modelStore.loadInstalledModels()
+            repairInstalledModelTemplates()
             systemProfile = MacSystemProfile.current()
             catalogEntries = try catalogService.loadDefaultCatalog()
             modelRecommendations = recommendationService.recommend(
@@ -69,8 +70,27 @@ final class AppModel {
     func refreshModels() {
         do {
             installedModels = try modelStore.loadInstalledModels()
+            repairInstalledModelTemplates()
         } catch {
             statusMessage = error.localizedDescription
+        }
+    }
+
+    private func repairInstalledModelTemplates() {
+        var changed = false
+        for index in installedModels.indices {
+            let repaired = ChatTemplateResolver.repairStoredTemplate(
+                installedModels[index].chatTemplate,
+                repoId: installedModels[index].repoId,
+                filename: installedModels[index].filename
+            )
+            if repaired != installedModels[index].chatTemplate {
+                installedModels[index].chatTemplate = repaired
+                changed = true
+            }
+        }
+        if changed {
+            try? modelStore.saveInstalledModels(installedModels)
         }
     }
 

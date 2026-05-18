@@ -235,6 +235,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.4.1** | Mistral instruct chat template fix (`mistral-v3`), model-specific stop sequences, template repair for installed models |
 | **1.4.0** | Parallel HF downloads (multi-connection), active downloads panel, rich online model catalog, GGUF validation, RAM-tier GPU defaults, streaming perf |
 | **1.3.2** | In-app GitHub updates; Swift 6 CI fix for Settings |
 | **1.3.0** | Settings window (⌘,) with Ollama-compatible parameters (top_k, repeat_penalty, mirostat, system, stop) |
