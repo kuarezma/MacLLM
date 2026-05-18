@@ -103,6 +103,22 @@ enum ChatTemplateResolver {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Arayüzde gösterilecek metinden kontrol token sızıntısını temizler.
+    static func sanitizeDisplayedText(_ text: String) -> String {
+        let markers = [
+            chatmlEnd, chatmlStart,
+            "<|eot_id|>", "<|start_header_id|>",
+            "[INST]", "[/INST]", "</s>", "<|end|>",
+        ]
+        var result = text
+        for marker in markers where !marker.isEmpty {
+            if let range = result.range(of: marker) {
+                result = String(result[..<range.lowerBound])
+            }
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     static func mergedStopSequences(settings: InferenceSettings, template: String) -> [String] {
         var stops = settings.stopSequences
         for extra in recommendedStopSequences(for: template) where !stops.contains(extra) {

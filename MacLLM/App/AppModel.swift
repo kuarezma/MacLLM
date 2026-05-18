@@ -16,9 +16,9 @@ final class AppModel {
     var statusMessage: String?
     var isLoadingModel = false
     var showCatalog = false
-    var showSettings = false
 
     private let modelStore = ModelStore.shared
+    private var statusClearTask: Task<Void, Never>?
     private let catalogService = ModelCatalogService.shared
     private let recommendationService = ModelRecommendationService.shared
     private let downloadService = HuggingFaceDownloadService.shared
@@ -63,7 +63,7 @@ final class AppModel {
                 await selectModel(first)
             }
         } catch {
-            statusMessage = error.localizedDescription
+            setStatusMessage(error.localizedDescription)
         }
     }
 
@@ -72,7 +72,31 @@ final class AppModel {
             installedModels = try modelStore.loadInstalledModels()
             repairInstalledModelTemplates()
         } catch {
-            statusMessage = error.localizedDescription
+            setStatusMessage(error.localizedDescription)
+        }
+    }
+
+    func deleteSession(_ session: ChatSession) {
+        do {
+            try chatStore.deleteSession(id: session.id)
+            sessions.removeAll { $0.id == session.id }
+            if currentSession.id == session.id {
+                newChat()
+            }
+            setStatusMessage("Sohbet silindi")
+        } catch {
+            setStatusMessage(error.localizedDescription)
+        }
+    }
+
+    func setStatusMessage(_ message: String?) {
+        statusClearTask?.cancel()
+        statusMessage = message
+        guard let message, !message.isEmpty else { return }
+        statusClearTask = Task {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled, statusMessage == message else { return }
+            statusMessage = nil
         }
     }
 
@@ -97,36 +121,36 @@ final class AppModel {
     @discardableResult
     func selectModel(_ model: InstalledModel) async -> Bool {
         isLoadingModel = true
-        statusMessage = "\(model.name) yükleniyor..."
+        setStatusMessage("\(model.name) yükleniyor…")
         defer { isLoadingModel = false }
         do {
             inferenceService.settings = settings
             try await inferenceService.loadModel(model)
             selectedModelId = model.id
             currentSession.modelId = model.id
-            statusMessage = "\(model.name) hazır"
+            setStatusMessage("\(model.name) hazır")
             refreshModels()
             return true
         } catch {
-            statusMessage = "Yükleme hatası: \(error.localizedDescription)"
+            setStatusMessage("Yükleme hatası: \(error.localizedDescription)")
             return false
         }
     }
 
     func downloadModel(_ entry: CatalogEntry) async {
-        statusMessage = "\(entry.name) indiriliyor…"
+        setStatusMessage("\(entry.name) indiriliyor…")
         do {
             let localURL = try await downloadService.download(entry: entry) { info in
                 Task { @MainActor in
                     let eta = info.estimatedSecondsRemaining.map {
                         DownloadMetrics.formatETA(seconds: $0)
                     } ?? "—"
-                    self.statusMessage = String(
+                    self.setStatusMessage(String(
                         format: "%.0f%% · %@ · kalan %@",
                         info.progress * 100,
                         entry.name,
                         eta
-                    )
+                    ))
                 }
             }
             try GGUFFileValidator.validateDownload(at: localURL, expectedBytes: entry.estimatedSizeBytes)
@@ -140,19 +164,19 @@ final class AppModel {
             )
             refreshModels()
             guard let model = installedModels.first(where: { $0.id == entry.id }) else {
-                statusMessage = "\(entry.name) kaydedildi ancak listede bulunamadı."
+                setStatusMessage("\(entry.name) kaydedildi ancak listede bulunamadı.")
                 return
             }
             let loaded = await selectModel(model)
             if loaded {
-                statusMessage = "\(entry.name) indirildi ve kullanıma hazır"
+                setStatusMessage("\(entry.name) indirildi ve kullanıma hazır")
             } else {
-                statusMessage = "\(entry.name) indirildi; yüklenemedi — soldan «Yükle» veya tekrar deneyin."
+                setStatusMessage("\(entry.name) indirildi; soldan modeli seçerek yükleyin.")
             }
         } catch is CancellationError {
-            statusMessage = "İndirme iptal edildi"
+            setStatusMessage("İndirme iptal edildi")
         } catch {
-            statusMessage = "İndirme hatası: \(error.localizedDescription)"
+            setStatusMessage("İndirme hatası: \(error.localizedDescription)")
         }
     }
 
@@ -164,9 +188,9 @@ final class AppModel {
         do {
             try modelStore.deleteModel(id: model.id)
             refreshModels()
-            statusMessage = "\(model.name) silindi"
+            setStatusMessage("\(model.name) silindi")
         } catch {
-            statusMessage = error.localizedDescription
+            setStatusMessage(error.localizedDescription)
         }
     }
 
@@ -174,7 +198,7 @@ final class AppModel {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
 
-        statusMessage = "Model kopyalanıyor…"
+        setStatusMessage("Model kopyalanıyor…")
         do {
             let filename = url.lastPathComponent
             let id = filename.replacingOccurrences(of: ".gguf", with: "")
@@ -196,12 +220,12 @@ final class AppModel {
             refreshModels()
             if let model = installedModels.first(where: { $0.id == id }) {
                 let loaded = await selectModel(model)
-                statusMessage = loaded ? "Model içe aktarıldı ve hazır" : "Model içe aktarıldı; yüklenemedi"
+                setStatusMessage(loaded ? "Model içe aktarıldı ve hazır" : "Model içe aktarıldı; soldan seçin")
             } else {
-                statusMessage = "Model içe aktarıldı"
+                setStatusMessage("Model içe aktarıldı")
             }
         } catch {
-            statusMessage = "İçe aktarma hatası: \(error.localizedDescription)"
+            setStatusMessage("İçe aktarma hatası: \(error.localizedDescription)")
         }
     }
 
@@ -224,9 +248,17 @@ final class AppModel {
     }
 
     func loadSession(_ session: ChatSession) {
-        currentSession = session
-        if let modelId = session.modelId,
+        if !currentSession.messages.isEmpty, currentSession.id != session.id {
+            Task { try? await saveCurrentSession() }
+        }
+        if let stored = try? chatStore.loadSession(id: session.id) {
+            currentSession = stored
+        } else {
+            currentSession = session
+        }
+        if let modelId = currentSession.modelId,
            let model = installedModels.first(where: { $0.id == modelId }) {
+            selectedModelId = modelId
             Task { await selectModel(model) }
         }
     }
@@ -235,11 +267,11 @@ final class AppModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         guard let model = selectedModel else {
-            statusMessage = "Önce bir model seçin veya indirin"
+            setStatusMessage("Önce bir model seçin veya indirin")
             return
         }
         guard inferenceService.isModelLoaded, inferenceService.loadedModelId == model.id else {
-            statusMessage = isLoadingModel ? "Model yükleniyor…" : "Model henüz hazır değil — soldan seçin veya yükleyin"
+            setStatusMessage(isLoadingModel ? "Model yükleniyor…" : "Model henüz hazır değil — soldan seçin")
             if !isLoadingModel {
                 Task { _ = await selectModel(model) }
             }
@@ -272,14 +304,17 @@ final class AppModel {
             if !pending.isEmpty {
                 currentSession.messages[assistantIndex].content += pending
             }
+            currentSession.messages[assistantIndex].content = ChatTemplateResolver.sanitizeDisplayedText(
+                currentSession.messages[assistantIndex].content
+            )
             try await saveCurrentSession()
         } catch is CancellationError {
-            statusMessage = "Üretim durduruldu"
+            setStatusMessage("Üretim durduruldu")
         } catch {
             if currentSession.messages[assistantIndex].content.isEmpty {
                 currentSession.messages[assistantIndex].content = "Hata: \(error.localizedDescription)"
             }
-            statusMessage = error.localizedDescription
+            setStatusMessage(error.localizedDescription)
         }
     }
 
@@ -312,7 +347,7 @@ final class AppModel {
         if let data = try? JSONEncoder().encode(settings) {
             UserDefaults.standard.set(data, forKey: "inferenceSettings")
         }
-        statusMessage = "Ayarlar kaydedildi"
+        setStatusMessage("Ayarlar kaydedildi")
         if let model = selectedModel {
             Task { await selectModel(model) }
         }

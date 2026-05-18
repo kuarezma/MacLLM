@@ -260,11 +260,12 @@ struct CatalogEntryRow: View {
                     .controlSize(.small)
                 }
             } else {
-                Button("Yükle") {
+                Button("Kullan") {
                     if let model = appModel.installedModels.first(where: { $0.id == entry.id }) {
                         Task { await appModel.selectModel(model) }
                     }
                 }
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             }
         }

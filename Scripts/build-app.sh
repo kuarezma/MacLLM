@@ -54,6 +54,7 @@ SOURCES=(
   MacLLM/App/AppModel.swift
   MacLLM/Core/Models.swift
   MacLLM/Core/AppVersion.swift
+  MacLLM/Core/AppTheme.swift
   MacLLM/Services/AppUpdateService.swift
   MacLLM/Services/ModelStore.swift
   MacLLM/Services/ModelCatalogService.swift

@@ -60,10 +60,10 @@ struct AppUpdateBannerView: View {
             .padding(12)
             .background(.blue.opacity(0.08))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppTheme.panelRadius)
                     .strokeBorder(.blue.opacity(0.25), lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius))
             .padding(.horizontal)
             .padding(.top, 8)
         }

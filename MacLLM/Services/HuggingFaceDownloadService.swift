@@ -323,7 +323,7 @@ final class HuggingFaceDownloadService: ObservableObject {
             scheduleRemoval(entryId: entryId)
             ctx.continuation?.resume(returning: fileURL)
         case .failure(let error) where error is CancellationError:
-            var cancelled = makeTaskInfo(
+            let cancelled = makeTaskInfo(
                 entry: entry, bytesReceived: 0, totalBytes: entry.estimatedSizeBytes,
                 speed: 0, eta: nil, state: .cancelled
             )

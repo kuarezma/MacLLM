@@ -15,7 +15,7 @@ struct MainView: View {
         } detail: {
             VStack(spacing: 0) {
                 AppUpdateBannerView()
-                if !downloadService.activeDownloads.isEmpty {
+                if downloadService.hasActiveTransfers {
                     ActiveDownloadsPanel(downloadService: downloadService, style: .compact)
                 }
                 ChatView()
@@ -27,21 +27,18 @@ struct MainView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
-                if downloadService.hasActiveTransfers {
-                    Label("\(downloadService.activeDownloads.filter { $0.state == .downloading || $0.state == .paused }.count) indirme", systemImage: "arrow.down.circle.fill")
-                        .foregroundStyle(.blue)
-                        .help("İndirmeler sohbet üstündeki panelde")
-                }
                 Button {
                     model.showCatalog = true
                 } label: {
-                    Label("Çevrimiçi Model", systemImage: "cloud.arrow.down")
+                    Label("Model Ekle", systemImage: "plus.circle")
                 }
+                .help("Katalogdan indir veya GGUF içe aktar")
                 Button {
                     model.newChat()
                 } label: {
                     Label("Yeni Sohbet", systemImage: "square.and.pencil")
                 }
+                .keyboardShortcut("n", modifiers: .command)
                 SettingsLink {
                     Label("Ayarlar", systemImage: "gearshape")
                 }
@@ -57,7 +54,8 @@ struct MainView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
                     .background(.bar)
             }
         }
@@ -66,26 +64,27 @@ struct MainView: View {
 
 struct ModelSidebarView: View {
     @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var inferenceService: InferenceService
 
     var body: some View {
         @Bindable var model = appModel
 
-        List(selection: $model.selectedModelId) {
+        List {
             Section("Yüklü Modeller") {
                 if model.installedModels.isEmpty {
                     ContentUnavailableView {
                         Label("Model yok", systemImage: "brain")
                     } description: {
-                        Text("Katalogdan bir model indirin veya GGUF dosyası içe aktarın.")
+                        Text("Katalogdan model indirin veya GGUF dosyası içe aktarın.")
                     } actions: {
                         Button("Model Ekle") { model.showCatalog = true }
                     }
                 } else {
                     ForEach(model.installedModels) { installed in
                         ModelRowView(model: installed, isSelected: model.selectedModelId == installed.id)
-                            .tag(installed.id)
+                            .contentShape(Rectangle())
                             .onTapGesture {
-                                Task { await model.selectModel(installed) }
+                                model.selectedModelId = installed.id
                             }
                             .contextMenu {
                                 Button("Sil", role: .destructive) {
@@ -97,28 +96,47 @@ struct ModelSidebarView: View {
             }
 
             Section("Sohbetler") {
-                ForEach(model.sessions) { session in
-                    Button(session.title) {
-                        model.loadSession(session)
+                if model.sessions.isEmpty {
+                    Text("Henüz kayıtlı sohbet yok")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(model.sessions) { session in
+                        HStack {
+                            Text(session.title)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                            if session.id == model.currentSession.id {
+                                Image(systemName: "checkmark")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            model.loadSession(session)
+                        }
+                        .contextMenu {
+                            Button("Sil", role: .destructive) {
+                                model.deleteSession(session)
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .lineLimit(1)
                 }
             }
 
             Section {
                 LabeledContent("Disk kullanımı", value: model.diskUsageFormatted)
             }
-
-            Section {
-                SettingsLink {
-                    Label("Ayarlar…", systemImage: "gearshape")
-                }
-                .help("Çıkarım, örnekleme, sistem mesajı (⌘,)")
-            }
         }
         .listStyle(.sidebar)
         .navigationTitle("MacLLM")
+        .onChange(of: model.selectedModelId) { _, newId in
+            guard let newId,
+                  let installed = model.installedModels.first(where: { $0.id == newId }),
+                  model.selectedModel?.id != newId || !inferenceService.isModelLoaded else { return }
+            Task { await model.selectModel(installed) }
+        }
     }
 }
 
@@ -127,7 +145,9 @@ struct ModelRowView: View {
     let isSelected: Bool
 
     private var subtitle: String {
-        let repo = model.repoId.split(separator: "/").suffix(2).joined(separator: "/")
+        let repo = model.repoId == "imported"
+            ? "İçe aktarıldı"
+            : model.repoId.split(separator: "/").suffix(2).joined(separator: "/")
         let size = ByteCountFormatter.string(fromByteCount: model.fileSizeBytes, countStyle: .file)
         let quant = ModelMetadataParser.parseQuant(from: model.filename) ?? ""
         if quant.isEmpty {
@@ -137,7 +157,7 @@ struct ModelRowView: View {
     }
 
     var body: some View {
-        HStack {
+        HStack(spacing: AppTheme.rowSpacing) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.name)
                     .fontWeight(isSelected ? .semibold : .regular)
@@ -147,12 +167,13 @@ struct ModelRowView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            Spacer()
+            Spacer(minLength: 0)
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
+                    .symbolRenderingMode(.hierarchical)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
     }
 }

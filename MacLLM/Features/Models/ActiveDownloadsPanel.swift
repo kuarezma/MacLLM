@@ -14,10 +14,10 @@ struct ActiveDownloadsPanel: View {
     private var visibleDownloads: [DownloadTaskInfo] {
         downloadService.activeDownloads.filter { info in
             switch info.state {
-            case .downloading, .paused, .queued:
+            case .downloading, .paused, .queued, .failed:
                 return true
-            case .completed, .failed, .cancelled:
-                return true
+            case .completed, .cancelled:
+                return false
             }
         }
     }
@@ -42,7 +42,7 @@ struct ActiveDownloadsPanel: View {
             downloadList
         } label: {
             Label {
-                Text("İndirilen modeller (\(inProgressCount))")
+                Text("Aktif indirmeler (\(inProgressCount))")
                     .font(.subheadline)
                     .fontWeight(.medium)
             } icon: {

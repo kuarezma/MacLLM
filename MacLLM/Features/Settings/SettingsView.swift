@@ -73,12 +73,17 @@ struct SettingsView: View {
                     }
                     .keyboardShortcut("s", modifiers: .command)
                     .buttonStyle(.borderedProminent)
+                    .help("Kapatırken de otomatik kaydedilir")
                 }
             }
         }
         .frame(minWidth: 640, minHeight: 480)
         .onAppear {
             syncStopText(from: model.settings)
+        }
+        .onDisappear {
+            model.settings.stopSequencesText = stopText
+            model.saveSettings()
         }
     }
 
