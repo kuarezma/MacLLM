@@ -18,5 +18,8 @@ jobs:
       - name: Install build tools
         run: brew install cmake ninja
 
+      - name: Unit tests
+        run: ./Scripts/run-unit-tests.sh
+
       - name: Smoke test (build + link check)
         run: ./Scripts/smoke-test.sh

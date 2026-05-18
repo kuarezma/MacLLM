@@ -370,7 +370,7 @@ final class AppModel {
 
         for index in attachments.indices {
             do {
-                try MediaContentProcessor.enrich(&attachments[index], sessionId: currentSession.id)
+                try await MediaContentProcessor.enrich(&attachments[index], sessionId: currentSession.id)
             } catch {
                 setStatusMessage(error.localizedDescription)
                 return
@@ -380,7 +380,7 @@ final class AppModel {
         if let videoIndex = attachments.firstIndex(where: { $0.kind == .video }) {
             let video = attachments[videoIndex]
             do {
-                let frames = try MediaContentProcessor.videoFrameAttachments(
+                let frames = try await MediaContentProcessor.videoFrameAttachments(
                     source: video,
                     sessionId: currentSession.id
                 )

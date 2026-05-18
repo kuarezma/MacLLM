@@ -21,13 +21,13 @@ enum MediaContentProcessor {
     static func enrich(
         _ attachment: inout MessageAttachment,
         sessionId: UUID
-    ) throws {
+    ) async throws {
         let url = AttachmentStore.shared.fileURL(sessionId: sessionId, attachment: attachment)
         switch attachment.kind {
         case .document:
             attachment.extractedText = try extractDocumentText(from: url, fileName: attachment.fileName)
         case .video:
-            let frames = try extractVideoFrames(from: url, sessionId: sessionId, baseName: attachment.fileName)
+            let frames = try await extractVideoFrames(from: url, sessionId: sessionId, baseName: attachment.fileName)
             attachment.extractedText = frames.isEmpty
                 ? nil
                 : "[Video: \(attachment.fileName) — \(frames.count) kare görüntü eklendi]"
@@ -40,10 +40,10 @@ enum MediaContentProcessor {
     static func videoFrameAttachments(
         source: MessageAttachment,
         sessionId: UUID
-    ) throws -> [MessageAttachment] {
+    ) async throws -> [MessageAttachment] {
         guard source.kind == .video else { return [] }
         let url = AttachmentStore.shared.fileURL(sessionId: sessionId, attachment: source)
-        return try extractVideoFrames(from: url, sessionId: sessionId, baseName: source.fileName)
+        return try await extractVideoFrames(from: url, sessionId: sessionId, baseName: source.fileName)
     }
 
     static func documentTextBlock(fileName: String, text: String) -> String {
@@ -92,16 +92,22 @@ enum MediaContentProcessor {
 
     // MARK: - Video frames
 
+    private static func videoDurationSeconds(asset: AVURLAsset) async throws -> Double {
+        let time = try await asset.load(.duration)
+        let seconds = CMTimeGetSeconds(time)
+        guard seconds.isFinite, seconds > 0.1 else {
+            throw MediaProcessingError.extractionFailed("Video süresi okunamadı.")
+        }
+        return seconds
+    }
+
     private static func extractVideoFrames(
         from url: URL,
         sessionId: UUID,
         baseName: String
-    ) throws -> [MessageAttachment] {
+    ) async throws -> [MessageAttachment] {
         let asset = AVURLAsset(url: url)
-        let duration = CMTimeGetSeconds(asset.duration)
-        guard duration.isFinite, duration > 0.1 else {
-            throw MediaProcessingError.extractionFailed("Video süresi okunamadı.")
-        }
+        let duration = try await videoDurationSeconds(asset: asset)
 
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true

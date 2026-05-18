@@ -4,6 +4,7 @@ struct MessageRow: View {
     let message: ChatMessage
     var sessionId: UUID
     var showsTypingIndicator: Bool = false
+    var isStreaming: Bool = false
 
     private var displayContent: String {
         if showsTypingIndicator { return "" }
@@ -42,7 +43,7 @@ struct MessageRow: View {
                     .padding(.vertical, 4)
                 } else if !displayContent.isEmpty {
                     if message.role == .assistant {
-                        MessageMarkdownView(text: displayContent)
+                        MessageMarkdownView(text: displayContent, isStreaming: isStreaming)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
                         Text(displayContent)

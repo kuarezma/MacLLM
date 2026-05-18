@@ -55,14 +55,14 @@ struct ChatView: View {
                                 .padding(.top, 40)
                             }
                             ForEach(model.currentSession.messages) { message in
-                                let isTyping = inferenceService.isGenerating
-                                    && message.role == .assistant
+                                let isLastAssistant = message.role == .assistant
                                     && message.id == model.currentSession.messages.last?.id
-                                    && message.content.isEmpty
+                                let isGeneratingReply = inferenceService.isGenerating && isLastAssistant
                                 MessageRow(
                                     message: message,
                                     sessionId: model.currentSession.id,
-                                    showsTypingIndicator: isTyping
+                                    showsTypingIndicator: isGeneratingReply && message.content.isEmpty,
+                                    isStreaming: isGeneratingReply && !message.content.isEmpty
                                 )
                                 .id(message.id)
                             }
@@ -187,26 +187,29 @@ struct ChatView: View {
     }
 
     private func importFiles(_ result: Result<[URL], Error>, model: AppModel) {
-        let urls: [URL]
         switch result {
         case .failure(let error):
             model.setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
             return
-        case .success(let picked):
-            urls = picked
-        }
-        for url in urls {
-            guard let kind = ChatAttachmentImporter.kind(for: url) else { continue }
-            do {
-                var attachment = try AttachmentStore.shared.importFile(
-                    from: url,
-                    sessionId: model.currentSession.id,
-                    kind: kind
-                )
-                try MediaContentProcessor.enrich(&attachment, sessionId: model.currentSession.id)
-                pendingAttachments.append(attachment)
-            } catch {
-                model.setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
+        case .success(let urls):
+            Task { @MainActor in
+                for url in urls {
+                    guard let kind = ChatAttachmentImporter.kind(for: url) else { continue }
+                    do {
+                        var attachment = try AttachmentStore.shared.importFile(
+                            from: url,
+                            sessionId: model.currentSession.id,
+                            kind: kind
+                        )
+                        try await MediaContentProcessor.enrich(
+                            &attachment,
+                            sessionId: model.currentSession.id
+                        )
+                        pendingAttachments.append(attachment)
+                    } catch {
+                        model.setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
+                    }
+                }
             }
         }
     }

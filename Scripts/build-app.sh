@@ -75,6 +75,7 @@ SOURCES=(
   MacLLM/Core/UserErrorFormatter.swift
   MacLLM/Core/AppVersion.swift
   MacLLM/Core/AppTheme.swift
+  MacLLM/Core/MarkdownContentParser.swift
   MacLLM/Services/AppUpdateService.swift
   MacLLM/Services/ModelStore.swift
   MacLLM/Services/ModelCatalogService.swift

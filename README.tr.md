@@ -255,6 +255,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.9.0** | Akış sırasında canlı Markdown; video süresi async API; GGUF içe aktarma ilerleme katmanı; `MarkdownContentParser` birim testleri |
 | **1.8.0** | Oturum başına sohbet dosyası (hafif indeks + otomatik geçiş); asistan Markdown (kod blokları, satır içi kod, kalın); GGUF üzerine yazma onayı; `Scripts/smoke-test.sh` |
 | **1.7.0** | Güvenilir model değişimi, üretim kilidi, oturum güvenliği; ek doğrulama; silme onayları; durum ve yükleme arayüzü |
 | **1.6.1** | Mesaj başına KV sıfırlama; çıkarım hata mesajları; composer düzeni |

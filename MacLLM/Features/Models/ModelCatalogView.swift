@@ -19,6 +19,7 @@ struct ModelCatalogView: View {
     @State private var pendingImportURL: URL?
     @State private var pendingImportName = ""
     @State private var showOverwriteImportConfirm = false
+    @State private var isImportingGGUF = false
     @State private var manualRepoId = ""
     @State private var manualFilename = ""
 
@@ -69,10 +70,31 @@ struct ModelCatalogView: View {
                 allowedContentTypes: [UTType(filenameExtension: "gguf") ?? .data],
                 allowsMultipleSelection: false
             ) { result in
-                if case .success(let urls) = result, let url = urls.first {
-                    handleImportSelection(url: url, model: model)
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        handleImportSelection(url: url, model: model)
+                    }
+                case .failure(let error):
+                    model.setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
                 }
             }
+            .overlay {
+                if isImportingGGUF {
+                    ZStack {
+                        Color.black.opacity(0.25)
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.large)
+                            Text("Model kopyalanıyor…")
+                                .font(.headline)
+                        }
+                        .padding(24)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+            }
+            .disabled(isImportingGGUF)
             .alert("Model zaten var", isPresented: $showOverwriteImportConfirm) {
                 Button("İptal", role: .cancel) {
                     pendingImportURL = nil
@@ -80,11 +102,7 @@ struct ModelCatalogView: View {
                 }
                 Button("Üzerine Yaz", role: .destructive) {
                     guard let url = pendingImportURL else { return }
-                    Task {
-                        await model.importGGUF(from: url, replaceExisting: true)
-                        pendingImportURL = nil
-                        pendingImportName = ""
-                    }
+                    startImport(url: url, model: model, replaceExisting: true)
                 }
             } message: {
                 Text("«\(pendingImportName)» klasörde zaten var. Üzerine yazılsın mı?")
@@ -99,7 +117,19 @@ struct ModelCatalogView: View {
             pendingImportName = url.lastPathComponent
             showOverwriteImportConfirm = true
         } else {
-            Task { await model.importGGUF(from: url) }
+            startImport(url: url, model: model, replaceExisting: false)
+        }
+    }
+
+    private func startImport(url: URL, model: AppModel, replaceExisting: Bool) {
+        Task {
+            isImportingGGUF = true
+            defer {
+                isImportingGGUF = false
+                pendingImportURL = nil
+                pendingImportName = ""
+            }
+            await model.importGGUF(from: url, replaceExisting: replaceExisting)
         }
     }
 

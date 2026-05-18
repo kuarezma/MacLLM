@@ -44,11 +44,15 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.8+)
+### Bu sürümde (1.9+)
 
-- Sohbetler oturum başına dosyada; eski tek dosyalı indeks otomatik taşınır
-- Asistan yanıtlarında Markdown (kod blokları, \`inline\`, **kalın**)
-- Aynı GGUF tekrar içe aktarılırken üzerine yazma onayı
+- Yanıt akışı sırasında canlı Markdown ve ilerleme göstergesi
+- Video süresi için güncel AVFoundation API
+- GGUF içe aktarmada ilerleme katmanı ve dosya seçici hata mesajları
+
+### Önceki (1.8)
+
+- Oturum başına sohbet dosyası; asistan Markdown; GGUF üzerine yazma onayı
 
 ### Kurulum (Terminal gerekmez)
 
