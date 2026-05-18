@@ -19,6 +19,12 @@ struct MacLLMApp: App {
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
+            CommandGroup(after: .appSettings) {
+                Button("Model Kataloğu…") {
+                    appModel.showCatalog = true
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+            }
         }
 
         Settings {

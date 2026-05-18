@@ -37,6 +37,7 @@ MacLLM, [llama.cpp](https://github.com/ggml-org/llama.cpp) ve **Metal GPU** ile 
 | **Gelişmiş indirme** | % ilerleme, boyut, **MB/s**, kalan süre, **durdur**, **devam**, **iptal** |
 | **Manuel kurulum** | `repo-id` + dosya adı veya yerel `.gguf` içe aktarma |
 | **Uyarlanan varsayılanlar** | İlk açılışta RAM’e göre bağlam ve token limiti |
+| **Ollama tarzı ayarlar** | Tam ayarlar penceresi (⌘,) — örnekleme, bağlam, sistem, stop |
 | **Gizlilik** | Veriler `~/Library/Application Support/MacLLM/` altında |
 | **Kolay dağıtım** | Release: **DMG**, **PKG**, **ZIP**, **Homebrew cask** |
 
@@ -116,16 +117,19 @@ Model indirilirken:
 - **Tahmini kalan süre**  
 - **Durdur** · **Devam** · **İptal**
 
-### Ayarlar
+### Ayarlar (Ollama uyumlu)
 
-Uygulama içi ayarlar:
+**MacLLM → Ayarlar…** (⌘,), araç çubuğu **dişli** veya sol panel **Ayarlar**.
 
-- Sıcaklık, top-p, maks. token  
-- Bağlam uzunluğu (2048 / 4096 / 8192)  
-- GPU katmanları (`-1` = tümü Metal’de)  
-- CPU iş parçacığı sayısı  
-- **Hugging Face token** (gated modeller)  
-- **Hakkında** — sürüm ve algılanan Mac bilgisi  
+| Sekme | Ollama parametresi | İçerik |
+|-------|-------------------|--------|
+| **Genel** | — | Sürüm, Mac bilgisi, model/sohbet klasörü, Finder’da aç |
+| **Model** | `num_ctx`, `num_gpu`, `num_thread` | Bağlam 2K–32K, GPU katmanları (-1 = tümü), CPU |
+| **Örnekleme** | `temperature`, `top_p`, `top_k`, `min_p`, `repeat_penalty`, `mirostat`, `seed` | llama.cpp örnekleme zinciri |
+| **Sohbet** | `num_predict`, `system`, `stop` | Maks. token, sistem mesajı, stop dizileri |
+| **Hugging Face** | — | Gated modeller için token |
+
+**Ollama varsayılanları** düğmesi tipik değerlere döner. **Kaydet** ayarları saklar; bağlam/GPU değişince modeli yeniden yükler.
 
 ## Kaynaktan derleme
 
@@ -163,8 +167,8 @@ open build/MacLLM.app
 
 ```bash
 ./Scripts/build-packages.sh          # zip + dmg + pkg + Homebrew cask güncelle
-./Scripts/create-release.sh 1.2.2    # derle + GitHub release (gh gerekir)
-SKIP_GITHUB=1 ./Scripts/create-release.sh 1.2.2   # yalnızca dist/ altında artefaktlar
+./Scripts/create-release.sh 1.3.0    # derle + GitHub release (gh gerekir)
+SKIP_GITHUB=1 ./Scripts/create-release.sh 1.3.0   # yalnızca dist/ altında artefaktlar
 ```
 
 `v*` etiketi push edilince [.github/workflows/release.yml](.github/workflows/release.yml) CI release oluşturur.
@@ -180,7 +184,8 @@ MacLLM/
 │   ├── Features/
 │   │   ├── Chat/               # Akışlı sohbet
 │   │   ├── Main/               # Ana kabuk
-│   │   └── Models/             # Katalog, arama, indirme UI
+│   │   ├── Models/             # Katalog, arama, indirme UI
+│   │   └── Settings/           # Ollama tarzı ayarlar penceresi
 │   ├── Services/
 │   │   ├── HuggingFaceDownloadService.swift
 │   │   ├── ModelRecommendationService.swift
@@ -226,6 +231,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.3.0** | Ayarlar penceresi (⌘,) — Ollama uyumlu parametreler (top_k, repeat_penalty, mirostat, system, stop) |
 | **1.2.2** | Dokümantasyon güncellemesi; DMG, PKG, ZIP, Homebrew paketleri |
 | **1.2.1** | PKG kurulum paketi, Homebrew cask, `build-packages.sh` |
 | **1.2.0** | İndirme hızı/ETA, duraklat/devam/iptal, DMG dağıtımı |

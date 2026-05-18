@@ -36,6 +36,15 @@ final class InferenceService: ObservableObject {
         }
     }
 
+    private static func messagesWithSystem(_ messages: [ChatMessage], systemPrompt: String) -> [ChatMessage] {
+        let trimmed = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return messages }
+        if messages.contains(where: { $0.role == .system }) { return messages }
+        var result = messages
+        result.insert(ChatMessage(role: .system, content: trimmed), at: 0)
+        return result
+    }
+
     func streamResponse(
         messages: [ChatMessage],
         chatTemplate: String
@@ -54,15 +63,38 @@ final class InferenceService: ObservableObject {
                         Task { await llamaContext.clear() }
                     }
 
-                    let prompt = try await llamaContext.applyChatTemplate(messages: messages, templateName: chatTemplate)
+                    let promptMessages = Self.messagesWithSystem(messages, systemPrompt: settings.systemPrompt)
+                    let prompt = try await llamaContext.applyChatTemplate(
+                        messages: promptMessages,
+                        templateName: chatTemplate
+                    )
                     try await llamaContext.completionInit(text: prompt)
+
+                    var generated = ""
+                    var emittedCount = 0
+                    let stops = settings.stopSequences.filter { !$0.isEmpty }
 
                     while await !llamaContext.is_done {
                         try Task.checkCancellation()
                         let chunk = try await llamaContext.completionLoop()
-                        if !chunk.isEmpty {
-                            continuation.yield(chunk)
+                        guard !chunk.isEmpty else { continue }
+
+                        generated += chunk
+                        var hitStop = false
+                        for stop in stops where generated.contains(stop) {
+                            if let range = generated.range(of: stop) {
+                                let trimmed = String(generated[..<range.lowerBound])
+                                if trimmed.count > emittedCount {
+                                    let start = trimmed.index(trimmed.startIndex, offsetBy: emittedCount)
+                                    continuation.yield(String(trimmed[start...]))
+                                }
+                                hitStop = true
+                                break
+                            }
                         }
+                        if hitStop { break }
+                        continuation.yield(chunk)
+                        emittedCount = generated.count
                     }
                     continuation.finish()
                 } catch {

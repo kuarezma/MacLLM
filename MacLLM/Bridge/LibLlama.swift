@@ -83,9 +83,49 @@ actor LlamaContext {
 
         let sparams = llama_sampler_chain_default_params()
         sampling = llama_sampler_chain_init(sparams)
-        llama_sampler_chain_add(sampling, llama_sampler_init_top_p(settings.topP, 1))
-        llama_sampler_chain_add(sampling, llama_sampler_init_temp(settings.temperature))
-        llama_sampler_chain_add(sampling, llama_sampler_init_dist(UInt32.random(in: 1...UInt32.max)))
+        Self.configureSamplerChain(sampling, vocab: vocab, settings: settings)
+    }
+
+    private static func configureSamplerChain(
+        _ chain: UnsafeMutablePointer<llama_sampler>,
+        vocab: OpaquePointer,
+        settings: InferenceSettings
+    ) {
+        let seed = settings.seed == 0 ? UInt32.random(in: 1...UInt32.max) : settings.seed
+
+        if settings.mirostat == 2 {
+            llama_sampler_chain_add(chain, llama_sampler_init_mirostat_v2(seed, settings.mirostatTau, settings.mirostatEta))
+            return
+        }
+        if settings.mirostat == 1 {
+            let n_vocab = llama_vocab_n_tokens(vocab)
+            llama_sampler_chain_add(
+                chain,
+                llama_sampler_init_mirostat(n_vocab, seed, settings.mirostatTau, settings.mirostatEta, 100)
+            )
+            return
+        }
+
+        if settings.repeatPenalty != 1.0 || settings.repeatLastN != 0 {
+            llama_sampler_chain_add(
+                chain,
+                llama_sampler_init_penalties(
+                    settings.repeatLastN,
+                    settings.repeatPenalty,
+                    0,
+                    0
+                )
+            )
+        }
+        if settings.topK > 0 {
+            llama_sampler_chain_add(chain, llama_sampler_init_top_k(settings.topK))
+        }
+        llama_sampler_chain_add(chain, llama_sampler_init_top_p(settings.topP, 1))
+        if settings.minP > 0 {
+            llama_sampler_chain_add(chain, llama_sampler_init_min_p(settings.minP, 1))
+        }
+        llama_sampler_chain_add(chain, llama_sampler_init_temp(settings.temperature))
+        llama_sampler_chain_add(chain, llama_sampler_init_dist(seed))
     }
 
     deinit {

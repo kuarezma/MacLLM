@@ -37,6 +37,7 @@ Built for **Apple Silicon** (M1/M2/M3/M4). The app reads your **chip and physica
 | **Rich download UI** | Progress %, downloaded/total size, speed (MB/s), ETA, **pause**, **resume**, **cancel** |
 | **Manual install** | Paste `repo-id` + `.gguf` filename, or import a local file |
 | **Adaptive defaults** | First-run inference settings tuned to your RAM (8 / 16 / 24 GB+) |
+| **Ollama-style settings** | Full settings window (⌘,) — sampling, context, system prompt, stop sequences |
 | **Privacy** | Models and chats in `~/Library/Application Support/MacLLM/` |
 | **Easy distribution** | Release ships **DMG**, **PKG**, **ZIP**, and a **Homebrew cask** |
 
@@ -116,16 +117,19 @@ While a model downloads you see:
 - **Estimated time remaining**  
 - **Pause** · **Resume** · **Cancel**
 
-### Settings
+### Settings (Ollama-compatible)
 
-**MacLLM → Settings** (or in-app settings):
+Open via **MacLLM → Settings…** (⌘,), toolbar **gear** icon, or sidebar **Settings**.
 
-- Temperature, top-p, max tokens  
-- Context length (2048 / 4096 / 8192)  
-- GPU layers (`-1` = all on Metal)  
-- CPU thread count  
-- **Hugging Face token** (for gated models)  
-- **About** — app version and detected Mac hardware summary  
+| Tab | Ollama parameter | What you can set |
+|-----|------------------|------------------|
+| **General** | — | Version, Mac info, models/chats folder, open in Finder |
+| **Model** | `num_ctx`, `num_gpu`, `num_thread` | Context 2K–32K, GPU layers (-1 = all), CPU threads |
+| **Sampling** | `temperature`, `top_p`, `top_k`, `min_p`, `repeat_penalty`, `repeat_last_n`, `mirostat`, `seed` | Full sampler chain via llama.cpp |
+| **Chat** | `num_predict`, `system`, `stop` | Max tokens, system prompt, stop strings (one per line) |
+| **Hugging Face** | — | Access token for gated models |
+
+**Ollama defaults** button restores typical values (temp 0.8, top_k 40, repeat_penalty 1.1, …). **Save** persists settings and reloads the model when context/GPU changes.
 
 ## Build from source
 
@@ -163,8 +167,8 @@ open build/MacLLM.app
 
 ```bash
 ./Scripts/build-packages.sh          # zip + dmg + pkg + update Homebrew cask
-./Scripts/create-release.sh 1.2.2    # build all + GitHub release (needs gh auth)
-SKIP_GITHUB=1 ./Scripts/create-release.sh 1.2.2   # artifacts only, under dist/
+./Scripts/create-release.sh 1.3.0    # build all + GitHub release (needs gh auth)
+SKIP_GITHUB=1 ./Scripts/create-release.sh 1.3.0   # artifacts only, under dist/
 ```
 
 Tag push (`v*`) also triggers [.github/workflows/release.yml](.github/workflows/release.yml) on GitHub Actions.
@@ -180,7 +184,8 @@ MacLLM/
 │   ├── Features/
 │   │   ├── Chat/               # Streaming chat UI
 │   │   ├── Main/               # NavigationSplitView shell
-│   │   └── Models/             # Catalog, online search, download UI
+│   │   ├── Models/             # Catalog, online search, download UI
+│   │   └── Settings/           # Ollama-style settings window
 │   ├── Services/
 │   │   ├── HuggingFaceDownloadService.swift
 │   │   ├── ModelRecommendationService.swift
@@ -226,6 +231,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.3.0** | Settings window (⌘,) with Ollama-compatible parameters (top_k, repeat_penalty, mirostat, system, stop) |
 | **1.2.2** | Documentation update; DMG, PKG, ZIP, Homebrew packages |
 | **1.2.1** | PKG installer, Homebrew cask, `build-packages.sh` |
 | **1.2.0** | Download speed/ETA, pause/resume/cancel, DMG installer |

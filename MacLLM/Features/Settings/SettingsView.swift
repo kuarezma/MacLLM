@@ -1,23 +1,189 @@
 import SwiftUI
+import AppKit
+
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case general = "Genel"
+    case model = "Model"
+    case sampling = "Örnekleme"
+    case chat = "Sohbet"
+    case huggingFace = "Hugging Face"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .general: return "gearshape"
+        case .model: return "cpu"
+        case .sampling: return "slider.horizontal.3"
+        case .chat: return "bubble.left.and.bubble.right"
+        case .huggingFace: return "cloud"
+        }
+    }
+}
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var appModel
+    @State private var tab: SettingsTab = .general
+    @State private var stopText = ""
 
     var body: some View {
         @Bindable var model = appModel
 
-        Form {
-            Section("Hugging Face (çevrimiçi indirme)") {
-                SecureField("Access Token (opsiyonel)", text: Binding(
-                    get: { HuggingFaceCredentials.token ?? "" },
-                    set: { HuggingFaceCredentials.token = $0.isEmpty ? nil : $0 }
-                ))
-                Text("Gated modeller için huggingface.co → Settings → Access Tokens bölümünden token oluşturun.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        NavigationSplitView {
+            List(selection: $tab) {
+                ForEach(SettingsTab.allCases) { item in
+                    Label(item.rawValue, systemImage: item.icon)
+                        .tag(item)
+                }
             }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+        } detail: {
+            Form {
+                switch tab {
+                case .general:
+                    generalSection(model: model)
+                case .model:
+                    modelSection(model: model)
+                case .sampling:
+                    samplingSection(model: model)
+                case .chat:
+                    chatSection(model: model)
+                case .huggingFace:
+                    huggingFaceSection()
+                }
+            }
+            .formStyle(.grouped)
+            .padding()
+            .navigationTitle(tab.rawValue)
+            .toolbar {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button("Ollama varsayılanları") {
+                        model.settings = InferenceSettings.ollamaDefaults
+                        model.settings.threadCount = Int32(
+                            max(1, min(8, model.systemProfile.processorCount - 2))
+                        )
+                        syncStopText(from: model.settings)
+                    }
+                    Button("Kaydet") {
+                        model.settings.stopSequencesText = stopText
+                        model.saveSettings()
+                    }
+                    .keyboardShortcut("s", modifiers: .command)
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+        .frame(minWidth: 640, minHeight: 480)
+        .onAppear {
+            syncStopText(from: model.settings)
+        }
+    }
 
-            Section("Üretim") {
+    @ViewBuilder
+    private func generalSection(model: AppModel) -> some View {
+        Section("Uygulama") {
+            LabeledContent("Sürüm", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+            LabeledContent("Bu Mac", value: model.systemProfile.displaySummary)
+            LabeledContent("Çıkarım motoru", value: "llama.cpp + Metal")
+        }
+
+        Section("Depolama (Ollama: models dizini)") {
+            LabeledContent("Modeller") {
+                Text(ModelStore.shared.modelsDirectory.path)
+                    .font(.caption)
+                    .textSelection(.enabled)
+                    .lineLimit(3)
+            }
+            LabeledContent("Sohbetler") {
+                Text(ModelStore.shared.appSupportURL.appendingPathComponent("chats").path)
+                    .font(.caption)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+            }
+            LabeledContent("Disk kullanımı", value: model.diskUsageFormatted)
+            Button("Klasörü Finder’da aç") {
+                NSWorkspace.shared.open(ModelStore.shared.appSupportURL)
+            }
+        }
+
+        Section {
+            Text("Ayarlar penceresine menü çubuğundan **MacLLM → Ayarlar…** (⌘,) ile de ulaşabilirsiniz.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func modelSection(model: AppModel) -> some View {
+        Section("Bağlam (num_ctx)") {
+            Picker("Bağlam uzunluğu", selection: Binding(
+                get: { Int(model.settings.contextLength) },
+                set: { model.settings.contextLength = UInt32($0) }
+            )) {
+                Text("2048").tag(2048)
+                Text("4096").tag(4096)
+                Text("8192").tag(8192)
+                Text("16384").tag(16384)
+                Text("32768").tag(32768)
+            }
+            Text("Modelin işleyebileceği maksimum token penceresi. Yüksek değer daha fazla RAM kullanır.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        Section("Donanım (num_gpu, num_thread)") {
+            Stepper(
+                "GPU katmanları: \(model.settings.gpuLayers < 0 ? "tümü (-1)" : "\(model.settings.gpuLayers)")",
+                value: Binding(
+                    get: { Int(model.settings.gpuLayers) },
+                    set: { model.settings.gpuLayers = Int32($0) }
+                ),
+                in: -1...128
+            )
+            Stepper("CPU iş parçacığı: \(model.settings.threadCount)", value: Binding(
+                get: { Int(model.settings.threadCount) },
+                set: { model.settings.threadCount = Int32($0) }
+            ), in: 1...32)
+            Text("GPU katmanları -1: tüm katmanlar Metal’de (Ollama’daki varsayılan tam offload).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        Section {
+            Text("Bağlam veya GPU ayarı değişince model yeniden yüklenir (Kaydet).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func samplingSection(model: AppModel) -> some View {
+        @Bindable var model = model
+        Section("Mirostat (Ollama: mirostat)") {
+            Picker("Mod", selection: $model.settings.mirostat) {
+                Text("Kapalı (0)").tag(Int32(0))
+                Text("Mirostat v1 (1)").tag(Int32(1))
+                Text("Mirostat v2 (2)").tag(Int32(2))
+            }
+            if model.settings.usesMirostat {
+                Slider(value: Binding(
+                    get: { Double(model.settings.mirostatTau) },
+                    set: { model.settings.mirostatTau = Float($0) }
+                ), in: 0...10, step: 0.1) {
+                    Text("Tau: \(model.settings.mirostatTau, specifier: "%.1f")")
+                }
+                Slider(value: Binding(
+                    get: { Double(model.settings.mirostatEta) },
+                    set: { model.settings.mirostatEta = Float($0) }
+                ), in: 0.01...1, step: 0.01) {
+                    Text("Eta: \(model.settings.mirostatEta, specifier: "%.2f")")
+                }
+            }
+        }
+
+        if !model.settings.usesMirostat {
+            Section("Sıcaklık ve çekirdek örnekleme") {
                 Slider(value: Binding(
                     get: { Double(model.settings.temperature) },
                     set: { model.settings.temperature = Float($0) }
@@ -30,46 +196,98 @@ struct SettingsView: View {
                 ), in: 0.05...1, step: 0.05) {
                     Text("Top-p: \(model.settings.topP, specifier: "%.2f")")
                 }
-                Stepper("Maks. token: \(model.settings.maxTokens)", value: Binding(
-                    get: { Int(model.settings.maxTokens) },
-                    set: { model.settings.maxTokens = Int32($0) }
-                ), in: 64...4096, step: 64)
-            }
-
-            Section("Bağlam ve donanım") {
-                Picker("Bağlam uzunluğu", selection: Binding(
-                    get: { Int(model.settings.contextLength) },
-                    set: { model.settings.contextLength = UInt32($0) }
-                )) {
-                    Text("2048").tag(2048)
-                    Text("4096").tag(4096)
-                    Text("8192").tag(8192)
-                }
-                Stepper("GPU katmanları (-1 = tümü): \(model.settings.gpuLayers)", value: Binding(
-                    get: { Int(model.settings.gpuLayers) },
-                    set: { model.settings.gpuLayers = Int32($0) }
-                ), in: -1...99)
-                Stepper("CPU iş parçacığı: \(model.settings.threadCount)", value: Binding(
-                    get: { Int(model.settings.threadCount) },
-                    set: { model.settings.threadCount = Int32($0) }
-                ), in: 1...16)
-            }
-
-            Section {
-                Button("Kaydet ve modeli yeniden yükle") {
-                    model.saveSettings()
+                Stepper("Top-k: \(model.settings.topK == 0 ? "kapalı" : "\(model.settings.topK)")", value: Binding(
+                    get: { Int(model.settings.topK) },
+                    set: { model.settings.topK = Int32($0) }
+                ), in: 0...200)
+                Slider(value: Binding(
+                    get: { Double(model.settings.minP) },
+                    set: { model.settings.minP = Float($0) }
+                ), in: 0...1, step: 0.01) {
+                    Text("Min-p: \(model.settings.minP == 0 ? "kapalı" : String(format: "%.2f", model.settings.minP))")
                 }
             }
 
-            Section("Hakkında") {
-                LabeledContent("Sürüm", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
-                LabeledContent("Bu Mac", value: model.systemProfile.displaySummary)
-                LabeledContent("Çıkarım", value: "llama.cpp + Metal")
-                LabeledContent("Modeller", value: model.diskUsageFormatted)
+            Section("Tekrar cezası (repeat_penalty)") {
+                Slider(value: Binding(
+                    get: { Double(model.settings.repeatPenalty) },
+                    set: { model.settings.repeatPenalty = Float($0) }
+                ), in: 1...2, step: 0.05) {
+                    Text("Cezası: \(model.settings.repeatPenalty, specifier: "%.2f") (1.0 = kapalı)")
+                }
+                Stepper("Son N token: \(model.settings.repeatLastN)", value: Binding(
+                    get: { Int(model.settings.repeatLastN) },
+                    set: { model.settings.repeatLastN = Int32($0) }
+                ), in: -1...512)
+                Text("repeat_last_n: -1 = tüm bağlam, 0 = kapalı")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
-        .padding()
-        .frame(width: 440)
+
+        Section("Tohum (seed)") {
+            Stepper(
+                "Seed: \(model.settings.seed == 0 ? "rastgele" : "\(model.settings.seed)")",
+                value: Binding(
+                    get: { Int(model.settings.seed) },
+                    set: { model.settings.seed = UInt32(max(0, $0)) }
+                ),
+                in: 0...999_999
+            )
+            Button("Rastgele tohum (0)") {
+                model.settings.seed = 0
+            }
+            .font(.caption)
+        }
+    }
+
+    @ViewBuilder
+    private func chatSection(model: AppModel) -> some View {
+        @Bindable var model = model
+        Section("Üretim limiti (num_predict)") {
+            Stepper("Maks. üretilecek token: \(model.settings.maxTokens)", value: Binding(
+                get: { Int(model.settings.maxTokens) },
+                set: { model.settings.maxTokens = Int32($0) }
+            ), in: 64...8192, step: 64)
+        }
+
+        Section("Sistem mesajı (system)") {
+            TextEditor(text: $model.settings.systemPrompt)
+                .font(.body)
+                .frame(minHeight: 80, maxHeight: 140)
+            Text("Her sohbete eklenir; model şablonuna göre system rolü olarak iletilir.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        Section("Durdurma dizileri (stop)") {
+            TextEditor(text: $stopText)
+                .font(.system(.body, design: .monospaced))
+                .frame(minHeight: 72, maxHeight: 120)
+            Text("Her satır bir stop dizisi (Ollama stop). Örn. </s>, ")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("Varsayılan stop listesi") {
+                stopText = InferenceSettings.ollamaDefaults.stopSequencesText
+            }
+            .font(.caption)
+        }
+    }
+
+    @ViewBuilder
+    private func huggingFaceSection() -> some View {
+        Section("Çevrimiçi indirme") {
+            SecureField("Access Token (opsiyonel)", text: Binding(
+                get: { HuggingFaceCredentials.token ?? "" },
+                set: { HuggingFaceCredentials.token = $0.isEmpty ? nil : $0 }
+            ))
+            Text("Gated modeller için huggingface.co → Settings → Access Tokens")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func syncStopText(from settings: InferenceSettings) {
+        stopText = settings.stopSequencesText
     }
 }

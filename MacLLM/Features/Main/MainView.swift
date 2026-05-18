@@ -30,6 +30,10 @@ struct MainView: View {
                 } label: {
                     Label("Yeni Sohbet", systemImage: "square.and.pencil")
                 }
+                SettingsLink {
+                    Label("Ayarlar", systemImage: "gearshape")
+                }
+                .help("Ayarlar (⌘,)")
             }
         }
         .sheet(isPresented: $model.showCatalog) {
@@ -92,6 +96,13 @@ struct ModelSidebarView: View {
 
             Section {
                 LabeledContent("Disk kullanımı", value: model.diskUsageFormatted)
+            }
+
+            Section {
+                SettingsLink {
+                    Label("Ayarlar…", systemImage: "gearshape")
+                }
+                .help("Çıkarım, örnekleme, sistem mesajı (⌘,)")
             }
         }
         .listStyle(.sidebar)
