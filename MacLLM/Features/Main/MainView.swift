@@ -2,7 +2,6 @@ import SwiftUI
 
 struct MainView: View {
     @Environment(AppModel.self) private var appModel
-    @Environment(\.openSettings) private var openSettings
     @EnvironmentObject private var inferenceService: InferenceService
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -47,9 +46,6 @@ struct MainView: View {
         .sheet(isPresented: $model.showSystemPromptSheet) {
             SystemPromptSheet()
                 .environment(appModel)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macLLMOpenSettings)) { _ in
-            openSettings()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let status = model.statusMessage, !status.isEmpty {
