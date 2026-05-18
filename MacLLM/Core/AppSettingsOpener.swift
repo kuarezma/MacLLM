@@ -1,14 +1,13 @@
 import AppKit
 
+extension Notification.Name {
+    static let macLLMOpenSettings = Notification.Name("macLLMOpenSettings")
+}
+
 enum AppSettingsOpener {
     @MainActor
     static func open() {
-        let settingsSelector = Selector(("showSettingsWindow:"))
-        let preferencesSelector = Selector(("showPreferencesWindow:"))
-        if NSApp.responds(to: settingsSelector) {
-            NSApp.sendAction(settingsSelector, to: nil, from: nil)
-        } else {
-            NSApp.sendAction(preferencesSelector, to: nil, from: nil)
-        }
+        NSApp.activate(ignoringOtherApps: true)
+        NotificationCenter.default.post(name: .macLLMOpenSettings, object: nil)
     }
 }

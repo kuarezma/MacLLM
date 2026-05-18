@@ -2,12 +2,10 @@ import SwiftUI
 
 struct MainView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.openSettings) private var openSettings
     @EnvironmentObject private var inferenceService: InferenceService
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var sessionToDelete: ChatSession?
-    @State private var modelToDelete: InstalledModel?
-    @State private var confirmDeleteCurrentChat = false
     @State private var showDownloadsPopover = false
     @State private var sidebarSearchFocused = false
 
@@ -15,11 +13,7 @@ struct MainView: View {
         @Bindable var model = appModel
 
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            JanSidebarView(
-                sessionToDelete: $sessionToDelete,
-                modelToDelete: $modelToDelete,
-                showDownloadsPopover: $showDownloadsPopover
-            )
+            JanSidebarView(showDownloadsPopover: $showDownloadsPopover)
             .navigationSplitViewColumnWidth(min: 220, ideal: AppTheme.sidebarWidth, max: 320)
         } detail: {
             VStack(spacing: 0) {
@@ -54,45 +48,8 @@ struct MainView: View {
             SystemPromptSheet()
                 .environment(appModel)
         }
-        .confirmationDialog(
-            "Bu sohbet silinsin mi?",
-            isPresented: $confirmDeleteCurrentChat,
-            titleVisibility: .visible
-        ) {
-            Button("Sohbeti Sil", role: .destructive) {
-                Task { await model.deleteSession(model.currentSession) }
-            }
-            Button("İptal", role: .cancel) {}
-        }
-        .confirmationDialog(
-            "Bu sohbet silinsin mi?",
-            isPresented: Binding(
-                get: { sessionToDelete != nil },
-                set: { if !$0 { sessionToDelete = nil } }
-            ),
-            presenting: sessionToDelete
-        ) { session in
-            Button("Sil", role: .destructive) {
-                Task { await model.deleteSession(session) }
-            }
-            Button("İptal", role: .cancel) { sessionToDelete = nil }
-        } message: { session in
-            Text("“\(session.title)” kalıcı olarak silinecek.")
-        }
-        .confirmationDialog(
-            "Model diskten silinsin mi?",
-            isPresented: Binding(
-                get: { modelToDelete != nil },
-                set: { if !$0 { modelToDelete = nil } }
-            ),
-            presenting: modelToDelete
-        ) { installed in
-            Button("Sil", role: .destructive) {
-                Task { await model.deleteModel(installed) }
-            }
-            Button("İptal", role: .cancel) { modelToDelete = nil }
-        } message: { installed in
-            Text("\(installed.name) dosyası silinecek. Bu işlem geri alınamaz.")
+        .onReceive(NotificationCenter.default.publisher(for: .macLLMOpenSettings)) { _ in
+            openSettings()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let status = model.statusMessage, !status.isEmpty {
@@ -109,13 +66,13 @@ struct MainView: View {
 struct JanSidebarView: View {
     @Environment(AppModel.self) private var appModel
     @EnvironmentObject private var inferenceService: InferenceService
-    @Binding var sessionToDelete: ChatSession?
-    @Binding var modelToDelete: InstalledModel?
     @Binding var showDownloadsPopover: Bool
 
     @State private var sessionSearchText = ""
     @State private var searchedSessions: [ChatSession] = []
     @State private var modelsExpanded = false
+    @State private var sessionPendingDelete: ChatSession?
+    @State private var modelPendingDelete: InstalledModel?
     @FocusState private var sessionSearchFocused: Bool
 
     private var sessionsToShow: [ChatSession] {
@@ -220,36 +177,7 @@ struct JanSidebarView: View {
                         .foregroundStyle(AppTheme.secondaryText)
                 } else {
                     ForEach(sessionsToShow) { session in
-                        HStack(spacing: 8) {
-                            Text(session.title)
-                                .lineLimit(1)
-                                .fontWeight(session.id == model.currentSession.id ? .semibold : .regular)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    Task { await model.loadSession(session) }
-                                }
-                            if session.id == model.currentSession.id {
-                                Capsule(style: .continuous)
-                                    .fill(AppTheme.accentGradient)
-                                    .frame(width: 3, height: 16)
-                            }
-                        }
-                        .contextMenu {
-                            Menu("Projeye taşı") {
-                                Button("Proje yok") {
-                                    Task { await model.assignSession(session.id, to: nil) }
-                                }
-                                ForEach(model.projects) { project in
-                                    Button(project.name) {
-                                        Task { await model.assignSession(session.id, to: project.id) }
-                                    }
-                                }
-                            }
-                            Button("Sil", role: .destructive) {
-                                sessionToDelete = session
-                            }
-                        }
+                        sessionRow(session)
                     }
                 }
             }
@@ -275,7 +203,7 @@ struct JanSidebarView: View {
                             }
                             .contextMenu {
                                 Button("Diskten Sil", role: .destructive) {
-                                    modelToDelete = installed
+                                    modelPendingDelete = installed
                                 }
                             }
                         }
@@ -322,6 +250,85 @@ struct JanSidebarView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSidebarSearch)) { _ in
             sessionSearchFocused = true
         }
+        .alert(
+            "Bu sohbet silinsin mi?",
+            isPresented: Binding(
+                get: { sessionPendingDelete != nil },
+                set: { if !$0 { sessionPendingDelete = nil } }
+            ),
+            presenting: sessionPendingDelete
+        ) { session in
+            Button("Sil", role: .destructive) {
+                Task {
+                    await model.deleteSession(session)
+                    sessionPendingDelete = nil
+                }
+            }
+            Button("İptal", role: .cancel) {
+                sessionPendingDelete = nil
+            }
+        } message: { session in
+            Text("“\(session.title)” kalıcı olarak silinecek.")
+        }
+        .alert(
+            "Model diskten silinsin mi?",
+            isPresented: Binding(
+                get: { modelPendingDelete != nil },
+                set: { if !$0 { modelPendingDelete = nil } }
+            ),
+            presenting: modelPendingDelete
+        ) { installed in
+            Button("Sil", role: .destructive) {
+                Task {
+                    await model.deleteModel(installed)
+                    modelPendingDelete = nil
+                }
+            }
+            Button("İptal", role: .cancel) {
+                modelPendingDelete = nil
+            }
+        } message: { installed in
+            Text("\(installed.name) dosyası silinecek. Bu işlem geri alınamaz.")
+        }
+    }
+
+    @ViewBuilder
+    private func sessionRow(_ session: ChatSession) -> some View {
+        HStack(spacing: 8) {
+            Text(session.title)
+                .lineLimit(1)
+                .fontWeight(session.id == appModel.currentSession.id ? .semibold : .regular)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if session.id == appModel.currentSession.id {
+                Capsule(style: .continuous)
+                    .fill(AppTheme.accentGradient)
+                    .frame(width: 3, height: 16)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            Task { await appModel.loadSession(session) }
+        }
+        .contextMenu {
+            Menu("Projeye taşı") {
+                Button("Proje yok") {
+                    Task { await appModel.assignSession(session.id, to: nil) }
+                }
+                ForEach(appModel.projects) { project in
+                    Button(project.name) {
+                        Task { await appModel.assignSession(session.id, to: project.id) }
+                    }
+                }
+            }
+            Button("Sil", role: .destructive) {
+                sessionPendingDelete = session
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button("Sil", role: .destructive) {
+                sessionPendingDelete = session
+            }
+        }
     }
 
     private func sidebarNavRow(
@@ -353,8 +360,10 @@ struct JanSidebarView: View {
                         .background(Color.primary.opacity(0.06), in: Capsule())
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(SidebarNavButtonStyle())
+        .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 8))
     }
 
     private func performSessionSearch(query: String) {

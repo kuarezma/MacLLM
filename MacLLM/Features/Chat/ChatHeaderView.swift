@@ -19,6 +19,7 @@ struct ChatHeaderView: View {
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(AccentIconButtonStyle())
+            .appHitTarget(minWidth: 36, minHeight: 36)
             .help("Ayarlar")
 
             AnimatedStatusDot(color: statusColor, pulse: shouldPulse)

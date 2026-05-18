@@ -44,7 +44,13 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.7)
+### Bu sürümde (1.14.8)
+
+- Ayarlar butonu düzeltmesi: sidebar, header ve composer menüsünden açılır
+- Sohbet silme: onay penceresi sidebar üzerinde, swipe ile silme desteği
+- Model silme onay penceresi macOS uyumlu hale getirildi
+
+### Önceki (1.14.7)
 
 - Composer buton düzeltmesi: + ekle, gönder, durdur, bağlam halkası tıklama alanı
 - İndirme toolbar bildirimi: aç/kapa toggle, badge tıklamayı engellemez
