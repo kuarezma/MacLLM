@@ -79,6 +79,7 @@ SOURCES=(
   MacLLM/Core/HubFileListLogic.swift
   MacLLM/Core/HFModelTypes.swift
   MacLLM/Core/AppNotifications.swift
+  MacLLM/Core/AppSettingsOpener.swift
   MacLLM/Core/GenerationStats.swift
   MacLLM/Core/ReasoningContentSplitter.swift
   MacLLM/Services/AppUpdateService.swift

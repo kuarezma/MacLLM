@@ -3,7 +3,6 @@ import SwiftUI
 struct ChatHeaderView: View {
     @Environment(AppModel.self) private var appModel
     @EnvironmentObject private var inferenceService: InferenceService
-    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         HStack(spacing: 12) {
@@ -12,7 +11,7 @@ struct ChatHeaderView: View {
             modelMenu
 
             Button {
-                openSettings()
+                AppSettingsOpener.open()
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 14, weight: .medium))

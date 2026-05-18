@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 
 struct ComposerToolsView: View {
     @Environment(AppModel.self) private var appModel
-    @Environment(\.openSettings) private var openSettings
     var isDisabled: Bool = false
 
     var body: some View {
@@ -33,7 +32,7 @@ struct ComposerToolsView: View {
                 .disabled(appModel.currentSession.messages.isEmpty)
                 Divider()
                 Button {
-                    openSettings()
+                    AppSettingsOpener.open()
                 } label: {
                     Label("Ayarlar", systemImage: "gearshape")
                 }

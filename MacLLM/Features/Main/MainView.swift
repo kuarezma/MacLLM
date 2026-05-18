@@ -112,7 +112,6 @@ struct MainView: View {
 struct JanSidebarView: View {
     @Environment(AppModel.self) private var appModel
     @EnvironmentObject private var inferenceService: InferenceService
-    @Environment(\.openSettings) private var openSettings
     @Binding var sessionToDelete: ChatSession?
     @Binding var modelToDelete: InstalledModel?
     @Binding var showDownloadsPopover: Bool
@@ -146,7 +145,7 @@ struct JanSidebarView: View {
                     model.showCatalog = true
                 }
                 sidebarNavRow("gearshape", title: "Ayarlar", shortcut: "⌘,") {
-                    openSettings()
+                    AppSettingsOpener.open()
                 }
             }
 
