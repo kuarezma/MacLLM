@@ -43,6 +43,11 @@ enum ModelMetadataParser {
         return formatter.localizedString(for: date, relativeTo: .now)
     }
 
+    static func formatFileSize(bytes: Int64) -> String {
+        guard bytes > 0 else { return "—" }
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
     static func formatCount(_ value: Int) -> String {
         if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
         if value >= 1_000 { return String(format: "%.1fK", Double(value) / 1_000) }

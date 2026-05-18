@@ -108,16 +108,36 @@ final class HuggingFaceHubService: Sendable {
         }
 
         let info = try decoder.decode(ModelInfo.self, from: data)
-        let files = (info.siblings ?? [])
-            .filter { $0.rfilename.lowercased().hasSuffix(".gguf") }
-            .sorted { HubFileListLogic.quantSortRank(filename: $0.rfilename) < HubFileListLogic.quantSortRank(filename: $1.rfilename) }
-            .map {
-                HFGGUFile(
-                    id: "\(repoId)/\($0.rfilename)",
-                    filename: $0.rfilename,
-                    sizeBytes: $0.size ?? 0
-                )
-            }
+        let sizeByFilename = try await fetchGGUFSizeMap(repoId: repoId)
+
+        let siblingGGUF = (info.siblings ?? []).filter { $0.rfilename.lowercased().hasSuffix(".gguf") }
+        let files: [HFGGUFile]
+        if siblingGGUF.isEmpty {
+            files = sizeByFilename
+                .sorted { HubFileListLogic.quantSortRank(filename: $0.key) < HubFileListLogic.quantSortRank(filename: $1.key) }
+                .map { filename, size in
+                    HFGGUFile(
+                        id: "\(repoId)/\(filename)",
+                        filename: filename,
+                        sizeBytes: size
+                    )
+                }
+        } else {
+            files = siblingGGUF
+                .sorted { HubFileListLogic.quantSortRank(filename: $0.rfilename) < HubFileListLogic.quantSortRank(filename: $1.rfilename) }
+                .map { sibling in
+                    let size = resolveFileSize(
+                        filename: sibling.rfilename,
+                        siblingSize: sibling.size,
+                        sizeByFilename: sizeByFilename
+                    )
+                    return HFGGUFile(
+                        id: "\(repoId)/\(sibling.rfilename)",
+                        filename: sibling.rfilename,
+                        sizeBytes: size
+                    )
+                }
+        }
 
         return HFRepoDetail(
             repoId: repoId,
@@ -175,6 +195,57 @@ final class HuggingFaceHubService: Sendable {
 
     static func huggingFaceURL(repoId: String) -> URL? {
         URL(string: "https://huggingface.co/\(repoId)")
+    }
+
+  /// HF model API artık siblings.size döndürmeyebilir — tree API'den boyutlar.
+    private func fetchGGUFSizeMap(repoId: String) async throws -> [String: Int64] {
+        let encoded = repoId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? repoId
+        struct TreeLFS: Decodable { let size: Int64? }
+        struct TreeEntry: Decodable {
+            let type: String?
+            let path: String
+            let size: Int64?
+            let lfs: TreeLFS?
+        }
+
+        for branch in ["main", "master"] {
+            guard let url = URL(string: "https://huggingface.co/api/models/\(encoded)/tree/\(branch)?recursive=1") else {
+                continue
+            }
+            var request = URLRequest(url: url)
+            HuggingFaceCredentials.applyAuth(to: &request)
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                continue
+            }
+            let entries = try decoder.decode([TreeEntry].self, from: data)
+            var map: [String: Int64] = [:]
+            for entry in entries where entry.type == "file" {
+                let path = entry.path
+                guard path.lowercased().hasSuffix(".gguf") else { continue }
+                let bytes = entry.lfs?.size ?? entry.size ?? 0
+                guard bytes > 0 else { continue }
+                map[path] = bytes
+                let base = (path as NSString).lastPathComponent
+                if map[base] == nil {
+                    map[base] = bytes
+                }
+            }
+            if !map.isEmpty { return map }
+        }
+        return [:]
+    }
+
+    private func resolveFileSize(
+        filename: String,
+        siblingSize: Int64?,
+        sizeByFilename: [String: Int64]
+    ) -> Int64 {
+        if let siblingSize, siblingSize > 0 { return siblingSize }
+        if let match = sizeByFilename[filename], match > 0 { return match }
+        let base = (filename as NSString).lastPathComponent
+        if let match = sizeByFilename[base], match > 0 { return match }
+        return 0
     }
 
     private func validate(_ response: URLResponse) throws {

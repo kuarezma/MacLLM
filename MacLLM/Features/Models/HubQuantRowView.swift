@@ -42,9 +42,10 @@ struct HubQuantRowView: View {
             Text("GGUF")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text(ByteCountFormatter.string(fromByteCount: file.sizeBytes, countStyle: .file))
+            Text(ModelMetadataParser.formatFileSize(bytes: file.sizeBytes))
                 .font(.subheadline)
                 .monospacedDigit()
+                .foregroundStyle(file.sizeBytes > 0 ? .primary : .secondary)
             infoButton
             downloadCell
         }
