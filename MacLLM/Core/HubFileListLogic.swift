@@ -22,6 +22,18 @@ enum HubQuantSort: String, CaseIterable, Identifiable {
     }
 }
 
+enum HubTableColumn: String, CaseIterable {
+    case model
+    case size
+
+    var title: String {
+        switch self {
+        case .model: return "Model"
+        case .size: return "Dosya boyutu"
+        }
+    }
+}
+
 enum HubQuantFilter: String, CaseIterable, Identifiable {
     case all
     case q2
@@ -88,17 +100,62 @@ enum HubFileListLogic {
         }
     }
 
+    static func matchesSearch(query: String, file: HFGGUFile) -> Bool {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return true }
+        if file.filename.lowercased().contains(needle) { return true }
+        if let quant = file.quantLabel?.lowercased(), quant.contains(needle) { return true }
+        return displayName(for: file).lowercased().contains(needle)
+    }
+
+    static func displayName(for file: HFGGUFile) -> String {
+        if let quant = file.quantLabel {
+            let base = (file.filename as NSString).deletingPathExtension
+            if base.lowercased().contains(quant.lowercased()) {
+                return base
+            }
+            return "\(base)-\(quant).gguf"
+        }
+        return file.filename
+    }
+
+    /// Sütun başlığına tıklanınca sıralama döngüsü.
+    static func sortForColumnTap(_ column: HubTableColumn, current: HubQuantSort) -> HubQuantSort {
+        switch column {
+        case .model:
+            switch current {
+            case .name: return .quantDescending
+            case .quantDescending: return .quantAscending
+            default: return .name
+            }
+        case .size:
+            return current == .sizeAscending ? .sizeDescending : .sizeAscending
+        }
+    }
+
+    static func isActiveSort(_ sort: HubQuantSort, for column: HubTableColumn) -> Bool {
+        switch column {
+        case .model: return sort == .name || sort == .quantAscending || sort == .quantDescending
+        case .size: return sort == .sizeAscending || sort == .sizeDescending
+        }
+    }
+
     static func filterAndSort(
         files: [HFGGUFile],
         filter: HubQuantFilter,
         sort: HubQuantSort,
-        fitLevels: [String: ModelFitLevel]
+        fitLevels: [String: ModelFitLevel],
+        searchQuery: String = ""
     ) -> [HFGGUFile] {
         var result = files
         if filter == .macFriendly {
             result = result.filter { fitLevels[$0.id] == .ideal || fitLevels[$0.id] == .workable }
         } else if filter != .all {
             result = result.filter { matches(filter: filter, file: $0) }
+        }
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            result = result.filter { matchesSearch(query: query, file: $0) }
         }
 
         switch sort {

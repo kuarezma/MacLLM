@@ -8,7 +8,9 @@ struct HubQuantRowView: View {
     let download: DownloadTaskInfo?
     let gated: Bool
     let isRecommended: Bool
+    var installedModel: InstalledModel?
     let onDownload: () -> Void
+    var onUse: (() -> Void)?
 
     @State private var showInfo = false
 
@@ -73,7 +75,7 @@ struct HubQuantRowView: View {
     @ViewBuilder
     private var modelNameCell: some View {
         HStack(spacing: 6) {
-            Text(HubQuantRowView.displayName(file: file))
+            Text(HubFileListLogic.displayName(for: file))
                 .font(.subheadline)
                 .lineLimit(2)
             if isRecommended {
@@ -98,7 +100,13 @@ struct HubQuantRowView: View {
     @ViewBuilder
     private var downloadCell: some View {
         Group {
-            if let download, download.state == .downloading || download.state == .paused {
+            if installedModel != nil {
+                Button("Kullan") {
+                    onUse?()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            } else if let download, download.state == .downloading || download.state == .paused {
                 HStack(spacing: 8) {
                     ProgressView(value: download.progress)
                         .frame(width: 72)
@@ -123,16 +131,5 @@ struct HubQuantRowView: View {
             }
         }
         .frame(width: 120, alignment: .trailing)
-    }
-
-    static func displayName(file: HFGGUFile) -> String {
-        if let quant = file.quantLabel {
-            let base = (file.filename as NSString).deletingPathExtension
-            if base.lowercased().contains(quant.lowercased()) {
-                return base
-            }
-            return "\(base)-\(quant).gguf"
-        }
-        return file.filename
     }
 }

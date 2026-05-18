@@ -33,7 +33,7 @@ struct OnlineModelSearchView: View {
                             Text("Örn. \"llama 3\", \"mistral 7b\", \"opus\"")
                         }
                     }
-                    ForEach(results) { model in
+                    ForEach(filteredResults) { model in
                         NavigationLink(value: model) {
                             OnlineModelRow(model: model, profile: appModel.systemProfile)
                         }
@@ -41,6 +41,15 @@ struct OnlineModelSearchView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var filteredResults: [HFModelSummary] {
+        let local = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard local.count >= 2, !results.isEmpty else { return results }
+        return results.filter { model in
+            model.repoId.lowercased().contains(local)
+                || model.displayTags.joined(separator: " ").lowercased().contains(local)
         }
     }
 

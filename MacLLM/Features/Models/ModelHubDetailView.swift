@@ -15,6 +15,8 @@ struct ModelHubDetailView: View {
     @State private var sortOrder: HubQuantSort = .recommended
     @State private var quantFilter: HubQuantFilter = .all
     @State private var readmeExpanded = false
+    @State private var fileSearchText = ""
+    @Environment(\.dismiss) private var dismiss
 
     private var files: [HFGGUFile] { detail?.files ?? [] }
     private var gated: Bool { detail?.gated == true || repo.gated }
@@ -36,8 +38,16 @@ struct ModelHubDetailView: View {
             files: files,
             filter: quantFilter,
             sort: sortOrder,
-            fitLevels: fitLevelsByFileId
+            fitLevels: fitLevelsByFileId,
+            searchQuery: fileSearchText
         )
+    }
+
+    private func installedModel(for file: HFGGUFile) -> InstalledModel? {
+        appModel.installedModels.first { model in
+            model.filename == file.filename
+                && (model.repoId == repo.repoId || model.id == "\(repo.repoId)-\(file.filename)")
+        }
     }
 
     private var recommendedFileId: String? {
@@ -103,9 +113,9 @@ struct ModelHubDetailView: View {
 
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                 GridRow {
-                    headerCell("Model")
+                    sortableHeader(.model)
                     headerCell("Format")
-                    headerCell("Dosya boyutu")
+                    sortableHeader(.size)
                     headerCell("")
                     headerCell("")
                         .frame(width: 120, alignment: .trailing)
@@ -120,10 +130,14 @@ struct ModelHubDetailView: View {
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 16)
                 } else if displayedFiles.isEmpty {
-                    Text("Seçilen filtreye uygun quant yok.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 16)
+                    Text(
+                        fileSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? "Seçilen filtreye uygun quant yok."
+                            : "Aramanızla eşleşen quant yok."
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 16)
                 } else {
                     ForEach(displayedFiles) { file in
                         HubQuantRowView(
@@ -136,7 +150,17 @@ struct ModelHubDetailView: View {
                             },
                             gated: gated,
                             isRecommended: file.id == recommendedFileId,
-                            onDownload: { Task { await download(file) } }
+                            installedModel: installedModel(for: file),
+                            onDownload: { Task { await download(file) } },
+                            onUse: {
+                                Task {
+                                    if let model = installedModel(for: file) {
+                                        await appModel.selectModel(model)
+                                        appModel.showCatalog = false
+                                        dismiss()
+                                    }
+                                }
+                            }
                         )
                         if file.id != displayedFiles.last?.id {
                             Divider()
@@ -152,6 +176,22 @@ struct ModelHubDetailView: View {
     @ViewBuilder
     private var quantControlsBar: some View {
         VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Quant veya dosya adı ara…", text: $fileSearchText)
+                    .textFieldStyle(.roundedBorder)
+                if !fileSearchText.isEmpty {
+                    Button {
+                        fileSearchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(HubQuantFilter.allCases) { filter in
@@ -211,6 +251,43 @@ struct ModelHubDetailView: View {
             .fontWeight(.semibold)
             .foregroundStyle(.secondary)
             .textCase(.uppercase)
+    }
+
+    @ViewBuilder
+    private func sortableHeader(_ column: HubTableColumn) -> some View {
+        Button {
+            sortOrder = HubFileListLogic.sortForColumnTap(column, current: sortOrder)
+        } label: {
+            HStack(spacing: 4) {
+                Text(column.title)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(
+                        HubFileListLogic.isActiveSort(sortOrder, for: column) ? Color.accentColor : .secondary
+                    )
+                    .textCase(.uppercase)
+                if HubFileListLogic.isActiveSort(sortOrder, for: column) {
+                    Image(systemName: sortIndicator(for: sortOrder, column: column))
+                        .font(.caption2)
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .help("Sıralamak için tıklayın")
+    }
+
+    private func sortIndicator(for sort: HubQuantSort, column: HubTableColumn) -> String {
+        switch column {
+        case .size:
+            return sort == .sizeAscending ? "chevron.up" : "chevron.down"
+        case .model:
+            switch sort {
+            case .quantAscending, .name: return "chevron.up"
+            case .quantDescending: return "chevron.down"
+            default: return "chevron.up"
+            }
+        }
     }
 
     @ViewBuilder
