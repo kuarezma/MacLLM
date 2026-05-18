@@ -12,20 +12,38 @@ struct ModelHubDetailView: View {
     @State private var readmeText: String?
     @State private var isLoading = true
     @State private var loadError: String?
+    @State private var sortOrder: HubQuantSort = .recommended
+    @State private var quantFilter: HubQuantFilter = .all
+    @State private var readmeExpanded = false
 
     private var files: [HFGGUFile] { detail?.files ?? [] }
     private var gated: Bool { detail?.gated == true || repo.gated }
 
+    private var fitLevelsByFileId: [String: ModelFitLevel] {
+        let profile = appModel.systemProfile
+        var map: [String: ModelFitLevel] = [:]
+        for file in files {
+            let entry = catalogEntry(for: file)
+            if let fit = ModelRecommendationService.shared.recommend(catalog: [entry], profile: profile).first?.fit {
+                map[file.id] = fit
+            }
+        }
+        return map
+    }
+
+    private var displayedFiles: [HFGGUFile] {
+        HubFileListLogic.filterAndSort(
+            files: files,
+            filter: quantFilter,
+            sort: sortOrder,
+            fitLevels: fitLevelsByFileId
+        )
+    }
+
     private var recommendedFileId: String? {
         guard !files.isEmpty else { return nil }
-        let profile = appModel.systemProfile
-        let scored = files.map { file -> (HFGGUFile, ModelFitLevel?) in
-            let entry = catalogEntry(for: file)
-            let fit = ModelRecommendationService.shared.recommend(catalog: [entry], profile: profile).first?.fit
-            return (file, fit)
-        }
-        if let ideal = scored.first(where: { $0.1 == .ideal })?.0 { return ideal.id }
-        if let workable = scored.first(where: { $0.1 == .workable })?.0 { return workable.id }
+        if let ideal = files.first(where: { fitLevelsByFileId[$0.id] == .ideal }) { return ideal.id }
+        if let workable = files.first(where: { fitLevelsByFileId[$0.id] == .workable }) { return workable.id }
         return files.first?.id
     }
 
@@ -81,6 +99,8 @@ struct ModelHubDetailView: View {
                 repoMetaBar(detail)
             }
 
+            quantControlsBar
+
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                 GridRow {
                     headerCell("Model")
@@ -99,8 +119,13 @@ struct ModelHubDetailView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 16)
+                } else if displayedFiles.isEmpty {
+                    Text("Seçilen filtreye uygun quant yok.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 16)
                 } else {
-                    ForEach(files) { file in
+                    ForEach(displayedFiles) { file in
                         HubQuantRowView(
                             file: file,
                             repo: repo,
@@ -113,7 +138,7 @@ struct ModelHubDetailView: View {
                             isRecommended: file.id == recommendedFileId,
                             onDownload: { Task { await download(file) } }
                         )
-                        if file.id != files.last?.id {
+                        if file.id != displayedFiles.last?.id {
                             Divider()
                         }
                     }
@@ -122,6 +147,61 @@ struct ModelHubDetailView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 16)
         }
+    }
+
+    @ViewBuilder
+    private var quantControlsBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(HubQuantFilter.allCases) { filter in
+                        Button {
+                            quantFilter = filter
+                        } label: {
+                            Text(filter.label)
+                                .font(.caption)
+                                .fontWeight(quantFilter == filter ? .semibold : .regular)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    quantFilter == filter
+                                        ? Color.accentColor.opacity(0.2)
+                                        : Color.primary.opacity(0.06)
+                                )
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            HStack(spacing: 12) {
+                Picker("Sırala", selection: $sortOrder) {
+                    ForEach(HubQuantSort.allCases) { order in
+                        Text(order.label).tag(order)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 160)
+
+                Text("\(displayedFiles.count) / \(files.count) dosya")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if recommendedFileId != nil, quantFilter != .macFriendly {
+                    Button("Önerilene git") {
+                        quantFilter = .all
+                        sortOrder = .recommended
+                    }
+                    .font(.caption)
+                    .buttonStyle(.link)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 10)
     }
 
     @ViewBuilder
@@ -189,12 +269,22 @@ struct ModelHubDetailView: View {
             }
 
             if let readmeText, !readmeText.isEmpty {
-                Text(readmePreview(readmeText))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
+                VStack(alignment: .leading, spacing: 8) {
+                    ReadmeMarkdownView(
+                        markdown: readmeExpanded ? readmeText : readmePreview(readmeText),
+                        maxHeight: readmeExpanded ? 560 : 320
+                    )
+                    if readmeText.count > 3200 || readmeText.components(separatedBy: "\n").count > 40 {
+                        Button(readmeExpanded ? "Daha az göster" : "Tamamını göster") {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                readmeExpanded.toggle()
+                            }
+                        }
+                        .font(.caption)
+                        .buttonStyle(.link)
+                    }
+                }
+                .padding(.horizontal, 20)
             } else if !isLoading {
                 Text("README bulunamadı.")
                     .font(.caption)
@@ -213,8 +303,9 @@ struct ModelHubDetailView: View {
 
     private func readmePreview(_ text: String) -> String {
         let lines = text.components(separatedBy: .newlines)
-        let head = lines.prefix(40).joined(separator: "\n")
-        return head.count > 4000 ? String(head.prefix(4000)) + "…" : head
+        let head = lines.prefix(28).joined(separator: "\n")
+        if head.count > 2800 { return String(head.prefix(2800)) + "\n\n…" }
+        return head
     }
 
     // MARK: - Actions
@@ -273,20 +364,5 @@ private struct FlowLayoutTags: View {
                 }
             }
         }
-    }
-}
-
-extension HFModelSummary {
-    static func hubEntry(repoId: String, tags: [String] = [], gated: Bool = false) -> HFModelSummary {
-        HFModelSummary(
-            id: repoId,
-            repoId: repoId,
-            downloads: 0,
-            likes: 0,
-            pipelineTag: nil,
-            tags: tags,
-            lastModified: nil,
-            gated: gated
-        )
     }
 }

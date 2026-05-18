@@ -76,6 +76,8 @@ SOURCES=(
   MacLLM/Core/AppVersion.swift
   MacLLM/Core/AppTheme.swift
   MacLLM/Core/MarkdownContentParser.swift
+  MacLLM/Core/HubFileListLogic.swift
+  MacLLM/Core/HFModelTypes.swift
   MacLLM/Services/AppUpdateService.swift
   MacLLM/Services/ModelStore.swift
   MacLLM/Services/ModelCatalogService.swift
@@ -114,6 +116,7 @@ SOURCES=(
   MacLLM/Features/Models/ModelHubDetailView.swift
   MacLLM/Features/Models/HubQuantRowView.swift
   MacLLM/Features/Models/DownloadManagerPopover.swift
+  MacLLM/Features/Models/ReadmeMarkdownView.swift
   MacLLM/Features/Settings/SettingsView.swift
 )
 

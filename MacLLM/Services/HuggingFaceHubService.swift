@@ -1,44 +1,5 @@
 import Foundation
 
-struct HFModelSummary: Identifiable, Hashable {
-    let id: String
-    let repoId: String
-    let downloads: Int
-    let likes: Int
-    let pipelineTag: String?
-    let tags: [String]
-    let lastModified: Date?
-    let gated: Bool
-
-    var parameterSize: String? {
-        ModelMetadataParser.parseParameterSize(from: "\(repoId) \(tags.joined(separator: " "))")
-    }
-
-    var displayTags: [String] {
-        ModelMetadataParser.displayTags(tags)
-    }
-}
-
-struct HFRepoDetail: Hashable {
-    let repoId: String
-    let downloads: Int
-    let likes: Int
-    let gated: Bool
-    let description: String?
-    let license: String?
-    let pipelineTag: String?
-    let tags: [String]
-    let files: [HFGGUFile]
-}
-
-struct HFGGUFile: Identifiable, Hashable {
-    let id: String
-    let filename: String
-    let sizeBytes: Int64
-
-    var quantLabel: String? { ModelMetadataParser.parseQuant(from: filename) }
-}
-
 enum HuggingFaceHubError: LocalizedError {
     case invalidURL
     case httpStatus(Int)
@@ -149,7 +110,7 @@ final class HuggingFaceHubService: Sendable {
         let info = try decoder.decode(ModelInfo.self, from: data)
         let files = (info.siblings ?? [])
             .filter { $0.rfilename.lowercased().hasSuffix(".gguf") }
-            .sorted { quantSortRank($0.rfilename) < quantSortRank($1.rfilename) }
+            .sorted { HubFileListLogic.quantSortRank(filename: $0.rfilename) < HubFileListLogic.quantSortRank(filename: $1.rfilename) }
             .map {
                 HFGGUFile(
                     id: "\(repoId)/\($0.rfilename)",
@@ -223,15 +184,4 @@ final class HuggingFaceHubService: Sendable {
         }
     }
 
-    private func quantSortRank(_ filename: String) -> Int {
-        let lower = filename.lowercased()
-        if lower.contains("q4_k_m") { return 0 }
-        if lower.contains("q4_k_s") { return 1 }
-        if lower.contains("q4_0") { return 2 }
-        if lower.contains("q5_k_m") { return 3 }
-        if lower.contains("q3_k") { return 4 }
-        if lower.contains("q6_k") { return 5 }
-        if lower.contains("q8_0") { return 6 }
-        return 10
-    }
 }
