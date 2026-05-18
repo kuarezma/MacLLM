@@ -176,6 +176,27 @@ struct ChatView: View {
                 .frame(height: AppTheme.composerAccessoryHeight)
             }
 
+            if let warning = model.visionAttachmentWarning(for: pendingAttachments) {
+                HStack(spacing: 8) {
+                    Image(systemName: "eye.slash")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    Button("Hub") {
+                        model.showCatalog = true
+                    }
+                    .font(.caption.weight(.medium))
+                    .buttonStyle(.borderless)
+                }
+                .padding(.horizontal, AppTheme.contentPadding)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.08))
+            }
+
             HStack(alignment: .bottom, spacing: 12) {
                 composerField(model: model)
                 ContextUsageView(
@@ -285,7 +306,13 @@ struct ChatView: View {
     }
 
     private var canSend: Bool {
-        (!inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty)
+        let hasContent = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !pendingAttachments.isEmpty
+        let visionBlocked = appModel.visionAttachmentWarning(for: pendingAttachments) != nil
+            && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && pendingAttachments.contains { $0.kind == .image || $0.kind == .video || $0.kind == .audio }
+        return hasContent
+            && !visionBlocked
             && !appModel.isLoadingModel
             && inferenceService.isModelLoaded
     }

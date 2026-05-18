@@ -73,6 +73,10 @@ struct HFGGUFile: Identifiable, Hashable {
     let sizeBytes: Int64
 
     var quantLabel: String? { ModelMetadataParser.parseQuant(from: filename) }
+
+    var isMmproj: Bool { filename.lowercased().contains("mmproj") }
+
+    var isModelWeights: Bool { !isMmproj }
 }
 
 extension HFModelSummary {

@@ -19,12 +19,14 @@ struct ModelHubDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     private var files: [HFGGUFile] { detail?.files ?? [] }
+    private var modelFiles: [HFGGUFile] { files.filter(\.isModelWeights) }
+    private var mmprojFile: HFGGUFile? { MmprojDiscovery.findInRepo(files: files) }
     private var gated: Bool { detail?.gated == true || repo.gated }
 
     private var fitLevelsByFileId: [String: ModelFitLevel] {
         let profile = appModel.systemProfile
         var map: [String: ModelFitLevel] = [:]
-        for file in files {
+        for file in modelFiles {
             let entry = catalogEntry(for: file)
             if let fit = ModelRecommendationService.shared.recommend(catalog: [entry], profile: profile).first?.fit {
                 map[file.id] = fit
@@ -35,7 +37,7 @@ struct ModelHubDetailView: View {
 
     private var displayedFiles: [HFGGUFile] {
         HubFileListLogic.filterAndSort(
-            files: files,
+            files: modelFiles,
             filter: quantFilter,
             sort: sortOrder,
             fitLevels: fitLevelsByFileId,
@@ -417,7 +419,10 @@ struct ModelHubDetailView: View {
             loadError = "Gated model — Ayarlar'dan Hugging Face token ekleyin."
             return
         }
-        await appModel.downloadModel(catalogEntry(for: file))
+        await appModel.downloadModel(
+            catalogEntry(for: file),
+            companionMmproj: file.isModelWeights ? mmprojFile.map(catalogEntry(for:)) : nil
+        )
     }
 
     private func catalogEntry(for file: HFGGUFile) -> CatalogEntry {

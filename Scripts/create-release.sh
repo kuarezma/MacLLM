@@ -44,7 +44,13 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.4)
+### Bu sürümde (1.14.5)
+
+- Vision model rehberi: composer uyarısı, Hub'dan otomatik mmproj indirme
+- mmproj dosyası otomatik bulma ve modele bağlama
+- Görüntü gönderimi için net yönlendirme (Qwen2-VL, LLaVA, Moondream)
+
+### Önceki (1.14.4)
 
 - Model Hub arama listesi: yayıncı avatarları, sabit satır düzeni
 - Quant uygunluk kartı ve Mac RAM rehberi (Q4_K_M vb.)

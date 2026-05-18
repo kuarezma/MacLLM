@@ -11,7 +11,7 @@ struct ModelCapabilities: Equatable {
         let haystack = "\(model.name) \(model.filename) \(model.repoId)".lowercased()
         let visionKeywords = [
             "vl", "vision", "llava", "bakllava", "moondream", "pixtral", "gemma-3", "gemma3",
-            "qwen2-vl", "qwen2vl", "qwen3-vl", "qwen3vl", "minicpm-v", "minicpmv", "internvl",
+            "qwen2-vl", "qwen2vl", "qwen3-vl", "qwen3vl", "qwen-vl", "minicpm-v", "minicpmv", "internvl",
             "cogvlm", "llama-3.2-vision", "llama3.2-vision", "granite-vision", "smolvlm",
         ]
         let audioKeywords = ["audio", "whisper", "speech", "ultravox", "granite-speech"]
@@ -25,6 +25,32 @@ struct ModelCapabilities: Equatable {
             supportsAudio: likelyAudio,
             requiresMmproj: likelyVision || likelyAudio
         )
+    }
+
+    /// Composer / gönderim öncesi görüntü-ses uyarı metni.
+    static func attachmentWarning(
+        model: InstalledModel?,
+        attachments: [MessageAttachment]
+    ) -> String? {
+        guard let model else {
+            return attachments.contains(where: { $0.kind == .image || $0.kind == .video || $0.kind == .audio })
+                ? "Görüntü göndermek için önce bir model seçin."
+                : nil
+        }
+        let caps = detect(model: model)
+        let hasImage = attachments.contains { $0.kind == .image || $0.kind == .video }
+        let hasAudio = attachments.contains { $0.kind == .audio }
+
+        if hasImage, !caps.supportsVision {
+            return "«\(model.name)» görüntü desteklemiyor. Model Hub → Qwen2-VL, LLaVA veya Moondream indirin."
+        }
+        if hasAudio, !caps.supportsAudio {
+            return "«\(model.name)» ses desteklemiyor. Sesli çok modlu model gerekir."
+        }
+        if caps.requiresMmproj, model.mmprojLocalPath == nil, hasImage || hasAudio {
+            return "Vision için mmproj GGUF gerekli. Hub'dan indirirken otomatik gelir; elle eklediyseniz modeli yeniden yükleyin."
+        }
+        return nil
     }
 
     func canUse(attachment: MessageAttachment) -> Bool {
@@ -51,5 +77,9 @@ enum MmprojDiscovery {
             .filter { $0.lastPathComponent.lowercased().contains("mmproj") }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .first
+    }
+
+    static func findInRepo(files: [HFGGUFile]) -> HFGGUFile? {
+        files.first { $0.isMmproj }
     }
 }

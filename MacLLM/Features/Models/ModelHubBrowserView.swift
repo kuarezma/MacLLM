@@ -417,6 +417,8 @@ struct HubDetailPane: View {
     @State private var readmeExpanded = false
 
     private var files: [HFGGUFile] { detail?.files ?? [] }
+    private var modelFiles: [HFGGUFile] { files.filter(\.isModelWeights) }
+    private var mmprojFile: HFGGUFile? { MmprojDiscovery.findInRepo(files: files) }
     private var gated: Bool { detail?.gated == true || repo.gated }
 
     private var fitLevelsByFileId: [String: ModelFitLevel] {
@@ -424,7 +426,7 @@ struct HubDetailPane: View {
     }
 
     private var assessmentsByFileId: [String: HubQuantAssessment] {
-        Dictionary(uniqueKeysWithValues: files.map { file in
+        Dictionary(uniqueKeysWithValues: modelFiles.map { file in
             (
                 file.id,
                 HubQuantAdvisor.assess(
@@ -437,11 +439,11 @@ struct HubDetailPane: View {
     }
 
     private var recommendedFile: HFGGUFile? {
-        guard !files.isEmpty else { return nil }
-        if let id = selectedFileId, let file = files.first(where: { $0.id == id }) { return file }
-        if let ideal = files.first(where: { fitLevelsByFileId[$0.id] == .ideal }) { return ideal }
-        if let workable = files.first(where: { fitLevelsByFileId[$0.id] == .workable }) { return workable }
-        return files.first
+        guard !modelFiles.isEmpty else { return nil }
+        if let id = selectedFileId, let file = modelFiles.first(where: { $0.id == id }) { return file }
+        if let ideal = modelFiles.first(where: { fitLevelsByFileId[$0.id] == .ideal }) { return ideal }
+        if let workable = modelFiles.first(where: { fitLevelsByFileId[$0.id] == .workable }) { return workable }
+        return modelFiles.first
     }
 
     var body: some View {
@@ -584,7 +586,7 @@ struct HubDetailPane: View {
                 .font(.caption)
                 .foregroundStyle(AppTheme.secondaryText)
 
-            if files.isEmpty {
+            if modelFiles.isEmpty {
                 Text("Bu depoda .gguf dosyası bulunamadı.")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryText)
@@ -594,6 +596,11 @@ struct HubDetailPane: View {
                     .foregroundStyle(.orange)
             } else {
                 downloadPicker
+                if mmprojFile != nil {
+                    Label("Vision: mmproj dosyası indirme ile birlikte otomatik eklenir.", systemImage: "eye")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
                 if let file = recommendedFile, let assessment = assessmentsByFileId[file.id] {
                     HubQuantFitCard(assessment: assessment, profile: appModel.systemProfile)
                 }
@@ -608,7 +615,7 @@ struct HubDetailPane: View {
     @ViewBuilder
     private var downloadPicker: some View {
         Menu {
-            ForEach(files) { file in
+            ForEach(modelFiles) { file in
                 let assessment = assessmentsByFileId[file.id]
                 Button {
                     selectedFileId = file.id
@@ -777,8 +784,9 @@ struct HubDetailPane: View {
     }
 
     private func recommendedFileIdAfterLoad(files: [HFGGUFile]) -> String? {
-        guard !files.isEmpty else { return nil }
-        let fitLevels = Dictionary(uniqueKeysWithValues: files.map { file in
+        let weights = files.filter(\.isModelWeights)
+        guard !weights.isEmpty else { return nil }
+        let fitLevels = Dictionary(uniqueKeysWithValues: weights.map { file in
             let fit = HubQuantAdvisor.assess(
                 file: file,
                 repoId: repo.repoId,
@@ -787,7 +795,7 @@ struct HubDetailPane: View {
             return (file.id, fit)
         })
         return HubFileListLogic.filterAndSort(
-            files: files,
+            files: weights,
             filter: .all,
             sort: .recommended,
             fitLevels: fitLevels
@@ -795,7 +803,16 @@ struct HubDetailPane: View {
     }
 
     private func download(_ file: HFGGUFile) async {
-        await appModel.downloadModel(catalogEntry(for: file))
+        let companion = mmprojCompanion(for: file)
+        await appModel.downloadModel(
+            catalogEntry(for: file),
+            companionMmproj: companion.map(catalogEntry(for:))
+        )
+    }
+
+    private func mmprojCompanion(for file: HFGGUFile) -> HFGGUFile? {
+        guard file.isModelWeights, let mmprojFile else { return nil }
+        return mmprojFile
     }
 
     private func catalogEntry(for file: HFGGUFile) -> CatalogEntry {

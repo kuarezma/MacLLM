@@ -72,6 +72,7 @@ final class AppModel {
             try modelStore.ensureDirectories()
             installedModels = try modelStore.loadInstalledModels()
             repairInstalledModelTemplates()
+            repairMmprojLinks()
             systemProfile = MacSystemProfile.current()
             catalogEntries = try catalogService.loadDefaultCatalog()
             modelRecommendations = recommendationService.recommend(
@@ -101,9 +102,14 @@ final class AppModel {
         do {
             installedModels = try modelStore.loadInstalledModels()
             repairInstalledModelTemplates()
+            repairMmprojLinks()
         } catch {
             setStatusMessage(error.localizedDescription)
         }
+    }
+
+    func visionAttachmentWarning(for attachments: [MessageAttachment]) -> String? {
+        ModelCapabilities.attachmentWarning(model: selectedModel, attachments: attachments)
     }
 
     func deleteSession(_ session: ChatSession) async {
@@ -165,6 +171,28 @@ final class AppModel {
         }
     }
 
+    private func repairMmprojLinks() {
+        var changed = false
+        for index in installedModels.indices {
+            let modelURL = URL(fileURLWithPath: installedModels[index].localPath)
+            if let mmproj = MmprojDiscovery.findSibling(to: modelURL) {
+                if installedModels[index].mmprojLocalPath != mmproj.path {
+                    installedModels[index].mmprojLocalPath = mmproj.path
+                    installedModels[index].mmprojFilename = mmproj.lastPathComponent
+                    changed = true
+                }
+            } else if let stalePath = installedModels[index].mmprojLocalPath,
+                      !FileManager.default.fileExists(atPath: stalePath) {
+                installedModels[index].mmprojLocalPath = nil
+                installedModels[index].mmprojFilename = nil
+                changed = true
+            }
+        }
+        if changed {
+            try? modelStore.saveInstalledModels(installedModels)
+        }
+    }
+
     @discardableResult
     func selectModel(_ model: InstalledModel) async -> Bool {
         modelLoadGeneration &+= 1
@@ -205,7 +233,7 @@ final class AppModel {
         }
     }
 
-    func downloadModel(_ entry: CatalogEntry) async {
+    func downloadModel(_ entry: CatalogEntry, companionMmproj: CatalogEntry? = nil) async {
         setStatusMessage("\(entry.name) indiriliyor…")
         do {
             let localURL = try await downloadService.download(entry: entry) { info in
@@ -222,13 +250,31 @@ final class AppModel {
                 }
             }
             try GGUFFileValidator.validateDownload(at: localURL, expectedBytes: entry.estimatedSizeBytes)
+
+            var mmprojURL = MmprojDiscovery.findSibling(to: localURL)
+            if mmprojURL == nil, let companion = companionMmproj {
+                setStatusMessage("Vision projeksiyonu (mmproj) indiriliyor…")
+                let mmprojLocal = try await downloadService.download(entry: companion) { info in
+                    Task { @MainActor in
+                        self.setStatusMessage(String(
+                            format: "mmproj %.0f%% · kalan %@",
+                            info.progress * 100,
+                            info.estimatedSecondsRemaining.map { DownloadMetrics.formatETA(seconds: $0) } ?? "—"
+                        ))
+                    }
+                }
+                try GGUFFileValidator.validateDownload(at: mmprojLocal, expectedBytes: companion.estimatedSizeBytes)
+                mmprojURL = mmprojLocal
+            }
+
             _ = try modelStore.registerModel(
                 id: entry.id,
                 name: entry.name,
                 repoId: entry.repoId,
                 filename: entry.filename,
                 localURL: localURL,
-                chatTemplate: entry.chatTemplate
+                chatTemplate: entry.chatTemplate,
+                mmprojURL: mmprojURL
             )
             refreshModels()
             guard let model = installedModels.first(where: { $0.id == entry.id }) else {
@@ -522,10 +568,9 @@ final class AppModel {
             let hasAudio = mediaAttachments.contains { $0.kind == .audio }
 
             if hasImage, !caps.supportsVision {
-                setStatusMessage(
-                    "Görüntü için vision modeli gerekir. Yalnızca metin/belge gönderebilirsiniz.",
-                    persistent: true
-                )
+                let warning = ModelCapabilities.attachmentWarning(model: model, attachments: attachments)
+                    ?? "Görüntü için vision modeli gerekir. Yalnızca metin/belge gönderebilirsiniz."
+                setStatusMessage(warning, persistent: true)
                 if trimmed.isEmpty { return }
                 attachments.removeAll { $0.kind == .image }
             }
