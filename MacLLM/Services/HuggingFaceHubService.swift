@@ -175,6 +175,25 @@ final class HuggingFaceHubService: Sendable {
         try await fetchRepoDetail(repoId: repoId).files
     }
 
+    /// Depo README.md (main veya master dalı).
+    func fetchReadme(repoId: String) async throws -> String? {
+        let encoded = repoId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? repoId
+        for branch in ["main", "master"] {
+            guard let url = URL(string: "https://huggingface.co/\(encoded)/raw/\(branch)/README.md") else {
+                continue
+            }
+            var request = URLRequest(url: url)
+            HuggingFaceCredentials.applyAuth(to: &request)
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                continue
+            }
+            let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let text, !text.isEmpty { return text }
+        }
+        return nil
+    }
+
     static func guessChatTemplate(repoId: String, filename: String) -> String {
         let haystack = "\(repoId) \(filename)".lowercased()
         if haystack.contains("llama-3.1") || haystack.contains("llama3.1") { return "llama3" }

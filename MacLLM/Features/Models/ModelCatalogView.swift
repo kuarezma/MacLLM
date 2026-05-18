@@ -2,8 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum ModelCatalogTab: String, CaseIterable, Identifiable {
+    case hub = "Hub"
     case recommended = "Önerilen"
-    case online = "Çevrimiçi"
     case manual = "Manuel"
 
     var id: String { rawValue }
@@ -14,7 +14,8 @@ struct ModelCatalogView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
 
-    @State private var tab: ModelCatalogTab = .recommended
+    @State private var tab: ModelCatalogTab = .hub
+    @State private var showDownloadsPopover = false
     @State private var showImporter = false
     @State private var pendingImportURL: URL?
     @State private var pendingImportName = ""
@@ -45,24 +46,27 @@ struct ModelCatalogView: View {
                 .padding()
 
                 switch tab {
+                case .hub:
+                    OnlineModelSearchView()
                 case .recommended:
                     recommendedList(model: model)
-                case .online:
-                    OnlineModelSearchView()
                 case .manual:
                     manualList(model: model)
                 }
             }
-            .navigationTitle("Model Ekle")
+            .navigationTitle("Model Hub")
+            .navigationDestination(for: HFModelSummary.self) { repo in
+                ModelHubDetailView(repo: repo)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Kapat") { dismiss() }
                 }
-                if !downloadService.activeDownloads.isEmpty {
-                    ToolbarItem(placement: .primaryAction) {
-                        Label("İndiriliyor", systemImage: "arrow.down.circle")
-                            .foregroundStyle(.orange)
-                    }
+                ToolbarItem(placement: .primaryAction) {
+                    DownloadToolbarButton(
+                        downloadService: downloadService,
+                        isPresented: $showDownloadsPopover
+                    )
                 }
             }
             .fileImporter(
@@ -108,7 +112,7 @@ struct ModelCatalogView: View {
                 Text("«\(pendingImportName)» klasörde zaten var. Üzerine yazılsın mı?")
             }
         }
-        .frame(minWidth: 560, minHeight: 520)
+        .frame(minWidth: 640, minHeight: 560)
     }
 
     private func handleImportSelection(url: URL, model: AppModel) {
@@ -267,6 +271,12 @@ struct CatalogEntryRow: View {
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
+
+            NavigationLink(value: HFModelSummary.hubEntry(repoId: entry.repoId)) {
+                Label("Tüm quant seçenekleri…", systemImage: "tablecells")
+            }
+            .font(.caption)
+            .buttonStyle(.link)
 
             if !isInstalled {
                 if let download = downloadService.activeDownloads.first(where: { $0.id == entry.id }),

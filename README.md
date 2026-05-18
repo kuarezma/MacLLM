@@ -257,6 +257,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.11.0** | Model Hub UI: quant table (Model / GGUF / size / download %), README + tags, download manager popover |
 | **1.10.0** | Markdown headings and lists; sidebar chat search (title + messages); in-chat message search with match navigation |
 | **1.9.0** | Live Markdown while streaming; async video duration API; GGUF import progress overlay; `MarkdownContentParser` unit tests |
 | **1.8.0** | Per-session chat files (lighter index + auto-migration); assistant Markdown (code blocks, inline code, bold); GGUF import overwrite confirmation; `Scripts/smoke-test.sh` |

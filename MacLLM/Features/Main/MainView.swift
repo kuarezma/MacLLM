@@ -8,6 +8,7 @@ struct MainView: View {
     @State private var sessionToDelete: ChatSession?
     @State private var modelToDelete: InstalledModel?
     @State private var confirmDeleteCurrentChat = false
+    @State private var showDownloadsPopover = false
 
     var body: some View {
         @Bindable var model = appModel
@@ -33,12 +34,16 @@ struct MainView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
+                DownloadToolbarButton(
+                    downloadService: downloadService,
+                    isPresented: $showDownloadsPopover
+                )
                 Button {
                     model.showCatalog = true
                 } label: {
-                    Label("Model Ekle", systemImage: "plus.circle")
+                    Label("Model Hub", systemImage: "plus.circle")
                 }
-                .help("Katalogdan indir veya GGUF içe aktar")
+                .help("Hub'tan model indir veya GGUF içe aktar")
                 if inferenceService.isModelLoaded {
                     Button {
                         Task { await model.unloadCurrentModel() }

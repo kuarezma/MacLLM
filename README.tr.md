@@ -255,6 +255,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.11.0** | Model Hub arayüzü: quant tablosu, README + etiketler, indirme yöneticisi popover |
 | **1.10.0** | Markdown başlık ve listeler; kenar çubuğunda sohbet arama; sohbet içi mesaj arama ve eşleşme gezintisi |
 | **1.9.0** | Akış sırasında canlı Markdown; video süresi async API; GGUF içe aktarma ilerleme katmanı; `MarkdownContentParser` birim testleri |
 | **1.8.0** | Oturum başına sohbet dosyası (hafif indeks + otomatik geçiş); asistan Markdown (kod blokları, satır içi kod, kalın); GGUF üzerine yazma onayı; `Scripts/smoke-test.sh` |
