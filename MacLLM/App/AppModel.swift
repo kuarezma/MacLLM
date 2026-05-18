@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 final class AppModel {
     var installedModels: [InstalledModel] = []
     var catalogEntries: [CatalogEntry] = []
+    var modelRecommendations: [ScoredCatalogEntry] = []
+    var systemProfile: MacSystemProfile = .current()
     var selectedModelId: String?
     var currentSession: ChatSession
     var sessions: [ChatSession] = []
@@ -18,6 +20,7 @@ final class AppModel {
 
     private let modelStore = ModelStore.shared
     private let catalogService = ModelCatalogService.shared
+    private let recommendationService = ModelRecommendationService.shared
     private let downloadService = HuggingFaceDownloadService.shared
     private let inferenceService = InferenceService.shared
     private let chatStore = ChatHistoryStore.shared
@@ -40,12 +43,20 @@ final class AppModel {
         do {
             try modelStore.ensureDirectories()
             installedModels = try modelStore.loadInstalledModels()
+            systemProfile = MacSystemProfile.current()
             catalogEntries = try catalogService.loadDefaultCatalog()
+            modelRecommendations = recommendationService.recommend(
+                catalog: catalogEntries,
+                profile: systemProfile
+            )
             sessions = try chatStore.loadSessionIndex()
             if let saved = UserDefaults.standard.data(forKey: "inferenceSettings"),
                let decoded = try? JSONDecoder().decode(InferenceSettings.self, from: saved) {
                 settings = decoded
                 inferenceService.settings = decoded
+            } else {
+                settings = InferenceSettings.defaults(for: systemProfile)
+                inferenceService.settings = settings
             }
             if selectedModelId == nil, let first = installedModels.first {
                 await selectModel(first)

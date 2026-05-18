@@ -24,7 +24,7 @@
 
 MacLLM, [llama.cpp](https://github.com/ggml-org/llama.cpp) ve **Metal GPU** ile büyük dil modellerini **tamamen Mac’inizde** çalıştıran **native macOS** uygulamasıdır (Swift + SwiftUI). **Hugging Face** üzerinden **GGUF** modelleri indirin, akışlı (streaming) sohbet edin; verileriniz cihazınızda kalır.
 
-**Apple Silicon** (M1/M2/M3/M4) ve **16 GB RAM** için optimize edilmiş önerilen model listesi ve çevrimiçi arama içerir.
+**Apple Silicon** (M1/M2/M3/M4) için tasarlanmıştır. Uygulama **Mac’inizin çip ve RAM bilgisini** okuyarak model önerilerini ve varsayılan çıkarım ayarlarını donanımınıza göre özelleştirir.
 
 ## Özellikler
 
@@ -32,6 +32,7 @@ MacLLM, [llama.cpp](https://github.com/ggml-org/llama.cpp) ve **Metal GPU** ile 
 |--------|----------|
 | **Native arayüz** | SwiftUI — model listesi, akışlı sohbet, ayarlar |
 | **Metal çıkarım** | llama.cpp ile Apple Silicon’da GPU offload |
+| **Donanıma göre öneri** | Modeller *sizin* RAM ve çipinize göre uygunluk gruplarına ayrılır |
 | **Çevrimiçi indirme** | HF kataloğu, arama, manuel repo/dosya |
 | **GGUF uyumu** | Ollama / LM Studio ile aynı format |
 | **Gizlilik** | Modeller ve sohbetler `~/Library/Application Support/MacLLM/` altında |
@@ -45,20 +46,27 @@ MacLLM, [llama.cpp](https://github.com/ggml-org/llama.cpp) ve **Metal GPU** ile 
 - **CMake 3.28+** ve **Ninja** (`brew install cmake ninja`)
 - Model başına **~5–10 GB** boş disk (quantize’e göre değişir)
 
-### Önerilen modeller (ör. M3 MacBook Air 16 GB)
+### Model önerileri (otomatik)
 
-| Model | Boyut (Q4) | Not |
-|-------|------------|-----|
-| Llama 3.2 3B Instruct | ~2 GB | Günlük kullanım için ideal |
-| Phi-3 Mini 4K | ~2.3 GB | Hızlı ve verimli |
-| Mistral 7B Instruct | ~4.5 GB | Daha güçlü, 16 GB’a uygun |
-| Llama 3.1 8B Instruct | ~5 GB | Üst sınır — diğer uygulamaları kapatın |
+**Model Ekle → Önerilen** sekmesinde MacLLM **çipinizi** (ör. Apple M2) ve **fiziksel RAM** miktarınızı algılar; katalog modellerini şu gruplara ayırır:
+
+- **En uygun** — Mac’inizde rahat çalışması beklenen  
+- **Çalışabilir** — diğer uygulamaları kapatırsanız mümkün  
+- **Genelde uygun değil** — RAM’iniz için genelde ağır  
+
+Özet rehber:
+
+| RAM | Uygun aralık | Genelde ağır |
+|-----|--------------|--------------|
+| 8 GB | 1B–3B (Llama 1B/3B, Qwen 1.5B, Phi-3 Mini) | 7B–8B |
+| 16 GB | 3B–7B | 8B üst sınır |
+| 24 GB+ | 7B–8B+ | — |
 
 ## İndir (hazır uygulama)
 
 **Son sürüm:** [github.com/kuarezma/MacLLM/releases/latest](https://github.com/kuarezma/MacLLM/releases/latest)
 
-1. `MacLLM-1.0.0-macOS-arm64.zip` dosyasını indirin (yalnızca Apple Silicon)
+1. [Releases](https://github.com/kuarezma/MacLLM/releases/latest) sayfasından güncel `MacLLM-*-macOS-arm64.zip` dosyasını indirin (yalnızca Apple Silicon)
 2. Açın ve **MacLLM.app** dosyasını Uygulamalar’a taşıyın
 3. İlk açılış: **sağ tık → Aç** (uygulama henüz notarize edilmedi)
 4. **Çevrimiçi Model** ile Hugging Face’ten GGUF indirin, sohbet edin

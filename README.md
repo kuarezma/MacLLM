@@ -24,7 +24,7 @@
 
 MacLLM is a **native macOS application** (Swift + SwiftUI) that runs large language models **entirely on your Mac** using [llama.cpp](https://github.com/ggml-org/llama.cpp) with **Metal GPU acceleration**. Browse and download **GGUF** models from **Hugging Face**, chat with streaming responses, and keep your data on-device.
 
-Built for **Apple Silicon** (M1/M2/M3/M4) with **16 GB RAM** in mind — sensible defaults, curated model catalog, and an online model search.
+Built for **Apple Silicon** (M1/M2/M3/M4). The app **detects your Mac’s chip and RAM** and tailors model recommendations and default inference settings to your hardware — not a fixed “M3 16 GB” profile.
 
 ## Features
 
@@ -32,6 +32,7 @@ Built for **Apple Silicon** (M1/M2/M3/M4) with **16 GB RAM** in mind — sensibl
 |--------|-------------|
 | **Native UI** | SwiftUI app — sidebar models, streaming chat, settings |
 | **Metal inference** | Full GPU offload via llama.cpp on Apple Silicon |
+| **Hardware-aware picks** | Recommendations grouped by fit for *your* RAM and chip |
 | **Online downloads** | Hugging Face catalog, search, and manual repo/file install |
 | **GGUF ecosystem** | Same format as Ollama / LM Studio |
 | **Privacy** | Models and chats stay in `~/Library/Application Support/MacLLM/` |
@@ -45,20 +46,27 @@ Built for **Apple Silicon** (M1/M2/M3/M4) with **16 GB RAM** in mind — sensibl
 - **CMake 3.28+** and **Ninja** (`brew install cmake ninja`)
 - **~5–10 GB free disk** per model (depends on quantization)
 
-### Recommended hardware (example: M3 MacBook Air 16 GB)
+### Model recommendations (adaptive)
 
-| Model | Size (Q4) | RAM hint |
-|-------|-----------|----------|
-| Llama 3.2 3B Instruct | ~2 GB | Comfortable daily driver |
-| Phi-3 Mini 4K | ~2.3 GB | Fast, efficient |
-| Mistral 7B Instruct | ~4.5 GB | Stronger, still fits 16 GB |
-| Llama 3.1 8B Instruct | ~5 GB | Upper limit — close other apps |
+Open **Model Add → Recommended**. MacLLM reads your **chip** (e.g. Apple M2) and **physical RAM**, then sorts catalog models into:
+
+- **Best fit** — comfortable on your Mac  
+- **Workable** — possible if you close other apps  
+- **Not recommended** — usually too heavy for your RAM  
+
+Typical guidance:
+
+| Your RAM | Sweet spot | Usually too heavy |
+|----------|------------|-----------------|
+| 8 GB | 1B–3B (Llama 3.2 1B/3B, Qwen 1.5B, Phi-3 Mini) | 7B–8B without closing apps |
+| 16 GB | 3B–7B | 8B at the upper edge |
+| 24 GB+ | 7B–8B+ | — |
 
 ## Download (pre-built)
 
 **Latest release:** [github.com/kuarezma/MacLLM/releases/latest](https://github.com/kuarezma/MacLLM/releases/latest)
 
-1. Download `MacLLM-1.0.0-macOS-arm64.zip` (Apple Silicon only)
+1. Download the latest `MacLLM-*-macOS-arm64.zip` from [Releases](https://github.com/kuarezma/MacLLM/releases/latest) (Apple Silicon only)
 2. Unzip and move **MacLLM.app** to Applications
 3. First open: **right-click → Open** (app is not notarized yet)
 4. Use **Online Model** to download a GGUF model, then chat

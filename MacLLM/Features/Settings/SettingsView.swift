@@ -62,7 +62,8 @@ struct SettingsView: View {
             }
 
             Section("Hakkında") {
-                LabeledContent("Sürüm", value: "1.0.0")
+                LabeledContent("Sürüm", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                LabeledContent("Bu Mac", value: model.systemProfile.displaySummary)
                 LabeledContent("Çıkarım", value: "llama.cpp + Metal")
                 LabeledContent("Modeller", value: model.diskUsageFormatted)
             }

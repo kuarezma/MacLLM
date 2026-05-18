@@ -55,6 +55,8 @@ SOURCES=(
   MacLLM/Core/Models.swift
   MacLLM/Services/ModelStore.swift
   MacLLM/Services/ModelCatalogService.swift
+  MacLLM/Services/MacSystemProfile.swift
+  MacLLM/Services/ModelRecommendationService.swift
   MacLLM/Services/HuggingFaceDownloadService.swift
   MacLLM/Services/HuggingFaceHubService.swift
   MacLLM/Services/HuggingFaceCredentials.swift

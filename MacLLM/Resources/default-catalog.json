@@ -1,44 +1,70 @@
 {
   "models": [
     {
+      "id": "llama-3.2-1b-instruct-q4",
+      "name": "Llama 3.2 1B Instruct (Q4_K_M)",
+      "description": "En hafif önerilen model — düşük RAM'li Mac'ler ve hızlı yanıtlar.",
+      "repoId": "bartowski/Llama-3.2-1B-Instruct-GGUF",
+      "filename": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+      "estimatedSizeBytes": 900000000,
+      "chatTemplate": "llama3",
+      "ramHintGB": 3,
+      "minPhysicalRamGB": 8
+    },
+    {
+      "id": "qwen2.5-1.5b-instruct-q4",
+      "name": "Qwen 2.5 1.5B Instruct (Q4_K_M)",
+      "description": "Kompakt ve verimli — 8 GB RAM ile günlük sohbet için uygun.",
+      "repoId": "bartowski/Qwen2.5-1.5B-Instruct-GGUF",
+      "filename": "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+      "estimatedSizeBytes": 1100000000,
+      "chatTemplate": "chatml",
+      "ramHintGB": 3,
+      "minPhysicalRamGB": 8
+    },
+    {
       "id": "llama-3.2-3b-instruct-q4",
       "name": "Llama 3.2 3B Instruct (Q4_K_M)",
-      "description": "Hızlı günlük sohbet — M3 16GB için ideal başlangıç modeli.",
+      "description": "Dengeli başlangıç modeli — çoğu Apple Silicon Mac için iyi varsayılan.",
       "repoId": "bartowski/Llama-3.2-3B-Instruct-GGUF",
       "filename": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
       "estimatedSizeBytes": 2100000000,
       "chatTemplate": "llama3",
-      "ramHintGB": 4
+      "ramHintGB": 4,
+      "minPhysicalRamGB": 8
     },
     {
       "id": "phi-3-mini-q4",
       "name": "Phi-3 Mini 4K Instruct (Q4_K_M)",
-      "description": "Microsoft Phi-3 — verimli ve kompakt.",
+      "description": "Microsoft Phi-3 — hızlı ve düşük bellek kullanımı.",
       "repoId": "bartowski/Phi-3-mini-4k-instruct-GGUF",
       "filename": "Phi-3-mini-4k-instruct-Q4_K_M.gguf",
       "estimatedSizeBytes": 2400000000,
       "chatTemplate": "phi3",
-      "ramHintGB": 4
+      "ramHintGB": 4,
+      "minPhysicalRamGB": 8
     },
     {
       "id": "mistral-7b-q4",
       "name": "Mistral 7B Instruct v0.3 (Q4_K_M)",
-      "description": "Daha güçlü yanıtlar — 16GB RAM ile uyumlu.",
+      "description": "Daha güçlü yanıtlar — genelde 16 GB ve üzeri RAM için.",
       "repoId": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
       "filename": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
       "estimatedSizeBytes": 4700000000,
       "chatTemplate": "mistral",
-      "ramHintGB": 8
+      "ramHintGB": 8,
+      "minPhysicalRamGB": 12
     },
     {
       "id": "llama-3.1-8b-q4",
       "name": "Llama 3.1 8B Instruct (Q4_K_M)",
-      "description": "Üst sınır model — diğer uygulamaları kapatın.",
+      "description": "Üst segment sohbet kalitesi — 16 GB+ RAM önerilir.",
       "repoId": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
       "filename": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
       "estimatedSizeBytes": 5000000000,
       "chatTemplate": "llama3",
-      "ramHintGB": 10
+      "ramHintGB": 10,
+      "minPhysicalRamGB": 16
     }
   ]
 }

@@ -14,7 +14,7 @@ struct ModelCatalogView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
 
-    @State private var tab: ModelCatalogTab = .online
+    @State private var tab: ModelCatalogTab = .recommended
     @State private var showImporter = false
     @State private var manualRepoId = ""
     @State private var manualFilename = ""
@@ -68,16 +68,61 @@ struct ModelCatalogView: View {
 
     @ViewBuilder
     private func recommendedList(model: AppModel) -> some View {
+        let recommendationService = ModelRecommendationService.shared
         List {
-            Section("M3 MacBook Air · 16 GB için önerilen") {
-                ForEach(model.catalogEntries) { entry in
-                    CatalogEntryRow(
-                        entry: entry,
-                        isInstalled: !ModelCatalogService.shared.catalogEntryNotInstalled(
-                            entry,
-                            installed: model.installedModels
+            Section {
+                Text(recommendationService.guidanceText(profile: model.systemProfile))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text(recommendationService.sectionTitle(profile: model.systemProfile))
+            }
+
+            let ideal = model.modelRecommendations.filter { $0.fit == .ideal }
+            if !ideal.isEmpty {
+                Section("En uygun") {
+                    ForEach(ideal) { scored in
+                        CatalogEntryRow(
+                            entry: scored.entry,
+                            recommendation: scored,
+                            isInstalled: !ModelCatalogService.shared.catalogEntryNotInstalled(
+                                scored.entry,
+                                installed: model.installedModels
+                            )
                         )
-                    )
+                    }
+                }
+            }
+
+            let workable = model.modelRecommendations.filter { $0.fit == .workable }
+            if !workable.isEmpty {
+                Section("Çalışabilir (bellek için dikkat)") {
+                    ForEach(workable) { scored in
+                        CatalogEntryRow(
+                            entry: scored.entry,
+                            recommendation: scored,
+                            isInstalled: !ModelCatalogService.shared.catalogEntryNotInstalled(
+                                scored.entry,
+                                installed: model.installedModels
+                            )
+                        )
+                    }
+                }
+            }
+
+            let heavy = model.modelRecommendations.filter { $0.fit == .notRecommended }
+            if !heavy.isEmpty {
+                Section("Bu Mac için genelde uygun değil") {
+                    ForEach(heavy) { scored in
+                        CatalogEntryRow(
+                            entry: scored.entry,
+                            recommendation: scored,
+                            isInstalled: !ModelCatalogService.shared.catalogEntryNotInstalled(
+                                scored.entry,
+                                installed: model.installedModels
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -124,7 +169,20 @@ struct CatalogEntryRow: View {
     @Environment(AppModel.self) private var appModel
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
     let entry: CatalogEntry
+    var recommendation: ScoredCatalogEntry?
     let isInstalled: Bool
+
+    private var fitBadge: (text: String, color: Color)? {
+        guard let recommendation else { return nil }
+        switch recommendation.fit {
+        case .ideal:
+            return ("En uygun", .green)
+        case .workable:
+            return ("Dikkat", .orange)
+        case .notRecommended:
+            return ("Ağır", .red)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -132,6 +190,16 @@ struct CatalogEntryRow: View {
                 Text(entry.name)
                     .font(.headline)
                 Spacer()
+                if let fitBadge {
+                    Text(fitBadge.text)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(fitBadge.color.opacity(0.15))
+                        .foregroundStyle(fitBadge.color)
+                        .clipShape(Capsule())
+                }
                 if isInstalled {
                     Text("Yüklü")
                         .font(.caption)
@@ -144,6 +212,11 @@ struct CatalogEntryRow: View {
             Text(entry.description)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if let note = recommendation?.fitNote {
+                Text(note)
+                    .font(.caption2)
+                    .foregroundStyle(recommendation?.fit == .notRecommended ? .red : .secondary)
+            }
             HStack {
                 Text(ByteCountFormatter.string(fromByteCount: entry.estimatedSizeBytes, countStyle: .file))
                 Text("·")
