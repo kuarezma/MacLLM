@@ -24,57 +24,47 @@
 
 MacLLM is a **native macOS application** (Swift + SwiftUI) that runs large language models **entirely on your Mac** using [llama.cpp](https://github.com/ggml-org/llama.cpp) with **Metal GPU acceleration**. Browse and download **GGUF** models from **Hugging Face**, chat with streaming responses, and keep your data on-device.
 
-Built for **Apple Silicon** (M1/M2/M3/M4). The app **detects your Mac’s chip and RAM** and tailors model recommendations and default inference settings to your hardware — not a fixed “M3 16 GB” profile.
+Built for **Apple Silicon** (M1/M2/M3/M4). The app reads your **chip and physical RAM** and adapts model recommendations, default context length, and inference settings to your hardware — not a fixed “M3 16 GB” profile.
 
 ## Features
 
 | Feature | Description |
 |--------|-------------|
-| **Native UI** | SwiftUI app — sidebar models, streaming chat, settings |
-| **Metal inference** | Full GPU offload via llama.cpp on Apple Silicon |
-| **Hardware-aware picks** | Recommendations grouped by fit for *your* RAM and chip |
-| **Online downloads** | Hugging Face catalog, search, and manual repo/file install |
-| **GGUF ecosystem** | Same format as Ollama / LM Studio |
-| **Privacy** | Models and chats stay in `~/Library/Application Support/MacLLM/` |
-| **Import** | Drag & drop local `.gguf` files |
+| **Native UI** | SwiftUI — model sidebar, streaming chat, settings, chat history |
+| **Metal inference** | Full GPU offload via llama.cpp (`GPU layers = -1` for all layers) |
+| **Hardware-aware catalog** | Curated GGUF list sorted into *Best fit* / *Workable* / *Not recommended* for your Mac |
+| **Hugging Face online** | Search models, browse repo files, download with progress |
+| **Rich download UI** | Progress %, downloaded/total size, speed (MB/s), ETA, **pause**, **resume**, **cancel** |
+| **Manual install** | Paste `repo-id` + `.gguf` filename, or import a local file |
+| **Adaptive defaults** | First-run inference settings tuned to your RAM (8 / 16 / 24 GB+) |
+| **Privacy** | Models and chats in `~/Library/Application Support/MacLLM/` |
+| **Easy distribution** | Release ships **DMG**, **PKG**, **ZIP**, and a **Homebrew cask** |
 
 ## Requirements
 
-- **macOS 14+** (Sonoma or later)
-- **Apple Silicon** (`arm64`) — Intel Macs are not supported
-- **Xcode Command Line Tools** (for building)
-- **CMake 3.28+** and **Ninja** (`brew install cmake ninja`)
-- **~5–10 GB free disk** per model (depends on quantization)
+| | |
+|--|--|
+| **OS** | macOS 14+ (Sonoma or later) |
+| **CPU** | Apple Silicon (`arm64`) — Intel Macs are **not** supported |
+| **Disk** | ~4 MB for the app; **~1–5 GB per model** (quantization-dependent) |
+| **Build only** | Xcode Command Line Tools, CMake 3.28+, Ninja (`brew install cmake ninja`) |
 
-### Model recommendations (adaptive)
-
-Open **Model Add → Recommended**. MacLLM reads your **chip** (e.g. Apple M2) and **physical RAM**, then sorts catalog models into:
-
-- **Best fit** — comfortable on your Mac  
-- **Workable** — possible if you close other apps  
-- **Not recommended** — usually too heavy for your RAM  
-
-Typical guidance:
-
-| Your RAM | Sweet spot | Usually too heavy |
-|----------|------------|-----------------|
-| 8 GB | 1B–3B (Llama 3.2 1B/3B, Qwen 1.5B, Phi-3 Mini) | 7B–8B without closing apps |
-| 16 GB | 3B–7B | 8B at the upper edge |
-| 24 GB+ | 7B–8B+ | — |
-
-## Download (pre-built)
+## Download & install
 
 **Latest release:** [github.com/kuarezma/MacLLM/releases/latest](https://github.com/kuarezma/MacLLM/releases/latest)
 
-### Install without Terminal
+Each release includes `SHA256SUMS.txt` for integrity checks.
 
-| Package | How to install |
-|---------|----------------|
-| **`.dmg`** (recommended) | Open DMG → drag **MacLLM** to **Applications** |
-| **`.pkg`** | Double-click → follow the installer |
-| **`.zip`** | Unzip → copy **MacLLM.app** to Applications |
+| Package | Best for | Steps |
+|---------|----------|--------|
+| **`.dmg`** | Most users | Open DMG → drag **MacLLM** to **Applications** |
+| **`.pkg`** | Installer wizard | Double-click → follow prompts → app lands in Applications |
+| **`.zip`** | Manual copy | Unzip → move **MacLLM.app** to Applications |
+| **Homebrew** | `brew` users | See below |
 
-First launch: **right-click MacLLM → Open**.
+**First launch** (unsigned build): **right-click MacLLM → Open**, or allow in **System Settings → Privacy & Security**.
+
+> Models are **not** bundled (~4 MB app). Download GGUF files inside the app after install.
 
 ### Homebrew
 
@@ -82,28 +72,77 @@ First launch: **right-click MacLLM → Open**.
 brew install --cask https://raw.githubusercontent.com/kuarezma/MacLLM/main/packaging/homebrew/macllm.rb
 ```
 
-See [packaging/homebrew/README.md](packaging/homebrew/README.md) for tap/local cask options.
+Local cask file: [packaging/homebrew/README.md](packaging/homebrew/README.md)
 
-> Models are **not** included in the download (~4 MB app). You download models from Hugging Face inside the app.
+## Quick start
+
+1. Install MacLLM (DMG, PKG, zip, or Homebrew).
+2. Open the app → toolbar **Online Model** (cloud icon).
+3. **Recommended** tab — pick a model suited to your Mac → **Download online**.
+4. Wait for the download (watch speed, ETA; pause/resume if needed).
+5. Select the model in the sidebar → chat.
+
+### Model Add window
+
+| Tab | Purpose |
+|-----|---------|
+| **Recommended** | Hardware-scored catalog (Llama 3.2 1B/3B, Qwen 2.5 1.5B, Phi-3 Mini, Mistral 7B, Llama 3.1 8B, …) |
+| **Online** | Search Hugging Face, open a repo, download any listed `.gguf` |
+| **Manual** | Import a local `.gguf` or enter `bartowski/…` repo + filename |
+
+### Model recommendations (adaptive)
+
+MacLLM detects e.g. **Apple M2 · 8 GB RAM** and groups models:
+
+- **Best fit** — expected to run comfortably  
+- **Workable** — may need closing other apps  
+- **Not recommended** — usually too heavy for your RAM  
+
+| Your RAM | Sweet spot | Often too heavy |
+|----------|------------|-----------------|
+| 8 GB | 1B–3B | 7B–8B without closing apps |
+| 16 GB | 3B–7B | 8B at the upper limit |
+| 24 GB+ | 7B–8B+ | — |
+
+Default **context length** and **max tokens** on first launch follow the same RAM tiers (e.g. 2048 on 8 GB, 4096 on 16 GB).
+
+### Download progress
+
+While a model downloads you see:
+
+- Percent complete and progress bar  
+- **Downloaded / total** size  
+- **Speed** (MB/s or KB/s)  
+- **Estimated time remaining**  
+- **Pause** · **Resume** · **Cancel**
+
+### Settings
+
+**MacLLM → Settings** (or in-app settings):
+
+- Temperature, top-p, max tokens  
+- Context length (2048 / 4096 / 8192)  
+- GPU layers (`-1` = all on Metal)  
+- CPU thread count  
+- **Hugging Face token** (for gated models)  
+- **About** — app version and detected Mac hardware summary  
 
 ## Build from source
 
-### 1. Clone and init submodule
+### 1. Clone and submodule
 
 ```bash
 git clone --recurse-submodules https://github.com/kuarezma/MacLLM.git
 cd MacLLM
 ```
 
-If you already cloned without submodules:
-
 ```bash
-git submodule update --init --recursive
+git submodule update --init --recursive   # if already cloned
 ```
 
 ### 2. Build llama.cpp (Metal XCFramework)
 
-First run takes **~1–5 minutes**:
+First run ~**1–5 minutes**:
 
 ```bash
 ./Scripts/build-llama-xcframework.sh
@@ -111,43 +150,51 @@ First run takes **~1–5 minutes**:
 
 Output: `Vendor/build-apple/llama.xcframework`
 
-### 3. Build and run the app
+### 3. Build the app
 
 ```bash
 ./Scripts/build-app.sh
 open build/MacLLM.app
 ```
 
-**Or use Xcode:**
+**Xcode:** `open MacLLM.xcodeproj` → scheme **MacLLM** → Run (⌘R)
+
+### 4. Release packages (maintainers)
 
 ```bash
-open MacLLM.xcodeproj
-# Select scheme MacLLM → Run (⌘R)
+./Scripts/build-packages.sh          # zip + dmg + pkg + update Homebrew cask
+./Scripts/create-release.sh 1.2.2    # build all + GitHub release (needs gh auth)
+SKIP_GITHUB=1 ./Scripts/create-release.sh 1.2.2   # artifacts only, under dist/
 ```
 
-### 4. Download a model and chat
-
-1. Click **Online Model** (cloud icon) in the toolbar  
-2. Open the **Online** tab → search or pick a recommended model → **Download**  
-3. Select the model in the sidebar → type a message  
-
-Optional: **MacLLM → Settings** for temperature, context length, GPU layers, and Hugging Face token (gated models).
+Tag push (`v*`) also triggers [.github/workflows/release.yml](.github/workflows/release.yml) on GitHub Actions.
 
 ## Project structure
 
 ```
 MacLLM/
-├── MacLLM/                 # SwiftUI app source
-│   ├── App/                # App entry, AppModel
-│   ├── Bridge/             # llama.cpp Swift bridge
-│   ├── Features/           # Chat, models, settings UI
-│   ├── Services/           # Download, inference, storage
-│   └── Resources/          # Catalog JSON, assets
+├── MacLLM/
+│   ├── App/                    # MacLLMApp, AppModel
+│   ├── Bridge/                 # llama.cpp Swift bridge
+│   ├── Core/                   # Models, settings types
+│   ├── Features/
+│   │   ├── Chat/               # Streaming chat UI
+│   │   ├── Main/               # NavigationSplitView shell
+│   │   └── Models/             # Catalog, online search, download UI
+│   ├── Services/
+│   │   ├── HuggingFaceDownloadService.swift
+│   │   ├── ModelRecommendationService.swift
+│   │   ├── MacSystemProfile.swift
+│   │   └── …
+│   └── Resources/
+│       └── default-catalog.json
+├── packaging/homebrew/         # macllm.rb cask
 ├── Scripts/
 │   ├── build-llama-xcframework.sh
-│   ├── build-app.sh        # swiftc build (no Xcode UI required)
-│   └── fit-app-icon.py
-├── Vendor/llama.cpp/       # git submodule
+│   ├── build-app.sh
+│   ├── build-packages.sh       # dmg, pkg, zip
+│   └── create-release.sh
+├── Vendor/llama.cpp/           # git submodule
 └── MacLLM.xcodeproj
 ```
 
@@ -157,7 +204,7 @@ MacLLM/
 |------|------|
 | Models | `~/Library/Application Support/MacLLM/models/` |
 | Chat history | `~/Library/Application Support/MacLLM/chats/` |
-| Settings | UserDefaults + inference prefs |
+| Settings | UserDefaults (`inferenceSettings`, HF token) |
 
 Legacy **MacSistem** data is migrated automatically on first launch.
 
@@ -167,25 +214,42 @@ Legacy **MacSistem** data is migrated automatically on first launch.
 flowchart LR
     UI[SwiftUI] --> AppModel
     AppModel --> Inference[InferenceService]
-    AppModel --> HF[HuggingFace Hub]
+    AppModel --> Rec[ModelRecommendationService]
+    AppModel --> HF[HuggingFace Hub / Download]
+    Rec --> Profile[MacSystemProfile]
     Inference --> Llama[llama.cpp Metal]
     HF --> CDN[Hugging Face CDN]
     AppModel --> Store[ModelStore]
 ```
 
+## Changelog (recent)
+
+| Version | Highlights |
+|---------|------------|
+| **1.2.2** | Documentation update; DMG, PKG, ZIP, Homebrew packages |
+| **1.2.1** | PKG installer, Homebrew cask, `build-packages.sh` |
+| **1.2.0** | Download speed/ETA, pause/resume/cancel, DMG installer |
+| **1.1.0** | Hardware-aware model recommendations, expanded catalog (1B–8B) |
+| **1.0.0** | Initial release — Metal chat, HF downloads, SwiftUI shell |
+
+Full history: [Releases](https://github.com/kuarezma/MacLLM/releases)
+
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| `llama.xcframework` missing | Run `./Scripts/build-llama-xcframework.sh` |
-| Out of memory | Use a smaller Q4 model; set context to 4096 in Settings |
-| Slow replies | Settings → GPU layers = **-1** (all layers on GPU) |
-| Download fails | Check network/disk; add HF token for gated models |
-| `no such module 'llama'` | Rebuild XCFramework; ensure `Vendor/build-apple/` exists |
+| App won’t open | Right-click → **Open**; check Privacy & Security |
+| `llama.xcframework` missing | `./Scripts/build-llama-xcframework.sh` |
+| Out of memory | Smaller model (1B/3B); lower context in Settings; close other apps |
+| Slow replies | Settings → GPU layers = **-1** |
+| Download fails | Disk space; network; HF token for gated models |
+| Download stuck | **Cancel** and retry; check firewall/VPN |
+| `no such module 'llama'` | Rebuild XCFramework; symlink `Modules` in framework if needed |
+| Homebrew SHA mismatch | Cask SHA matches release DMG — use [latest release](https://github.com/kuarezma/MacLLM/releases/latest) URL |
 
 ## Contributing
 
-Issues and pull requests are welcome. Please avoid committing large model files (`.gguf`) — they are downloaded at runtime.
+Issues and pull requests welcome. Do **not** commit `.gguf` model files — they are downloaded at runtime.
 
 ## License
 
