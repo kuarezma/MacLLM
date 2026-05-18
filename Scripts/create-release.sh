@@ -44,12 +44,17 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.3)
+### Bu sürümde (1.14.4)
+
+- Model Hub arama listesi: yayıncı avatarları, sabit satır düzeni
+- Quant uygunluk kartı ve Mac RAM rehberi (Q4_K_M vb.)
+- CI derleme düzeltmesi (MainActor izolasyonu)
+
+### Önceki (1.14.3)
 
 - LM Studio tarzı Model Hub: split arama + detay paneli, metadata, quant seçici
 - Paralel indirme ilerleme düzeltmesi (0% takılması giderildi)
 - PDF ekleri: metin çıkarımı, taranmış PDF sayfa görüntüleri, hata banner
-- CI derleme düzeltmeleri (openSettings, MainActor)
 
 ### Önceki (1.14.2)
 

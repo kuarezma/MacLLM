@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 /// LM Studio tarzı split Hub — sol arama listesi, sağ detay paneli.
+@MainActor
 struct ModelHubBrowserView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
@@ -68,7 +69,7 @@ struct ModelHubBrowserView: View {
                             )
                             .contentShape(Rectangle())
                             .onTapGesture { selectedRepo = model }
-                            Divider().padding(.leading, 56)
+                            Divider().padding(.leading, HubSearchRowLayout.dividerLeadingInset)
                         }
                     }
                 }
@@ -220,6 +221,26 @@ struct ModelHubBrowserView: View {
     }
 }
 
+// MARK: - Search list layout
+
+private enum HubSearchRowLayout {
+    static let avatarSize: CGFloat = 40
+    static let horizontalPadding: CGFloat = 12
+    static let verticalPadding: CGFloat = 8
+    static let avatarSpacing: CGFloat = 10
+    static let rowHeight: CGFloat = 98
+    static let contentHeight: CGFloat = 82
+    static let titleHeight: CGFloat = 16
+    static let authorHeight: CGFloat = 13
+    static let blurbHeight: CGFloat = 28
+    static let statsHeight: CGFloat = 16
+    static let rowSpacing: CGFloat = 3
+
+    static var dividerLeadingInset: CGFloat {
+        horizontalPadding + avatarSize + avatarSpacing
+    }
+}
+
 // MARK: - Search result row
 
 private struct HubSearchResultRow: View {
@@ -246,80 +267,141 @@ private struct HubSearchResultRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            HubAuthorAvatar(author: model.author ?? "?")
+        HStack(alignment: .top, spacing: HubSearchRowLayout.avatarSpacing) {
+            HubModelAvatarView(repoId: model.repoId, size: HubSearchRowLayout.avatarSize)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(model.displayName)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    if isVerified {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                    }
-                    if model.gated {
-                        AppTheme.badge("Gated", color: .orange)
-                    }
-                }
+            VStack(alignment: .leading, spacing: HubSearchRowLayout.rowSpacing) {
+                Text(model.displayName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, minHeight: HubSearchRowLayout.titleHeight, maxHeight: HubSearchRowLayout.titleHeight, alignment: .leading)
 
-                if let author = model.author {
-                    Text(author)
-                        .font(.caption2)
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
+                Text(model.author ?? " ")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .opacity(model.author == nil ? 0 : 1)
+                    .frame(maxWidth: .infinity, minHeight: HubSearchRowLayout.authorHeight, maxHeight: HubSearchRowLayout.authorHeight, alignment: .leading)
 
                 Text(model.shortBlurb)
-                    .font(.caption)
+                    .font(.system(size: 11))
                     .foregroundStyle(AppTheme.secondaryText)
                     .lineLimit(2)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, minHeight: HubSearchRowLayout.blurbHeight, maxHeight: HubSearchRowLayout.blurbHeight, alignment: .topLeading)
 
-                HStack(spacing: 10) {
-                    if let badge = model.parameterSizeBadge {
-                        AppTheme.badge(badge, color: AppTheme.accent)
-                    }
-                    Label(ModelMetadataParser.formatCount(model.downloads), systemImage: "arrow.down.circle")
-                    Label(ModelMetadataParser.formatCount(model.likes), systemImage: "heart")
-                    if let fitLevel {
-                        AppTheme.fitBadge(fitLevel)
-                    }
+                HStack(spacing: 0) {
+                    HubSearchParamSlot(badge: model.parameterSizeBadge)
+
+                    HubSearchStatLabel(
+                        systemImage: "arrow.down.circle",
+                        value: ModelMetadataParser.formatCount(model.downloads),
+                        width: 52
+                    )
+
+                    HubSearchStatLabel(
+                        systemImage: "heart",
+                        value: ModelMetadataParser.formatCount(model.likes),
+                        width: 44
+                    )
+
+                    HubSearchFitSlot(fitLevel: fitLevel)
+
+                    Spacer(minLength: 0)
+
+                    HubSearchStatusIcons(isVerified: isVerified, isGated: model.gated)
                 }
-                .font(.caption2)
+                .font(.system(size: 10))
                 .foregroundStyle(AppTheme.secondaryText)
-
-                if let updated = ModelMetadataParser.relativeDate(model.lastModified) {
-                    Text(updated)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+                .frame(maxWidth: .infinity, minHeight: HubSearchRowLayout.statsHeight, maxHeight: HubSearchRowLayout.statsHeight, alignment: .leading)
             }
+            .frame(height: HubSearchRowLayout.contentHeight, alignment: .top)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, HubSearchRowLayout.horizontalPadding)
+        .padding(.vertical, HubSearchRowLayout.verticalPadding)
+        .frame(height: HubSearchRowLayout.rowHeight, alignment: .top)
         .background(isSelected ? AppTheme.accent.opacity(0.12) : Color.clear)
     }
 }
 
-private struct HubAuthorAvatar: View {
-    let author: String
+private struct HubSearchParamSlot: View {
+    let badge: String?
 
     var body: some View {
-        let initial = author.prefix(1).uppercased()
-        Text(initial)
-            .font(.caption.weight(.bold))
-            .frame(width: 36, height: 36)
-            .background(AppTheme.elevatedSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(AppTheme.border, lineWidth: 1)
-            )
+        Group {
+            if let badge {
+                AppTheme.badge(badge, color: AppTheme.accent)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: 38, alignment: .leading)
     }
 }
 
-// MARK: - Detail pane
+private struct HubSearchStatLabel: View {
+    let systemImage: String
+    let value: String
+    let width: CGFloat
 
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+                .font(.system(size: 9))
+                .frame(width: 10)
+            Text(value)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .monospacedDigit()
+        }
+        .frame(width: width, alignment: .leading)
+    }
+}
+
+private struct HubSearchFitSlot: View {
+    let fitLevel: ModelFitLevel?
+
+    var body: some View {
+        Group {
+            if let fitLevel {
+                AppTheme.fitBadge(fitLevel)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: 58, alignment: .leading)
+    }
+}
+
+private struct HubSearchStatusIcons: View {
+    let isVerified: Bool
+    let isGated: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(.blue)
+                .opacity(isVerified ? 1 : 0)
+                .frame(width: 12)
+
+            Text("Gated")
+                .font(.system(size: 9, weight: .medium))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .foregroundStyle(.orange)
+                .background(Color.orange.opacity(0.15))
+                .clipShape(Capsule())
+                .opacity(isGated ? 1 : 0)
+                .frame(width: 42)
+        }
+    }
+}
+
+@MainActor
 struct HubDetailPane: View {
     @Environment(AppModel.self) private var appModel
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
@@ -388,7 +470,9 @@ struct HubDetailPane: View {
     @ViewBuilder
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
+            HStack(alignment: .top, spacing: 14) {
+                HubModelAvatarView(repoId: repo.repoId, size: 56)
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(repo.displayName)
                         .font(.title2.weight(.semibold))
@@ -408,7 +492,9 @@ struct HubDetailPane: View {
                         .help("Kopyala")
                     }
                 }
+
                 Spacer()
+
                 if let url = HuggingFaceHubService.huggingFaceURL(repoId: repo.repoId) {
                     Link(destination: url) {
                         Label("HF", systemImage: "safari")

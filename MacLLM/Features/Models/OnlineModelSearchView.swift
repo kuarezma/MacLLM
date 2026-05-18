@@ -133,6 +133,8 @@ private struct OnlineModelRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
+            HubModelAvatarView(repoId: model.repoId, size: 40)
+
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(ModelMetadataParser.repoDisplayName(model.repoId))
