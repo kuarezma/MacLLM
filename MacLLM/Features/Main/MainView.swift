@@ -134,6 +134,15 @@ struct ModelSidebarView: View {
     @Binding var sessionToDelete: ChatSession?
     @Binding var modelToDelete: InstalledModel?
 
+    @State private var sessionSearchText = ""
+    @State private var searchedSessions: [ChatSession] = []
+
+    private var sessionsToShow: [ChatSession] {
+        sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? appModel.sessions
+            : searchedSessions
+    }
+
     var body: some View {
         @Bindable var model = appModel
 
@@ -180,12 +189,22 @@ struct ModelSidebarView: View {
             }
 
             Section("Sohbetler") {
+                TextField("Sohbetlerde ara…", text: $sessionSearchText)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: sessionSearchText) { _, query in
+                        performSessionSearch(query: query)
+                    }
+
                 if model.sessions.isEmpty {
                     Text("Henüz kayıtlı sohbet yok")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } else if sessionsToShow.isEmpty {
+                    Text("Eşleşen sohbet yok")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 } else {
-                    ForEach(model.sessions) { session in
+                    ForEach(sessionsToShow) { session in
                         HStack(spacing: 8) {
                             Text(session.title)
                                 .lineLimit(1)
@@ -224,6 +243,11 @@ struct ModelSidebarView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle("MacLLM")
+        .onChange(of: model.sessions.count) { _, _ in
+            if !sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                performSessionSearch(query: sessionSearchText)
+            }
+        }
         .onChange(of: model.selectedModelId) { _, newId in
             guard let newId,
                   let installed = model.installedModels.first(where: { $0.id == newId }) else { return }
@@ -231,6 +255,20 @@ struct ModelSidebarView: View {
                 return
             }
             Task { await model.selectModel(installed) }
+        }
+    }
+
+    private func performSessionSearch(query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            searchedSessions = []
+            return
+        }
+        Task {
+            let summaries = (try? ChatHistoryStore.shared.searchSessionSummaries(matching: trimmed)) ?? []
+            await MainActor.run {
+                searchedSessions = summaries.map { $0.asEmptySession() }
+            }
         }
     }
 }

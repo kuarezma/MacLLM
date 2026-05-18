@@ -96,6 +96,27 @@ final class ChatHistoryStore: Sendable {
         try writeIndex(summaries)
     }
 
+    /// Başlık veya mesaj içeriğinde arama (büyük/küçük harf duyarsız).
+    func searchSessionSummaries(matching query: String) throws -> [ChatSessionSummary] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else {
+            return try loadSummaries().sorted { $0.updatedAt > $1.updatedAt }
+        }
+
+        var matches: [ChatSessionSummary] = []
+        for summary in try loadSummaries() {
+            if summary.title.lowercased().contains(needle) {
+                matches.append(summary)
+                continue
+            }
+            guard let session = try loadSession(id: summary.id) else { continue }
+            if session.messages.contains(where: { $0.content.lowercased().contains(needle) }) {
+                matches.append(summary)
+            }
+        }
+        return matches.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     func deleteSession(id: UUID) throws {
         var summaries = try loadSummaries()
         summaries.removeAll { $0.id == id }

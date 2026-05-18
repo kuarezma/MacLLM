@@ -17,8 +17,7 @@ struct MessageMarkdownView: View {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
                     case .text(let prose):
-                        Text(attributedProse(prose))
-                            .textSelection(.enabled)
+                        ProseMarkdownView(text: prose)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     case .code(let language, let code):
                         VStack(alignment: .leading, spacing: 4) {
@@ -54,44 +53,4 @@ struct MessageMarkdownView: View {
         }
     }
 
-    private func attributedProse(_ prose: String) -> AttributedString {
-        var attributed = AttributedString(prose)
-        applyInlineCode(in: &attributed)
-        applyBold(in: &attributed)
-        return attributed
-    }
-
-    private func applyInlineCode(in attributed: inout AttributedString) {
-        let pattern = #"`([^`]+)`"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
-        let string = String(attributed.characters)
-        let matches = regex.matches(in: string, range: NSRange(string.startIndex..., in: string))
-        for match in matches.reversed() {
-            guard let range = Range(match.range, in: string),
-                  let innerRange = Range(match.range(at: 1), in: string) else { continue }
-            let code = String(string[innerRange])
-            var replacement = AttributedString(code)
-            replacement.font = .system(.body, design: .monospaced)
-            replacement.backgroundColor = Color.primary.opacity(0.08)
-            if let attrRange = Range(range, in: attributed) {
-                attributed.replaceSubrange(attrRange, with: replacement)
-            }
-        }
-    }
-
-    private func applyBold(in attributed: inout AttributedString) {
-        let pattern = #"\*\*([^*]+)\*\*"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
-        let string = String(attributed.characters)
-        let matches = regex.matches(in: string, range: NSRange(string.startIndex..., in: string))
-        for match in matches.reversed() {
-            guard let range = Range(match.range, in: string),
-                  let innerRange = Range(match.range(at: 1), in: string) else { continue }
-            var replacement = AttributedString(String(string[innerRange]))
-            replacement.inlinePresentationIntent = .stronglyEmphasized
-            if let attrRange = Range(range, in: attributed) {
-                attributed.replaceSubrange(attrRange, with: replacement)
-            }
-        }
-    }
 }

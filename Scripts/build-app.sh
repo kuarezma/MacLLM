@@ -104,6 +104,7 @@ SOURCES=(
   MacLLM/Features/Chat/ChatView.swift
   MacLLM/Features/Chat/MessageRow.swift
   MacLLM/Features/Chat/MessageMarkdownView.swift
+  MacLLM/Features/Chat/ProseMarkdownView.swift
   MacLLM/Features/Chat/ChatComposerAttachments.swift
   MacLLM/Features/Chat/MessageAttachmentsView.swift
   MacLLM/Features/Models/DownloadProgressView.swift

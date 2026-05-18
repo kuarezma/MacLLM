@@ -9,7 +9,35 @@ enum MarkdownContentParserTests {
         testCodeFence()
         testUnclosedFenceStreaming()
         testMultipleBlocks()
+        testBulletList()
+        testHeading()
+        testNumberedList()
         finish()
+    }
+
+    private static func testBulletList() {
+        let segments = MarkdownContentParser.proseSegments(from: "- bir\n- iki")
+        expect(segments.count == 1, "bullet count")
+        if case .bulletList(let items) = segments[0] {
+            expect(items == ["bir", "iki"], "bullet items")
+        } else { fail("bullet type") }
+    }
+
+    private static func testHeading() {
+        let segments = MarkdownContentParser.proseSegments(from: "## Başlık\nMetin")
+        expect(segments.count == 2, "heading count")
+        if case .heading(let level, let text) = segments[0] {
+            expect(level == 2, "heading level")
+            expect(text == "Başlık", "heading text")
+        } else { fail("heading type") }
+    }
+
+    private static func testNumberedList() {
+        let segments = MarkdownContentParser.proseSegments(from: "1. alpha\n2. beta")
+        expect(segments.count == 1, "numbered count")
+        if case .numberedList(let items) = segments[0] {
+            expect(items == ["alpha", "beta"], "numbered items")
+        } else { fail("numbered type") }
     }
 
     private static func testPlainText() {

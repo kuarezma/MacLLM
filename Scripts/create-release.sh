@@ -44,11 +44,15 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.9+)
+### Bu sürümde (1.10+)
 
-- Yanıt akışı sırasında canlı Markdown ve ilerleme göstergesi
-- Video süresi için güncel AVFoundation API
-- GGUF içe aktarmada ilerleme katmanı ve dosya seçici hata mesajları
+- Markdown başlıklar (`#`–`###`) ve madde işaretli / numaralı listeler
+- Kenar çubuğunda sohbet arama (başlık + mesaj metni)
+- Aktif sohbette mesaj arama (⌘F) ve eşleşmeler arasında gezinme
+
+### Önceki (1.9)
+
+- Canlı Markdown akışı; video API; GGUF içe aktarma UX
 
 ### Önceki (1.8)
 

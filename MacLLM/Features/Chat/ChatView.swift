@@ -6,6 +6,8 @@ struct ChatView: View {
     @State private var inputText = ""
     @State private var pendingAttachments: [MessageAttachment] = []
     @State private var showFileImporter = false
+    @State private var messageSearchText = ""
+    @State private var searchMatchIndex = 0
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -54,7 +56,7 @@ struct ChatView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 40)
                             }
-                            ForEach(model.currentSession.messages) { message in
+                            ForEach(messagesToShow(model: model)) { message in
                                 let isLastAssistant = message.role == .assistant
                                     && message.id == model.currentSession.messages.last?.id
                                 let isGeneratingReply = inferenceService.isGenerating && isLastAssistant
@@ -74,7 +76,16 @@ struct ChatView: View {
                         scrollToBottom(proxy: proxy, animated: true)
                     }
                     .onChange(of: model.currentSession.messages.last?.content) { _, _ in
-                        scrollToBottom(proxy: proxy, animated: false)
+                        if messageSearchNeedle.isEmpty {
+                            scrollToBottom(proxy: proxy, animated: false)
+                        }
+                    }
+                    .onChange(of: messageSearchText) { _, _ in
+                        searchMatchIndex = 0
+                        scrollToSearchMatch(proxy: proxy)
+                    }
+                    .onChange(of: searchMatchIndex) { _, _ in
+                        scrollToSearchMatch(proxy: proxy)
                     }
                 }
 
@@ -85,7 +96,64 @@ struct ChatView: View {
         }
         .navigationTitle(model.selectedModel?.name ?? "Sohbet")
         .navigationSubtitle(navigationSubtitle)
+        .searchable(text: $messageSearchText, prompt: "Bu sohbette ara")
+        .toolbar {
+            if !matchingMessageIds.isEmpty {
+                ToolbarItemGroup(placement: .automatic) {
+                    Text("\(searchMatchIndex + 1)/\(matchingMessageIds.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        stepSearchMatch(delta: -1)
+                    } label: {
+                        Image(systemName: "chevron.up")
+                    }
+                    .help("Önceki eşleşme")
+                    Button {
+                        stepSearchMatch(delta: 1)
+                    } label: {
+                        Image(systemName: "chevron.down")
+                    }
+                    .help("Sonraki eşleşme")
+                }
+            }
+        }
         .onAppear { inputFocused = true }
+    }
+
+    private var messageSearchNeedle: String {
+        messageSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var matchingMessageIds: [UUID] {
+        let needle = messageSearchNeedle
+        guard !needle.isEmpty else { return [] }
+        return appModel.currentSession.messages
+            .filter { $0.content.localizedCaseInsensitiveContains(needle) }
+            .map(\.id)
+    }
+
+    private func messagesToShow(model: AppModel) -> [ChatMessage] {
+        let needle = messageSearchNeedle
+        if needle.isEmpty { return model.currentSession.messages }
+        return model.currentSession.messages.filter {
+            $0.content.localizedCaseInsensitiveContains(needle)
+        }
+    }
+
+    private func stepSearchMatch(delta: Int) {
+        let count = matchingMessageIds.count
+        guard count > 0 else { return }
+        searchMatchIndex = (searchMatchIndex + delta + count) % count
+    }
+
+    private func scrollToSearchMatch(proxy: ScrollViewProxy) {
+        let ids = matchingMessageIds
+        guard !ids.isEmpty else { return }
+        let index = min(max(searchMatchIndex, 0), ids.count - 1)
+        withAnimation(.easeOut(duration: 0.2)) {
+            proxy.scrollTo(ids[index], anchor: .center)
+        }
     }
 
     @ViewBuilder
@@ -229,6 +297,12 @@ struct ChatView: View {
     private var navigationSubtitle: String {
         if inferenceService.isGenerating {
             return "Yanıt üretiliyor…"
+        }
+        if !messageSearchNeedle.isEmpty {
+            let count = matchingMessageIds.count
+            return count == 0
+                ? "Eşleşme yok"
+                : "\(count) eşleşme · \(appModel.currentSession.title)"
         }
         return appModel.currentSession.title
     }
