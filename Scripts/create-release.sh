@@ -46,7 +46,7 @@ gh release create "$TAG" \
 
 ### Bu sürümde (1.14.5)
 
-- Vision model rehberi: composer uyarısı, Hub'dan otomatik mmproj indirme
+- Vision model rehberi: composer uyarısı, Hub üzerinden otomatik mmproj indirme
 - mmproj dosyası otomatik bulma ve modele bağlama
 - Görüntü gönderimi için net yönlendirme (Qwen2-VL, LLaVA, Moondream)
 
