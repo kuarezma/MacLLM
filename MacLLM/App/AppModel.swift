@@ -24,6 +24,7 @@ final class AppModel {
     private let downloadService = HuggingFaceDownloadService.shared
     private let inferenceService = InferenceService.shared
     private let chatStore = ChatHistoryStore.shared
+    private var modelLoadGeneration: UInt = 0
 
     var selectedModel: InstalledModel? {
         installedModels.first { $0.id == selectedModelId }
@@ -86,25 +87,27 @@ final class AppModel {
         }
     }
 
-    func deleteSession(_ session: ChatSession) {
+    func deleteSession(_ session: ChatSession) async {
+        await stopGenerationAndWait()
         do {
             try chatStore.deleteSession(id: session.id)
+            AttachmentStore.shared.deleteSessionAttachments(sessionId: session.id)
             sessions.removeAll { $0.id == session.id }
             if currentSession.id == session.id {
-                newChat()
+                await newChat()
             }
             setStatusMessage("Sohbet silindi")
         } catch {
-            setStatusMessage(error.localizedDescription)
+            setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
         }
     }
 
-    func setStatusMessage(_ message: String?) {
+    func setStatusMessage(_ message: String?, persistent: Bool = false) {
         statusClearTask?.cancel()
         statusMessage = message
-        guard let message, !message.isEmpty else { return }
+        guard let message, !message.isEmpty, !persistent else { return }
         statusClearTask = Task {
-            try? await Task.sleep(for: .seconds(6))
+            try? await Task.sleep(for: .seconds(8))
             guard !Task.isCancelled, statusMessage == message else { return }
             statusMessage = nil
         }
@@ -145,27 +148,36 @@ final class AppModel {
 
     @discardableResult
     func selectModel(_ model: InstalledModel) async -> Bool {
+        modelLoadGeneration &+= 1
+        let generation = modelLoadGeneration
+
         isLoadingModel = true
         setStatusMessage("\(model.name) yükleniyor…")
         defer { isLoadingModel = false }
+
         do {
+            try Task.checkCancellation()
             inferenceService.settings = settings
             try await inferenceService.loadModel(model)
+            guard generation == modelLoadGeneration else { return false }
+
             selectedModelId = model.id
             currentSession.modelId = model.id
             setStatusMessage("\(model.name) hazır")
             refreshModels()
             return true
+        } catch is CancellationError {
+            return false
         } catch {
-            setStatusMessage("Yükleme hatası: \(error.localizedDescription)")
+            guard generation == modelLoadGeneration else { return false }
+            setStatusMessage("Yükleme hatası: \(UserErrorFormatter.message(for: error))", persistent: true)
             return false
         }
     }
 
     func unloadCurrentModel() async {
-        if inferenceService.isGenerating {
-            stopGeneration()
-        }
+        modelLoadGeneration &+= 1
+        await stopGenerationAndWait()
         await inferenceService.unloadModel()
         if let name = selectedModel?.name {
             setStatusMessage("\(name) bellekten çıkarıldı")
@@ -218,16 +230,34 @@ final class AppModel {
     }
 
     func deleteModel(_ model: InstalledModel) async {
+        modelLoadGeneration &+= 1
         if selectedModelId == model.id {
+            await stopGenerationAndWait()
             await inferenceService.unloadModel()
             selectedModelId = nil
         }
         do {
             try modelStore.deleteModel(id: model.id)
+            if currentSession.modelId == model.id {
+                currentSession.modelId = nil
+            }
+            for index in sessions.indices where sessions[index].modelId == model.id {
+                sessions[index].modelId = nil
+            }
+            if let stored = try? chatStore.loadSessionIndex() {
+                var updated = stored
+                for index in updated.indices where updated[index].modelId == model.id {
+                    updated[index].modelId = nil
+                }
+                for session in updated {
+                    try? chatStore.saveSession(session)
+                }
+                sessions = try chatStore.loadSessionIndex()
+            }
             refreshModels()
             setStatusMessage("\(model.name) silindi")
         } catch {
-            setStatusMessage(error.localizedDescription)
+            setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
         }
     }
 
@@ -268,12 +298,10 @@ final class AppModel {
         }
     }
 
-    func newChat() {
-        if inferenceService.isGenerating {
-            stopGeneration()
-        }
+    func newChat() async {
+        await stopGenerationAndWait()
         if !currentSession.messages.isEmpty {
-            Task { try? await saveCurrentSession() }
+            try? await saveCurrentSession()
         }
         currentSession = ChatSession(modelId: selectedModelId)
         setStatusMessage(nil)
@@ -290,9 +318,10 @@ final class AppModel {
         sessions = try chatStore.loadSessionIndex()
     }
 
-    func loadSession(_ session: ChatSession) {
+    func loadSession(_ session: ChatSession) async {
+        await stopGenerationAndWait()
         if !currentSession.messages.isEmpty, currentSession.id != session.id {
-            Task { try? await saveCurrentSession() }
+            try? await saveCurrentSession()
         }
         if let stored = try? chatStore.loadSession(id: session.id) {
             currentSession = stored
@@ -302,15 +331,21 @@ final class AppModel {
         if let modelId = currentSession.modelId,
            let model = installedModels.first(where: { $0.id == modelId }) {
             selectedModelId = modelId
-            Task { await selectModel(model) }
+            if inferenceService.loadedModelId != modelId || !inferenceService.isModelLoaded {
+                _ = await selectModel(model)
+            }
         }
     }
 
     func sendMessage(_ text: String, pendingAttachments: [MessageAttachment] = []) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !pendingAttachments.isEmpty else { return }
+        guard !inferenceService.isGenerating else {
+            setStatusMessage("Önce mevcut yanıtın bitmesini bekleyin veya «Yanıtı Durdur» kullanın.")
+            return
+        }
         guard let model = selectedModel else {
-            setStatusMessage("Önce bir model seçin veya indirin")
+            setStatusMessage("Önce bir model seçin veya indirin", persistent: true)
             return
         }
         guard inferenceService.isModelLoaded, inferenceService.loadedModelId == model.id else {
@@ -360,24 +395,29 @@ final class AppModel {
 
         let mediaAttachments = attachments.filter { $0.kind == .image || $0.kind == .audio }
         if !mediaAttachments.isEmpty {
-            if !caps.supportsVision && mediaAttachments.contains(where: { $0.kind == .image }) {
+            let hasImage = mediaAttachments.contains { $0.kind == .image }
+            let hasAudio = mediaAttachments.contains { $0.kind == .audio }
+
+            if hasImage, !caps.supportsVision {
                 setStatusMessage(
-                    "Görüntü/video için vision modeli ve mmproj GGUF gerekir. Belgeler metin olarak gönderilebilir."
+                    "Görüntü için vision modeli gerekir. Yalnızca metin/belge gönderebilirsiniz.",
+                    persistent: true
                 )
-                if trimmed.isEmpty, attachments.allSatisfy({ $0.kind == .image || $0.kind == .video }) {
-                    return
-                }
+                if trimmed.isEmpty { return }
+                attachments.removeAll { $0.kind == .image }
             }
-            if mediaAttachments.contains(where: { $0.kind == .audio }), !caps.supportsAudio {
-                setStatusMessage("Ses için ses destekli vision modeli gerekir.")
+            if hasAudio, !caps.supportsAudio {
+                setStatusMessage("Ses için ses destekli vision modeli gerekir.", persistent: true)
+                if trimmed.isEmpty, !attachments.contains(where: { $0.kind == .document }) { return }
+                attachments.removeAll { $0.kind == .audio }
             }
-            if caps.requiresMmproj, model.mmprojLocalPath == nil {
+            if caps.requiresMmproj, model.mmprojLocalPath == nil,
+               attachments.contains(where: { $0.kind == .image || $0.kind == .audio }) {
                 setStatusMessage(
-                    "Bu model çok modlu — aynı klasöre mmproj GGUF dosyasını ekleyip modeli yeniden yükleyin."
+                    "Çok modlu model için aynı klasöre mmproj GGUF ekleyip modeli yeniden yükleyin.",
+                    persistent: true
                 )
-                if mediaAttachments.allSatisfy({ $0.kind == .image || $0.kind == .audio }) && trimmed.isEmpty {
-                    return
-                }
+                if trimmed.isEmpty { return }
             }
         }
 
@@ -386,7 +426,11 @@ final class AppModel {
             ChatMessage(role: .user, content: displayText, attachments: attachments)
         )
         let assistantIndex = currentSession.messages.count
-        currentSession.messages.append(ChatMessage(role: .assistant, content: ""))
+        let assistantMessageId = UUID()
+        currentSession.messages.append(
+            ChatMessage(id: assistantMessageId, role: .assistant, content: "")
+        )
+        let activeSessionId = currentSession.id
 
         let template = model.chatTemplate
         let messagesForInference = Self.trimMessagesForContext(
@@ -403,6 +447,11 @@ final class AppModel {
             var pending = ""
             var lastFlush = Date()
             for try await chunk in stream {
+                guard currentSession.id == activeSessionId,
+                      assistantIndex < currentSession.messages.count,
+                      currentSession.messages[assistantIndex].id == assistantMessageId else {
+                    break
+                }
                 pending += chunk
                 let now = Date()
                 if now.timeIntervalSince(lastFlush) >= 0.06 {
@@ -413,35 +462,56 @@ final class AppModel {
                     lastFlush = now
                 }
             }
-            if !pending.isEmpty {
-                let combined = currentSession.messages[assistantIndex].content + pending
-                currentSession.messages[assistantIndex].content =
-                    ControlTokenSanitizer.sanitizeForDisplay(combined)
+            if currentSession.id == activeSessionId,
+               assistantIndex < currentSession.messages.count,
+               currentSession.messages[assistantIndex].id == assistantMessageId {
+                if !pending.isEmpty {
+                    let combined = currentSession.messages[assistantIndex].content + pending
+                    currentSession.messages[assistantIndex].content =
+                        ControlTokenSanitizer.sanitizeForDisplay(combined)
+                }
+                currentSession.messages[assistantIndex].content = ControlTokenSanitizer.sanitizeForDisplay(
+                    currentSession.messages[assistantIndex].content
+                )
+                try await saveCurrentSession()
             }
-            currentSession.messages[assistantIndex].content = ControlTokenSanitizer.sanitizeForDisplay(
-                currentSession.messages[assistantIndex].content
-            )
-            try await saveCurrentSession()
         } catch is CancellationError {
-            setStatusMessage("Üretim durduruldu")
-        } catch {
-            if currentSession.messages[assistantIndex].content.isEmpty {
-                currentSession.messages[assistantIndex].content = "Hata: \(error.localizedDescription)"
+            if currentSession.id == activeSessionId,
+               assistantIndex < currentSession.messages.count,
+               currentSession.messages[assistantIndex].content.isEmpty {
+                currentSession.messages.remove(at: assistantIndex)
             }
-            setStatusMessage(error.localizedDescription)
+            setStatusMessage("Üretim durduruldu")
+            try? await saveCurrentSession()
+        } catch {
+            guard currentSession.id == activeSessionId,
+                  assistantIndex < currentSession.messages.count else { return }
+            if currentSession.messages[assistantIndex].content.isEmpty {
+                currentSession.messages[assistantIndex].content =
+                    "Hata: \(UserErrorFormatter.message(for: error))"
+            }
+            setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
+            try? await saveCurrentSession()
         }
     }
 
     func stopGeneration() {
-        inferenceService.stopGeneration()
+        Task { await stopGenerationAndWait() }
+    }
+
+    func stopGenerationAndWait() async {
+        await inferenceService.stopGeneration()
     }
 
     private static func trimMessagesForContext(_ messages: [ChatMessage], maxContextTokens: Int) -> [ChatMessage] {
-        let budget = max(512, Int(Double(maxContextTokens) * 0.82))
+        let budget = max(512, Int(Double(maxContextTokens) * 0.78))
         var estimated = 0
         var kept: [ChatMessage] = []
         for message in messages.reversed() {
-            let cost = max(1, message.content.count / 4)
+            let attachmentCost = message.attachments.reduce(0) { partial, attachment in
+                partial + (attachment.extractedText?.count ?? 0) / 4 + 64
+            }
+            let cost = max(1, message.content.count / 3 + attachmentCost)
             if estimated + cost > budget, !kept.isEmpty { break }
             estimated += cost
             kept.insert(message, at: 0)
@@ -456,14 +526,23 @@ final class AppModel {
         return kept
     }
 
-    func saveSettings() {
+    func saveSettings(reloadModel: Bool = false) {
         inferenceService.settings = settings
         if let data = try? JSONEncoder().encode(settings) {
             UserDefaults.standard.set(data, forKey: "inferenceSettings")
         }
+        mergeDefaultStopSequences()
         setStatusMessage("Ayarlar kaydedildi")
-        if let model = selectedModel {
+        if reloadModel, let model = selectedModel {
             Task { await selectModel(model) }
         }
+    }
+
+    func saveSettingsIfNeeded(comparedTo baseline: InferenceSettings) {
+        let needsReload =
+            baseline.contextLength != settings.contextLength
+            || baseline.gpuLayers != settings.gpuLayers
+            || baseline.threadCount != settings.threadCount
+        saveSettings(reloadModel: needsReload)
     }
 }

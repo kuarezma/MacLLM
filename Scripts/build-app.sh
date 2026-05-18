@@ -72,6 +72,7 @@ SOURCES=(
   MacLLM/App/AppModel.swift
   MacLLM/Core/Models.swift
   MacLLM/Core/MessageAttachment.swift
+  MacLLM/Core/UserErrorFormatter.swift
   MacLLM/Core/AppVersion.swift
   MacLLM/Core/AppTheme.swift
   MacLLM/Services/AppUpdateService.swift

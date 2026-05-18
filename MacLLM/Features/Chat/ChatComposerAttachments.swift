@@ -28,7 +28,7 @@ struct ChatAttachmentImporter {
     static let contentTypes: [UTType] = [
         .image, .audio, .movie, .video, .pdf, .plainText, .json, .rtf,
         UTType(filenameExtension: "md") ?? .plainText,
-        UTType(filenameExtension: "docx") ?? .data,
+        UTType(filenameExtension: "csv") ?? .plainText,
     ].compactMap { $0 }
 
     static func kind(for url: URL) -> AttachmentKind? {
@@ -40,7 +40,9 @@ struct ChatAttachmentImporter {
         if ["jpg", "jpeg", "png", "gif", "webp", "heic", "bmp"].contains(ext) { return .image }
         if ["wav", "mp3", "m4a", "flac", "aac", "ogg"].contains(ext) { return .audio }
         if ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext) { return .video }
-        if ["pdf", "txt", "md", "csv", "json", "rtf", "doc", "docx"].contains(ext) { return .document }
+        if ["pdf", "txt", "md", "csv", "json", "rtf", "log", "swift", "py", "js", "html", "xml"].contains(ext) {
+            return .document
+        }
         return nil
     }
 }

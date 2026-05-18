@@ -27,6 +27,7 @@ struct SettingsView: View {
     @Environment(AppUpdateController.self) private var appUpdate
     @State private var tab: SettingsTab = .general
     @State private var stopText = ""
+    @State private var settingsBaseline = InferenceSettings.default
 
     var body: some View {
         @Bindable var model = appModel
@@ -69,7 +70,8 @@ struct SettingsView: View {
                     }
                     Button("Kaydet") {
                         model.settings.stopSequencesText = stopText
-                        model.saveSettings()
+                        model.saveSettingsIfNeeded(comparedTo: settingsBaseline)
+                        settingsBaseline = model.settings
                     }
                     .keyboardShortcut("s", modifiers: .command)
                     .buttonStyle(.borderedProminent)
@@ -79,12 +81,13 @@ struct SettingsView: View {
         }
         .frame(minWidth: 640, minHeight: 480)
         .onAppear {
+            settingsBaseline = model.settings
             syncStopText(from: model.settings)
         }
         .onDisappear {
             guard !AppShutdown.isShuttingDown else { return }
             model.settings.stopSequencesText = stopText
-            model.saveSettings()
+            model.saveSettingsIfNeeded(comparedTo: settingsBaseline)
         }
     }
 

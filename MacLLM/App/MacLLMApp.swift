@@ -28,7 +28,7 @@ struct MacLLMApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Yeni Sohbet") {
-                    appModel.newChat()
+                    Task { await appModel.newChat() }
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }

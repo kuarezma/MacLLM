@@ -13,6 +13,7 @@ final class InferenceService: ObservableObject {
     private var generationTask: Task<Void, Never>?
 
     func loadModel(_ model: InstalledModel) async throws {
+        await stopGeneration()
         await unloadModel()
         llamaContext = try await LlamaContext.createContext(
             path: model.localPath,
@@ -26,14 +27,7 @@ final class InferenceService: ObservableObject {
     }
 
     func unloadModel() async {
-        generationTask?.cancel()
-        await llamaContext?.cancel()
-
-        if let generationTask {
-            await generationTask.value
-        }
-        generationTask = nil
-        isGenerating = false
+        await stopGeneration()
 
         if let llamaContext {
             await llamaContext.shutdown()
@@ -43,11 +37,14 @@ final class InferenceService: ObservableObject {
         loadedModelId = nil
     }
 
-    func stopGeneration() {
+    func stopGeneration() async {
         generationTask?.cancel()
-        Task {
-            await llamaContext?.cancel()
+        await llamaContext?.cancel()
+        if let generationTask {
+            await generationTask.value
         }
+        generationTask = nil
+        isGenerating = false
     }
 
     private static func messagesWithSystem(_ messages: [ChatMessage], systemPrompt: String) -> [ChatMessage] {
@@ -72,7 +69,9 @@ final class InferenceService: ObservableObject {
         }
 
         return AsyncThrowingStream { continuation in
-            generationTask = Task.detached(priority: .userInitiated) {
+            Task { @MainActor in
+                await self.stopGeneration()
+                self.generationTask = Task.detached(priority: .userInitiated) {
                 do {
                     await MainActor.run { self.isGenerating = true }
                     defer {
@@ -93,6 +92,7 @@ final class InferenceService: ObservableObject {
                         messages: promptMessages,
                         templateName: chatTemplate
                     )
+                    await llamaContext.clear()
                     try await llamaContext.completionInit(text: prompt, mediaPaths: mediaPaths)
 
                     while await !llamaContext.is_done {
@@ -113,6 +113,7 @@ final class InferenceService: ObservableObject {
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
+                }
                 }
             }
         }

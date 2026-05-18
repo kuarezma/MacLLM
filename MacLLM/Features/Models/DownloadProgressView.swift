@@ -60,7 +60,7 @@ struct DownloadProgressView: View {
                             Button {
                                 onPause()
                             } label: {
-                                Label("Durdur", systemImage: "pause.fill")
+                                Label("Duraklat", systemImage: "pause.fill")
                             }
                             .controlSize(.small)
                         }

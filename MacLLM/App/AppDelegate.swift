@@ -19,8 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let appModel = Self.appModel {
             if InferenceService.shared.isGenerating {
-                appModel.stopGeneration()
-                try? await Task.sleep(for: .milliseconds(200))
+                await appModel.stopGenerationAndWait()
             }
             if !appModel.currentSession.messages.isEmpty {
                 try? await appModel.saveCurrentSession()

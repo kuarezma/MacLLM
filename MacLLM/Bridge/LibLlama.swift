@@ -3,6 +3,8 @@ import llama
 
 enum LlamaError: Error, LocalizedError {
     case couldNotInitializeContext
+    case contextOverflow(promptTokens: Int, contextSize: Int)
+    case decodeFailed
     case templateFailed
     case generationCancelled
 
@@ -10,6 +12,10 @@ enum LlamaError: Error, LocalizedError {
         switch self {
         case .couldNotInitializeContext:
             return "Model yüklenemedi. Dosya bozuk olabilir veya yetersiz bellek."
+        case .contextOverflow(let promptTokens, let contextSize):
+            return "Bağlam doldu (\(promptTokens) token, limit \(contextSize)). Ayarlardan num_ctx düşürün veya yeni sohbet açın."
+        case .decodeFailed:
+            return "Çıkarım hatası. Yeni sohbet deneyin veya modeli yeniden yükleyin."
         case .templateFailed:
             return "Sohbet şablonu uygulanamadı."
         case .generationCancelled:
@@ -287,10 +293,11 @@ actor LlamaContext {
         tokens_list = tokenize(text: text, add_bos: true)
         temporary_invalid_cchars = []
 
-        let n_ctx = llama_n_ctx(context)
-        let n_kv_req = tokens_list.count + (Int(n_len) - tokens_list.count)
-        if n_kv_req > n_ctx {
-            throw LlamaError.couldNotInitializeContext
+        let n_ctx = Int(llama_n_ctx(context))
+        let promptTokens = tokens_list.count
+        let reserveForGeneration = max(64, Int(n_len))
+        if promptTokens + reserveForGeneration > n_ctx {
+            throw LlamaError.contextOverflow(promptTokens: promptTokens, contextSize: n_ctx)
         }
 
         llama_batch_clear(&batch)
@@ -300,7 +307,7 @@ actor LlamaContext {
         batch.logits[Int(batch.n_tokens) - 1] = 1
 
         if llama_decode(context, batch) != 0 {
-            throw LlamaError.couldNotInitializeContext
+            throw LlamaError.decodeFailed
         }
         n_cur = batch.n_tokens
     }
@@ -338,18 +345,22 @@ actor LlamaContext {
         n_cur += 1
 
         if llama_decode(context, batch) != 0 {
-            throw LlamaError.couldNotInitializeContext
+            throw LlamaError.decodeFailed
         }
 
         return new_token_str
     }
 
+    /// Yeni kullanıcı mesajı öncesi KV önbelleğini ve konum sayacını sıfırlar.
     func clear() {
         tokens_list.removeAll()
         temporary_invalid_cchars.removeAll()
         is_done = false
         cancelled = false
         multimodalPrefill = false
+        n_cur = 0
+        n_decode = 0
+        llama_batch_clear(&batch)
         llama_memory_clear(llama_get_memory(context), true)
     }
 

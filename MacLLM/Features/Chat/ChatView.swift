@@ -55,8 +55,16 @@ struct ChatView: View {
                                 .padding(.top, 40)
                             }
                             ForEach(model.currentSession.messages) { message in
-                                MessageRow(message: message, sessionId: model.currentSession.id)
-                                    .id(message.id)
+                                let isTyping = inferenceService.isGenerating
+                                    && message.role == .assistant
+                                    && message.id == model.currentSession.messages.last?.id
+                                    && message.content.isEmpty
+                                MessageRow(
+                                    message: message,
+                                    sessionId: model.currentSession.id,
+                                    showsTypingIndicator: isTyping
+                                )
+                                .id(message.id)
                             }
                         }
                         .padding(AppTheme.contentPadding)
@@ -96,22 +104,35 @@ struct ChatView: View {
             }
 
             HStack(alignment: .bottom, spacing: 10) {
-            Button {
-                showFileImporter = true
-            } label: {
-                Image(systemName: "paperclip")
-                    .font(.title2)
-            }
-            .buttonStyle(.plain)
-            .help("Dosya ekle (görüntü, ses, video, belge)")
+                HStack(alignment: .bottom, spacing: 4) {
+                    Button {
+                        showFileImporter = true
+                    } label: {
+                        Image(systemName: "paperclip")
+                            .font(.system(size: 18, weight: .medium))
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(inferenceService.isGenerating)
+                    .help("Dosya ekle (görüntü, ses, video, belge)")
 
-            TextField("Mesajınızı yazın…", text: $inputText, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...12)
-                .focused($inputFocused)
-                .frame(maxWidth: .infinity, minHeight: 52, alignment: .topLeading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                    TextField("Mesajınızı yazın…", text: $inputText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...12)
+                        .focused($inputFocused)
+                        .disabled(inferenceService.isGenerating)
+                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .topLeading)
+                        .padding(.vertical, 8)
+                        .padding(.trailing, 8)
+                        .onSubmit {
+                            guard !inferenceService.isGenerating else { return }
+                            send()
+                        }
+                }
+                .padding(.leading, 6)
+                .padding(.trailing, 4)
+                .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: AppTheme.panelRadius)
                         .fill(Color(nsColor: .textBackgroundColor))
@@ -120,34 +141,34 @@ struct ChatView: View {
                     RoundedRectangle(cornerRadius: AppTheme.panelRadius)
                         .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
                 )
-                .onSubmit { send() }
 
-            VStack(spacing: 8) {
-                if inferenceService.isGenerating {
-                    Button("Durdur") {
-                        model.stopGeneration()
+                Group {
+                    if inferenceService.isGenerating {
+                        Button("Yanıtı Durdur") {
+                            Task { await model.stopGenerationAndWait() }
+                        }
+                        .keyboardShortcut(.escape, modifiers: [])
+                    } else {
+                        Button {
+                            send()
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 32))
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Gönder")
+                        .help("Gönder (⌘↩)")
+                        .disabled(
+                            (inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                && pendingAttachments.isEmpty)
+                                || model.isLoadingModel
+                                || !inferenceService.isModelLoaded
+                        )
+                        .keyboardShortcut(.return, modifiers: [.command])
                     }
-                    .keyboardShortcut(.escape, modifiers: [])
-                } else {
-                    Button {
-                        send()
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Gönder")
-                    .help("Gönder (⌘↩)")
-                    .disabled(
-                        (inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            && pendingAttachments.isEmpty)
-                            || model.isLoadingModel
-                            || !inferenceService.isModelLoaded
-                    )
-                    .keyboardShortcut(.return, modifiers: [.command])
                 }
-            }
-            .frame(width: 72)
+                .frame(width: 52, height: 44, alignment: .bottom)
             }
         }
         .padding(.horizontal, 12)
@@ -166,7 +187,14 @@ struct ChatView: View {
     }
 
     private func importFiles(_ result: Result<[URL], Error>, model: AppModel) {
-        guard case .success(let urls) = result else { return }
+        let urls: [URL]
+        switch result {
+        case .failure(let error):
+            model.setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
+            return
+        case .success(let picked):
+            urls = picked
+        }
         for url in urls {
             guard let kind = ChatAttachmentImporter.kind(for: url) else { continue }
             do {
@@ -178,7 +206,7 @@ struct ChatView: View {
                 try MediaContentProcessor.enrich(&attachment, sessionId: model.currentSession.id)
                 pendingAttachments.append(attachment)
             } catch {
-                model.setStatusMessage(error.localizedDescription)
+                model.setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
             }
         }
     }
@@ -214,6 +242,7 @@ struct ChatView: View {
     }
 
     private func send() {
+        guard !inferenceService.isGenerating else { return }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
         let attachments = pendingAttachments

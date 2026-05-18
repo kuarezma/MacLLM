@@ -5,13 +5,19 @@ struct MainView: View {
     @EnvironmentObject private var inferenceService: InferenceService
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var sessionToDelete: ChatSession?
+    @State private var modelToDelete: InstalledModel?
+    @State private var confirmDeleteCurrentChat = false
 
     var body: some View {
         @Bindable var model = appModel
 
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            ModelSidebarView()
-                .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 360)
+            ModelSidebarView(
+                sessionToDelete: $sessionToDelete,
+                modelToDelete: $modelToDelete
+            )
+            .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 360)
         } detail: {
             VStack(spacing: 0) {
                 AppUpdateBannerView()
@@ -42,14 +48,14 @@ struct MainView: View {
                     .help("Modeli bellekten çıkarır; dosya diskte kalır")
                 }
                 Button {
-                    model.newChat()
+                    Task { await model.newChat() }
                 } label: {
                     Label("Yeni Sohbet", systemImage: "square.and.pencil")
                 }
                 .keyboardShortcut("n", modifiers: .command)
                 if model.canDeleteCurrentSession {
                     Button(role: .destructive) {
-                        model.deleteSession(model.currentSession)
+                        confirmDeleteCurrentChat = true
                     } label: {
                         Label("Sohbeti Sil", systemImage: "trash")
                     }
@@ -63,6 +69,50 @@ struct MainView: View {
         }
         .sheet(isPresented: $model.showCatalog) {
             ModelCatalogView()
+        }
+        .confirmationDialog(
+            "Bu sohbet silinsin mi?",
+            isPresented: $confirmDeleteCurrentChat,
+            titleVisibility: .visible
+        ) {
+            Button("Sohbeti Sil", role: .destructive) {
+                Task { await model.deleteSession(model.currentSession) }
+            }
+            Button("İptal", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Bu sohbet silinsin mi?",
+            isPresented: Binding(
+                get: { sessionToDelete != nil },
+                set: { if !$0 { sessionToDelete = nil } }
+            ),
+            presenting: sessionToDelete
+        ) { session in
+            Button("Sil", role: .destructive) {
+                Task { await model.deleteSession(session) }
+            }
+            Button("İptal", role: .cancel) {
+                sessionToDelete = nil
+            }
+        } message: { session in
+            Text("“\(session.title)” kalıcı olarak silinecek.")
+        }
+        .confirmationDialog(
+            "Model diskten silinsin mi?",
+            isPresented: Binding(
+                get: { modelToDelete != nil },
+                set: { if !$0 { modelToDelete = nil } }
+            ),
+            presenting: modelToDelete
+        ) { installed in
+            Button("Sil", role: .destructive) {
+                Task { await model.deleteModel(installed) }
+            }
+            Button("İptal", role: .cancel) {
+                modelToDelete = nil
+            }
+        } message: { installed in
+            Text("\(installed.name) dosyası silinecek. Bu işlem geri alınamaz.")
         }
         .safeAreaInset(edge: .bottom) {
             if let status = model.statusMessage, !status.isEmpty {
@@ -81,6 +131,8 @@ struct MainView: View {
 struct ModelSidebarView: View {
     @Environment(AppModel.self) private var appModel
     @EnvironmentObject private var inferenceService: InferenceService
+    @Binding var sessionToDelete: ChatSession?
+    @Binding var modelToDelete: InstalledModel?
 
     var body: some View {
         @Bindable var model = appModel
@@ -109,11 +161,7 @@ struct ModelSidebarView: View {
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            if isSelected && !inferenceService.isModelLoaded {
-                                Task { await model.selectModel(installed) }
-                            } else {
-                                model.selectedModelId = installed.id
-                            }
+                            model.selectedModelId = installed.id
                         }
                         .contextMenu {
                             if isLoaded {
@@ -124,7 +172,7 @@ struct ModelSidebarView: View {
                                 }
                             }
                             Button("Diskten Sil", role: .destructive) {
-                                Task { await model.deleteModel(installed) }
+                                modelToDelete = installed
                             }
                         }
                     }
@@ -144,7 +192,7 @@ struct ModelSidebarView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    model.loadSession(session)
+                                    Task { await model.loadSession(session) }
                                 }
                             if session.id == model.currentSession.id {
                                 Image(systemName: "checkmark")
@@ -152,7 +200,7 @@ struct ModelSidebarView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Button {
-                                model.deleteSession(session)
+                                sessionToDelete = session
                             } label: {
                                 Image(systemName: "trash")
                                     .font(.caption)
@@ -163,7 +211,7 @@ struct ModelSidebarView: View {
                         }
                         .contextMenu {
                             Button("Sil", role: .destructive) {
-                                model.deleteSession(session)
+                                sessionToDelete = session
                             }
                         }
                     }
@@ -178,8 +226,10 @@ struct ModelSidebarView: View {
         .navigationTitle("MacLLM")
         .onChange(of: model.selectedModelId) { _, newId in
             guard let newId,
-                  let installed = model.installedModels.first(where: { $0.id == newId }),
-                  model.selectedModel?.id != newId || !inferenceService.isModelLoaded else { return }
+                  let installed = model.installedModels.first(where: { $0.id == newId }) else { return }
+            if inferenceService.loadedModelId == newId, inferenceService.isModelLoaded {
+                return
+            }
             Task { await model.selectModel(installed) }
         }
     }
@@ -226,9 +276,10 @@ struct ModelRowView: View {
                 .foregroundStyle(.orange)
                 .help("Bellekten çıkar")
             } else if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .symbolRenderingMode(.hierarchical)
+                Image(systemName: "circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .help("Seçili — belleğe almak için dokunun")
             }
         }
         .padding(.vertical, 4)

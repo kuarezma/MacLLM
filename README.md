@@ -257,6 +257,8 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.7.0** | Reliable model switching, generation lock, session safety; attachment validation; delete confirmations; clearer status and loading UI |
+| **1.6.1** | KV cache reset per message; clearer inference errors; composer layout fix |
 | **1.6.0** | Chat attachments (image, audio, video, documents); **libmtmd** + mmproj for vision models; reply token sanitization; graceful app quit; model eject & chat delete UI |
 | **1.5.4** | `GenerationOutputFilter` — stop sequences and ChatML token leaks fixed during streaming |
 | **1.5.3** | Graceful shutdown on quit (unload model, cancel downloads) |

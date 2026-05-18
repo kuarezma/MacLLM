@@ -255,6 +255,8 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.7.0** | Güvenilir model değişimi, üretim kilidi, oturum güvenliği; ek doğrulama; silme onayları; durum ve yükleme arayüzü |
+| **1.6.1** | Mesaj başına KV sıfırlama; çıkarım hata mesajları; composer düzeni |
 | **1.6.0** | Sohbet ekleri (görüntü, ses, video, belge); **libmtmd** + mmproj; yanıt token temizliği; güvenli çıkış; model çıkarma ve sohbet silme |
 | **1.5.4** | `GenerationOutputFilter` — ChatML stop ve kontrol token sızıntısı düzeltmesi |
 | **1.5.3** | Çıkışta güvenli kapanış (model boşaltma, indirme iptali) |

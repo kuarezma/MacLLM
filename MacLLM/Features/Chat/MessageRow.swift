@@ -3,20 +3,22 @@ import SwiftUI
 struct MessageRow: View {
     let message: ChatMessage
     var sessionId: UUID
+    var showsTypingIndicator: Bool = false
 
     private var displayContent: String {
-        let raw = message.displayPreviewText.isEmpty ? "…" : message.displayPreviewText
+        if showsTypingIndicator { return "" }
+        let raw = message.content
         if message.role == .assistant {
             return ControlTokenSanitizer.sanitizeForDisplay(raw)
         }
-        return raw
+        return raw.isEmpty ? message.displayPreviewText : raw
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: AppTheme.rowSpacing) {
             Image(systemName: message.role == .user ? "person.circle.fill" : "sparkles")
                 .font(.title2)
-                .foregroundStyle(message.role == .user ? Color.accentColor : .purple)
+                .foregroundStyle(message.role == .user ? Color.accentColor : .secondary)
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -29,7 +31,16 @@ struct MessageRow: View {
                     MessageAttachmentsView(attachments: message.attachments, sessionId: sessionId)
                 }
 
-                if !message.content.isEmpty || message.role == .assistant {
+                if showsTypingIndicator {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Yanıt yazılıyor…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                } else if !displayContent.isEmpty {
                     Text(displayContent)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
