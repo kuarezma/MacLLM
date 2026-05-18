@@ -75,6 +75,7 @@ actor LlamaContext {
     var n_len: Int32 = 1024
     var n_cur: Int32 = 0
     var n_decode: Int32 = 0
+    private(set) var lastPromptTokenCount: Int = 0
 
     private var cancelled = false
     private var shutDown = false
@@ -292,6 +293,7 @@ actor LlamaContext {
 
         tokens_list = tokenize(text: text, add_bos: true)
         temporary_invalid_cchars = []
+        lastPromptTokenCount = tokens_list.count
 
         let n_ctx = Int(llama_n_ctx(context))
         let promptTokens = tokens_list.count
@@ -352,6 +354,10 @@ actor LlamaContext {
     }
 
     /// Yeni kullanıcı mesajı öncesi KV önbelleğini ve konum sayacını sıfırlar.
+    func generationSnapshot() -> (promptTokens: Int, outputTokens: Int) {
+        (lastPromptTokenCount, Int(n_decode))
+    }
+
     func clear() {
         tokens_list.removeAll()
         temporary_invalid_cchars.removeAll()
@@ -360,6 +366,7 @@ actor LlamaContext {
         multimodalPrefill = false
         n_cur = 0
         n_decode = 0
+        lastPromptTokenCount = 0
         llama_batch_clear(&batch)
         llama_memory_clear(llama_get_memory(context), true)
     }
@@ -370,6 +377,11 @@ actor LlamaContext {
         defer { result.deallocate() }
         let nChars = llama_model_desc(model, result, 256)
         return String(cString: Array(UnsafeBufferPointer(start: result, count: Int(nChars))) + [0])
+    }
+
+    func countTokens(in text: String, addBos: Bool = false) -> Int {
+        guard !text.isEmpty else { return addBos ? 1 : 0 }
+        return tokenize(text: text, add_bos: addBos).count
     }
 
     private func tokenize(text: String, add_bos: Bool) -> [llama_token] {

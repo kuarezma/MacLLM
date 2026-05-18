@@ -9,16 +9,18 @@ struct MainView: View {
     @State private var modelToDelete: InstalledModel?
     @State private var confirmDeleteCurrentChat = false
     @State private var showDownloadsPopover = false
+    @State private var sidebarSearchFocused = false
 
     var body: some View {
         @Bindable var model = appModel
 
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            ModelSidebarView(
+            JanSidebarView(
                 sessionToDelete: $sessionToDelete,
-                modelToDelete: $modelToDelete
+                modelToDelete: $modelToDelete,
+                showDownloadsPopover: $showDownloadsPopover
             )
-            .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 360)
+            .navigationSplitViewColumnWidth(min: 220, ideal: AppTheme.sidebarWidth, max: 320)
         } detail: {
             VStack(spacing: 0) {
                 AppUpdateBannerView()
@@ -38,42 +40,18 @@ struct MainView: View {
                     downloadService: downloadService,
                     isPresented: $showDownloadsPopover
                 )
-                Button {
-                    model.showCatalog = true
-                } label: {
-                    Label("Model Hub", systemImage: "plus.circle")
-                }
-                .help("Hub'tan model indir veya GGUF içe aktar")
-                if inferenceService.isModelLoaded {
-                    Button {
-                        Task { await model.unloadCurrentModel() }
-                    } label: {
-                        Label("Modeli Çıkar", systemImage: "eject")
-                    }
-                    .help("Modeli bellekten çıkarır; dosya diskte kalır")
-                }
-                Button {
-                    Task { await model.newChat() }
-                } label: {
-                    Label("Yeni Sohbet", systemImage: "square.and.pencil")
-                }
-                .keyboardShortcut("n", modifiers: .command)
-                if model.canDeleteCurrentSession {
-                    Button(role: .destructive) {
-                        confirmDeleteCurrentChat = true
-                    } label: {
-                        Label("Sohbeti Sil", systemImage: "trash")
-                    }
-                    .help("Geçerli sohbeti kalıcı olarak siler")
-                }
-                SettingsLink {
-                    Label("Ayarlar", systemImage: "gearshape")
-                }
-                .help("Ayarlar (⌘,)")
             }
         }
         .sheet(isPresented: $model.showCatalog) {
             ModelCatalogView()
+        }
+        .sheet(isPresented: $model.showNewProjectSheet) {
+            NewProjectSheet()
+                .environment(appModel)
+        }
+        .sheet(isPresented: $model.showSystemPromptSheet) {
+            SystemPromptSheet()
+                .environment(appModel)
         }
         .confirmationDialog(
             "Bu sohbet silinsin mi?",
@@ -96,9 +74,7 @@ struct MainView: View {
             Button("Sil", role: .destructive) {
                 Task { await model.deleteSession(session) }
             }
-            Button("İptal", role: .cancel) {
-                sessionToDelete = nil
-            }
+            Button("İptal", role: .cancel) { sessionToDelete = nil }
         } message: { session in
             Text("“\(session.title)” kalıcı olarak silinecek.")
         }
@@ -113,9 +89,7 @@ struct MainView: View {
             Button("Sil", role: .destructive) {
                 Task { await model.deleteModel(installed) }
             }
-            Button("İptal", role: .cancel) {
-                modelToDelete = nil
-            }
+            Button("İptal", role: .cancel) { modelToDelete = nil }
         } message: { installed in
             Text("\(installed.name) dosyası silinecek. Bu işlem geri alınamaz.")
         }
@@ -133,18 +107,24 @@ struct MainView: View {
     }
 }
 
-struct ModelSidebarView: View {
+// MARK: - Jan-style sidebar
+
+struct JanSidebarView: View {
     @Environment(AppModel.self) private var appModel
     @EnvironmentObject private var inferenceService: InferenceService
+    @Environment(\.openSettings) private var openSettings
     @Binding var sessionToDelete: ChatSession?
     @Binding var modelToDelete: InstalledModel?
+    @Binding var showDownloadsPopover: Bool
 
     @State private var sessionSearchText = ""
     @State private var searchedSessions: [ChatSession] = []
+    @State private var modelsExpanded = false
+    @FocusState private var sessionSearchFocused: Bool
 
     private var sessionsToShow: [ChatSession] {
         sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? appModel.sessions
+            ? appModel.filteredSessions
             : searchedSessions
     }
 
@@ -152,41 +132,67 @@ struct ModelSidebarView: View {
         @Bindable var model = appModel
 
         List {
-            Section("Yüklü Modeller") {
-                if model.installedModels.isEmpty {
-                    ContentUnavailableView {
-                        Label("Model yok", systemImage: "brain")
-                    } description: {
-                        Text("Katalogdan model indirin veya GGUF dosyası içe aktarın.")
-                    } actions: {
-                        Button("Model Ekle") { model.showCatalog = true }
+            Section {
+                sidebarNavRow("square.and.pencil", title: "Yeni Sohbet", shortcut: "⌘N") {
+                    Task { await model.newChat() }
+                }
+                sidebarNavRow("folder.badge.plus", title: "Yeni Proje", shortcut: "⌘P") {
+                    model.showNewProjectSheet = true
+                }
+                sidebarNavRow("magnifyingglass", title: "Ara", shortcut: "⌘K") {
+                    sessionSearchFocused = true
+                }
+                sidebarNavRow("square.grid.2x2", title: "Hub") {
+                    model.showCatalog = true
+                }
+                sidebarNavRow("gearshape", title: "Ayarlar", shortcut: "⌘,") {
+                    openSettings()
+                }
+            }
+
+            if !model.projects.isEmpty {
+                Section("Projeler") {
+                    Button {
+                        model.selectedProjectId = nil
+                    } label: {
+                        HStack {
+                            Image(systemName: "tray.full")
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.secondaryText)
+                            Text("Tüm sohbetler")
+                                .foregroundStyle(AppTheme.primaryText)
+                            Spacer()
+                            if model.selectedProjectId == nil {
+                                Image(systemName: "checkmark")
+                                    .font(.caption)
+                                    .foregroundStyle(AppTheme.accent)
+                            }
+                        }
                     }
-                } else {
-                    ForEach(model.installedModels) { installed in
-                        let isSelected = model.selectedModelId == installed.id
-                        let isLoaded = isSelected
-                            && inferenceService.isModelLoaded
-                            && inferenceService.loadedModelId == installed.id
-                        ModelRowView(
-                            model: installed,
-                            isSelected: isSelected,
-                            isLoadedInMemory: isLoaded,
-                            onUnload: { Task { await model.unloadCurrentModel() } }
-                        )
+                    .buttonStyle(.plain)
+
+                    ForEach(model.projects) { project in
+                        HStack(spacing: 8) {
+                            Image(systemName: "folder")
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.secondaryText)
+                            Text(project.name)
+                                .lineLimit(1)
+                                .fontWeight(model.selectedProjectId == project.id ? .semibold : .regular)
+                            Spacer()
+                            if model.selectedProjectId == project.id {
+                                Circle()
+                                    .fill(AppTheme.accent)
+                                    .frame(width: 6, height: 6)
+                            }
+                        }
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            model.selectedModelId = installed.id
+                            model.selectedProjectId = project.id
                         }
                         .contextMenu {
-                            if isLoaded {
-                                Button {
-                                    Task { await model.unloadCurrentModel() }
-                                } label: {
-                                    Label("Bellekten Çıkar", systemImage: "eject")
-                                }
-                            }
-                            Button("Diskten Sil", role: .destructive) {
-                                modelToDelete = installed
+                            Button("Sil", role: .destructive) {
+                                model.deleteProject(project)
                             }
                         }
                     }
@@ -196,44 +202,47 @@ struct ModelSidebarView: View {
             Section("Sohbetler") {
                 TextField("Sohbetlerde ara…", text: $sessionSearchText)
                     .textFieldStyle(.roundedBorder)
+                    .focused($sessionSearchFocused)
                     .onChange(of: sessionSearchText) { _, query in
                         performSessionSearch(query: query)
                     }
 
                 if model.sessions.isEmpty {
-                    Text("Henüz kayıtlı sohbet yok")
+                    Text("Henüz sohbet yok")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
                 } else if sessionsToShow.isEmpty {
-                    Text("Eşleşen sohbet yok")
+                    Text("Eşleşme yok")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.secondaryText)
                 } else {
                     ForEach(sessionsToShow) { session in
                         HStack(spacing: 8) {
                             Text(session.title)
                                 .lineLimit(1)
+                                .fontWeight(session.id == model.currentSession.id ? .semibold : .regular)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     Task { await model.loadSession(session) }
                                 }
                             if session.id == model.currentSession.id {
-                                Image(systemName: "checkmark")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Circle()
+                                    .fill(AppTheme.accent)
+                                    .frame(width: 6, height: 6)
                             }
-                            Button {
-                                sessionToDelete = session
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(.caption)
-                            }
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(.secondary)
-                            .help("Sohbeti sil")
                         }
                         .contextMenu {
+                            Menu("Projeye taşı") {
+                                Button("Proje yok") {
+                                    Task { await model.assignSession(session.id, to: nil) }
+                                }
+                                ForEach(model.projects) { project in
+                                    Button(project.name) {
+                                        Task { await model.assignSession(session.id, to: project.id) }
+                                    }
+                                }
+                            }
                             Button("Sil", role: .destructive) {
                                 sessionToDelete = session
                             }
@@ -243,11 +252,39 @@ struct ModelSidebarView: View {
             }
 
             Section {
-                LabeledContent("Disk kullanımı", value: model.diskUsageFormatted)
+                DisclosureGroup("Modeller", isExpanded: $modelsExpanded) {
+                    if model.installedModels.isEmpty {
+                        Button("Model Hub…") { model.showCatalog = true }
+                            .font(.caption)
+                    } else {
+                        ForEach(model.installedModels) { installed in
+                            ModelRowView(
+                                model: installed,
+                                isSelected: model.selectedModelId == installed.id,
+                                isLoadedInMemory: model.selectedModelId == installed.id
+                                    && inferenceService.isModelLoaded
+                                    && inferenceService.loadedModelId == installed.id,
+                                onUnload: { Task { await model.unloadCurrentModel() } }
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                model.selectedModelId = installed.id
+                            }
+                            .contextMenu {
+                                Button("Diskten Sil", role: .destructive) {
+                                    modelToDelete = installed
+                                }
+                            }
+                        }
+                    }
+                    LabeledContent("Disk", value: model.diskUsageFormatted)
+                        .font(.caption)
+                }
             }
         }
         .listStyle(.sidebar)
         .navigationTitle("MacLLM")
+        .background(AppTheme.sidebarBackground)
         .onChange(of: model.sessions.count) { _, _ in
             if !sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 performSessionSearch(query: sessionSearchText)
@@ -257,10 +294,43 @@ struct ModelSidebarView: View {
             guard let newId,
                   let installed = model.installedModels.first(where: { $0.id == newId }) else { return }
             if inferenceService.loadedModelId == newId, inferenceService.isModelLoaded {
+                Task { await model.refreshContextTokenCount() }
                 return
             }
-            Task { await model.selectModel(installed) }
+            Task {
+                await model.selectModel(installed)
+                await model.refreshContextTokenCount()
+            }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .focusSidebarSearch)) { _ in
+            sessionSearchFocused = true
+        }
+    }
+
+    private func sidebarNavRow(
+        _ icon: String,
+        title: String,
+        shortcut: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 20)
+                    .foregroundStyle(AppTheme.secondaryText)
+                Text(title)
+                    .foregroundStyle(AppTheme.primaryText)
+                Spacer()
+                if let shortcut {
+                    Text(shortcut)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText.opacity(0.7))
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .buttonStyle(.plain)
     }
 
     private func performSessionSearch(query: String) {
@@ -272,7 +342,11 @@ struct ModelSidebarView: View {
         Task {
             let summaries = (try? ChatHistoryStore.shared.searchSessionSummaries(matching: trimmed)) ?? []
             await MainActor.run {
-                searchedSessions = summaries.map { $0.asEmptySession() }
+                var results = summaries.map { $0.asEmptySession() }
+                if let projectId = appModel.selectedProjectId {
+                    results = results.filter { $0.projectId == projectId }
+                }
+                searchedSessions = results
             }
         }
     }
@@ -300,34 +374,20 @@ struct ModelRowView: View {
         HStack(spacing: AppTheme.rowSpacing) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.name)
-                    .fontWeight(isSelected ? .semibold : .regular)
+                    .font(.caption.weight(isSelected ? .semibold : .regular))
                     .lineLimit(2)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.secondaryText)
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
             if isLoadedInMemory {
-                Button {
-                    onUnload?()
-                } label: {
-                    Image(systemName: "eject.fill")
-                        .font(.caption)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.orange)
-                .help("Bellekten çıkar")
-            } else if isSelected {
-                Image(systemName: "circle.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .help("Seçili — belleğe almak için dokunun")
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
             }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
-        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius))
+        .padding(.vertical, 2)
     }
 }

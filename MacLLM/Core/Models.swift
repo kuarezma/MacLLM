@@ -158,6 +158,7 @@ struct ChatSession: Codable, Identifiable {
     var id: UUID
     var title: String
     var modelId: String?
+    var projectId: UUID?
     var messages: [ChatMessage]
     var createdAt: Date
     var updatedAt: Date
@@ -166,6 +167,7 @@ struct ChatSession: Codable, Identifiable {
         id: UUID = UUID(),
         title: String = "Yeni sohbet",
         modelId: String? = nil,
+        projectId: UUID? = nil,
         messages: [ChatMessage] = [],
         createdAt: Date = .now,
         updatedAt: Date = .now
@@ -173,9 +175,25 @@ struct ChatSession: Codable, Identifiable {
         self.id = id
         self.title = title
         self.modelId = modelId
+        self.projectId = projectId
         self.messages = messages
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, modelId, projectId, messages, createdAt, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        modelId = try c.decodeIfPresent(String.self, forKey: .modelId)
+        projectId = try c.decodeIfPresent(UUID.self, forKey: .projectId)
+        messages = try c.decode([ChatMessage].self, forKey: .messages)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
     }
 }
 

@@ -32,6 +32,16 @@ struct MacLLMApp: App {
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
+            CommandGroup(after: .sidebar) {
+                Button("Sohbetlerde Ara") {
+                    NotificationCenter.default.post(name: .focusSidebarSearch, object: nil)
+                }
+                .keyboardShortcut("k", modifiers: [.command])
+                Button("Yeni Proje") {
+                    appModel.showNewProjectSheet = true
+                }
+                .keyboardShortcut("p", modifiers: [.command])
+            }
             CommandGroup(after: .appSettings) {
                 Button("Model Ekle…") {
                     appModel.showCatalog = true

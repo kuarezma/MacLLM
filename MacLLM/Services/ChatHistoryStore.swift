@@ -5,6 +5,7 @@ struct ChatSessionSummary: Codable, Identifiable, Hashable {
     var id: UUID
     var title: String
     var modelId: String?
+    var projectId: UUID?
     var createdAt: Date
     var updatedAt: Date
 
@@ -12,8 +13,23 @@ struct ChatSessionSummary: Codable, Identifiable, Hashable {
         id = session.id
         title = session.title
         modelId = session.modelId
+        projectId = session.projectId
         createdAt = session.createdAt
         updatedAt = session.updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, modelId, projectId, createdAt, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        modelId = try c.decodeIfPresent(String.self, forKey: .modelId)
+        projectId = try c.decodeIfPresent(UUID.self, forKey: .projectId)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
     }
 
     func asEmptySession() -> ChatSession {
@@ -21,6 +37,7 @@ struct ChatSessionSummary: Codable, Identifiable, Hashable {
             id: id,
             title: title,
             modelId: modelId,
+            projectId: projectId,
             messages: [],
             createdAt: createdAt,
             updatedAt: updatedAt

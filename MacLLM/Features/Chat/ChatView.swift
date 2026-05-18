@@ -14,88 +14,39 @@ struct ChatView: View {
         @Bindable var model = appModel
 
         VStack(spacing: 0) {
+            ChatHeaderView()
+
             if model.selectedModel == nil {
-                ContentUnavailableView {
-                    Label("Model seçilmedi", systemImage: "cpu")
-                } description: {
-                    Text("Sol panelden bir model seçin veya katalogdan yeni model ekleyin.")
-                } actions: {
-                    Button("Model Ekle…") { model.showCatalog = true }
-                }
+                emptyState(
+                    title: "Model seçin",
+                    description: "Üstten model seçin veya Hub'dan indirin.",
+                    actionTitle: "Model Hub",
+                    action: { model.showCatalog = true }
+                )
             } else if model.isLoadingModel {
-                ContentUnavailableView {
-                    Label("Model hazırlanıyor", systemImage: "cpu")
-                } description: {
-                    Text("Çıkarım motoru yükleniyor. Birkaç saniye sürebilir.")
-                } actions: {
-                    ProgressView().controlSize(.regular)
-                }
+                emptyState(
+                    title: "Model hazırlanıyor",
+                    description: "Çıkarım motoru yükleniyor…",
+                    actionTitle: nil,
+                    action: nil
+                )
             } else if !inferenceService.isModelLoaded {
-                ContentUnavailableView {
-                    Label("Model bellekte değil", systemImage: "eject")
-                } description: {
-                    Text("\(model.selectedModel?.name ?? "Model") diskte yüklü; sohbet için belleğe alın.")
-                } actions: {
-                    if let selected = model.selectedModel {
-                        Button("Yeniden Yükle") {
+                emptyState(
+                    title: "Model bellekte değil",
+                    description: "\(model.selectedModel?.name ?? "Model") sohbet için yüklenmeli.",
+                    actionTitle: "Yeniden Yükle",
+                    action: {
+                        if let selected = model.selectedModel {
                             Task { await model.selectModel(selected) }
                         }
-                        .buttonStyle(.borderedProminent)
                     }
-                }
+                )
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: AppTheme.messageSpacing) {
-                            if model.currentSession.messages.isEmpty {
-                                ContentUnavailableView {
-                                    Label("Sohbet başlatın", systemImage: "bubble.left.and.bubble.right")
-                                } description: {
-                                    Text("Aşağıya mesaj yazın. Yanıtlar yerel olarak üretilir.")
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 40)
-                            }
-                            ForEach(messagesToShow(model: model)) { message in
-                                let isLastAssistant = message.role == .assistant
-                                    && message.id == model.currentSession.messages.last?.id
-                                let isGeneratingReply = inferenceService.isGenerating && isLastAssistant
-                                MessageRow(
-                                    message: message,
-                                    sessionId: model.currentSession.id,
-                                    showsTypingIndicator: isGeneratingReply && message.content.isEmpty,
-                                    isStreaming: isGeneratingReply && !message.content.isEmpty
-                                )
-                                .id(message.id)
-                            }
-                        }
-                        .padding(AppTheme.contentPadding)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .onChange(of: model.currentSession.messages.count) { _, _ in
-                        scrollToBottom(proxy: proxy, animated: true)
-                    }
-                    .onChange(of: model.currentSession.messages.last?.content) { _, _ in
-                        if messageSearchNeedle.isEmpty {
-                            scrollToBottom(proxy: proxy, animated: false)
-                        }
-                    }
-                    .onChange(of: messageSearchText) { _, _ in
-                        searchMatchIndex = 0
-                        scrollToSearchMatch(proxy: proxy)
-                    }
-                    .onChange(of: searchMatchIndex) { _, _ in
-                        scrollToSearchMatch(proxy: proxy)
-                    }
-                }
-
-                Divider()
-
-                chatInputBar(model: model)
+                chatContent(model: model)
             }
         }
-        .navigationTitle(model.selectedModel?.name ?? "Sohbet")
-        .navigationSubtitle(navigationSubtitle)
+        .background(AppTheme.chatBackground)
+        .navigationTitle("")
         .searchable(text: $messageSearchText, prompt: "Bu sohbette ara")
         .toolbar {
             if !matchingMessageIds.isEmpty {
@@ -103,22 +54,245 @@ struct ChatView: View {
                     Text("\(searchMatchIndex + 1)/\(matchingMessageIds.count)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button {
-                        stepSearchMatch(delta: -1)
-                    } label: {
+                    Button { stepSearchMatch(delta: -1) } label: {
                         Image(systemName: "chevron.up")
                     }
-                    .help("Önceki eşleşme")
-                    Button {
-                        stepSearchMatch(delta: 1)
-                    } label: {
+                    Button { stepSearchMatch(delta: 1) } label: {
                         Image(systemName: "chevron.down")
                     }
-                    .help("Sonraki eşleşme")
                 }
             }
         }
         .onAppear { inputFocused = true }
+    }
+
+    @ViewBuilder
+    private func chatContent(model: AppModel) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: AppTheme.messageSpacing) {
+                    if model.currentSession.messages.isEmpty {
+                        VStack(spacing: 20) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.system(size: 40))
+                                .foregroundStyle(AppTheme.secondaryText.opacity(0.5))
+                            Text("Bir şey sorun…")
+                                .font(.title2.weight(.medium))
+                                .foregroundStyle(AppTheme.primaryText)
+                            Text("Yanıtlar cihazınızda yerel olarak üretilir.")
+                                .font(.subheadline)
+                                .foregroundStyle(AppTheme.secondaryText)
+
+                            QuickPromptChips(prompts: QuickPromptChips.defaults) { prompt in
+                                Task { await model.sendMessage(prompt) }
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 48)
+                        .padding(.bottom, 40)
+                    }
+
+                    ForEach(messagesToShow(model: model)) { message in
+                        let isLastAssistant = message.role == .assistant
+                            && message.id == model.currentSession.messages.last?.id
+                        let isGeneratingReply = inferenceService.isGenerating && isLastAssistant
+                        MessageRow(
+                            message: message,
+                            sessionId: model.currentSession.id,
+                            showsTypingIndicator: isGeneratingReply && message.content.isEmpty,
+                            isStreaming: isGeneratingReply && !message.content.isEmpty,
+                            generationStats: stats(for: message, isLastAssistant: isLastAssistant)
+                        )
+                        .id(message.id)
+                    }
+                }
+                .padding(.horizontal, AppTheme.contentPadding)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
+            }
+            .onChange(of: model.currentSession.messages.count) { _, _ in
+                scrollToBottom(proxy: proxy, animated: true)
+                model.scheduleContextTokenRefresh()
+            }
+            .onChange(of: model.currentSession.messages.last?.content) { _, _ in
+                if messageSearchNeedle.isEmpty {
+                    scrollToBottom(proxy: proxy, animated: false)
+                }
+                model.scheduleContextTokenRefresh()
+            }
+            .onChange(of: messageSearchText) { _, _ in
+                searchMatchIndex = 0
+                scrollToSearchMatch(proxy: proxy)
+            }
+            .onChange(of: searchMatchIndex) { _, _ in
+                scrollToSearchMatch(proxy: proxy)
+            }
+            .onChange(of: inferenceService.isGenerating) { _, isGenerating in
+                if !isGenerating {
+                    model.scheduleContextTokenRefresh()
+                }
+            }
+            .task {
+                await model.refreshContextTokenCount()
+            }
+        }
+
+        janComposer(model: model)
+    }
+
+    @ViewBuilder
+    private func janComposer(model: AppModel) -> some View {
+        VStack(spacing: 0) {
+            if !pendingAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pendingAttachments) { attachment in
+                            PendingAttachmentChip(attachment: attachment) {
+                                pendingAttachments.removeAll { $0.id == attachment.id }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.contentPadding)
+                    .padding(.top, 10)
+                }
+            }
+
+            HStack(alignment: .bottom, spacing: 12) {
+                composerField(model: model)
+                ContextUsageView(
+                    usedTokens: model.contextTokenCount,
+                    maxTokens: Int(model.settings.contextLength),
+                    isEstimate: model.contextTokenCountIsEstimate
+                )
+                sendButton(model: model)
+            }
+            .padding(.horizontal, AppTheme.contentPadding)
+            .padding(.vertical, 14)
+        }
+        .background(AppTheme.chatBackground)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(height: 1)
+        }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            handleDrop(providers, model: model)
+        }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: ChatAttachmentImporter.contentTypes,
+            allowsMultipleSelection: true
+        ) { result in
+            importFiles(result, model: model)
+        }
+    }
+
+    @ViewBuilder
+    private func composerField(model: AppModel) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 4) {
+                composerIconButton("plus", help: "Dosya ekle") {
+                    showFileImporter = true
+                }
+                .disabled(inferenceService.isGenerating)
+
+                TextField("Bir şey sorun…", text: $inputText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...12)
+                    .focused($inputFocused)
+                    .disabled(inferenceService.isGenerating)
+                    .onSubmit {
+                        guard !inferenceService.isGenerating else { return }
+                        send()
+                    }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+
+            HStack {
+                ComposerToolsView(isDisabled: inferenceService.isGenerating)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.composerBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.composerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.composerRadius, style: .continuous)
+                .strokeBorder(AppTheme.border, lineWidth: 1)
+        )
+    }
+
+    private func composerIconButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(AppTheme.secondaryText)
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    @ViewBuilder
+    private func sendButton(model: AppModel) -> some View {
+        if inferenceService.isGenerating {
+            Button {
+                Task { await model.stopGenerationAndWait() }
+            } label: {
+                Image(systemName: "stop.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(AppTheme.accent)
+            }
+            .buttonStyle(.plain)
+            .help("Durdur")
+            .keyboardShortcut(.escape, modifiers: [])
+        } else {
+            Button(action: send) {
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(canSend ? AppTheme.accent : AppTheme.secondaryText.opacity(0.4))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .keyboardShortcut(.return, modifiers: [.command])
+        }
+    }
+
+    private var canSend: Bool {
+        (!inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty)
+            && !appModel.isLoadingModel
+            && inferenceService.isModelLoaded
+    }
+
+    private func stats(for message: ChatMessage, isLastAssistant: Bool) -> GenerationStats? {
+        guard message.role == .assistant, isLastAssistant, !inferenceService.isGenerating else { return nil }
+        return inferenceService.lastGenerationStats
+    }
+
+    private func emptyState(
+        title: String,
+        description: String,
+        actionTitle: String?,
+        action: (() -> Void)?
+    ) -> some View {
+        VStack {
+            Spacer()
+            ContentUnavailableView {
+                Label(title, systemImage: "cpu")
+            } description: {
+                Text(description)
+            } actions: {
+                if let actionTitle, let action {
+                    Button(actionTitle, action: action)
+                        .buttonStyle(.borderedProminent)
+                        .tint(AppTheme.accent)
+                }
+            }
+            Spacer()
+        }
     }
 
     private var messageSearchNeedle: String {
@@ -156,109 +330,10 @@ struct ChatView: View {
         }
     }
 
-    @ViewBuilder
-    private func chatInputBar(model: AppModel) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !pendingAttachments.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(pendingAttachments) { attachment in
-                            PendingAttachmentChip(attachment: attachment) {
-                                pendingAttachments.removeAll { $0.id == attachment.id }
-                            }
-                        }
-                    }
-                }
-            }
-
-            HStack(alignment: .bottom, spacing: 10) {
-                HStack(alignment: .bottom, spacing: 4) {
-                    Button {
-                        showFileImporter = true
-                    } label: {
-                        Image(systemName: "paperclip")
-                            .font(.system(size: 18, weight: .medium))
-                            .frame(width: 36, height: 36)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(inferenceService.isGenerating)
-                    .help("Dosya ekle (görüntü, ses, video, belge)")
-
-                    TextField("Mesajınızı yazın…", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(1...12)
-                        .focused($inputFocused)
-                        .disabled(inferenceService.isGenerating)
-                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .topLeading)
-                        .padding(.vertical, 8)
-                        .padding(.trailing, 8)
-                        .onSubmit {
-                            guard !inferenceService.isGenerating else { return }
-                            send()
-                        }
-                }
-                .padding(.leading, 6)
-                .padding(.trailing, 4)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.panelRadius)
-                        .fill(Color(nsColor: .textBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.panelRadius)
-                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-                )
-
-                Group {
-                    if inferenceService.isGenerating {
-                        Button("Yanıtı Durdur") {
-                            Task { await model.stopGenerationAndWait() }
-                        }
-                        .keyboardShortcut(.escape, modifiers: [])
-                    } else {
-                        Button {
-                            send()
-                        } label: {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 32))
-                                .frame(width: 44, height: 44)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Gönder")
-                        .help("Gönder (⌘↩)")
-                        .disabled(
-                            (inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                && pendingAttachments.isEmpty)
-                                || model.isLoadingModel
-                                || !inferenceService.isModelLoaded
-                        )
-                        .keyboardShortcut(.return, modifiers: [.command])
-                    }
-                }
-                .frame(width: 52, height: 44, alignment: .bottom)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(.bar)
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            handleDrop(providers, model: model)
-        }
-        .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: ChatAttachmentImporter.contentTypes,
-            allowsMultipleSelection: true
-        ) { result in
-            importFiles(result, model: model)
-        }
-    }
-
     private func importFiles(_ result: Result<[URL], Error>, model: AppModel) {
         switch result {
         case .failure(let error):
             model.setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
-            return
         case .success(let urls):
             Task { @MainActor in
                 for url in urls {
@@ -292,19 +367,6 @@ struct ChatView: View {
             }
         }
         return true
-    }
-
-    private var navigationSubtitle: String {
-        if inferenceService.isGenerating {
-            return "Yanıt üretiliyor…"
-        }
-        if !messageSearchNeedle.isEmpty {
-            let count = matchingMessageIds.count
-            return count == 0
-                ? "Eşleşme yok"
-                : "\(count) eşleşme · \(appModel.currentSession.title)"
-        }
-        return appModel.currentSession.title
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool) {

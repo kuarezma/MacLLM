@@ -44,18 +44,22 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.13.1)
+### Bu sürümde (1.14.0)
 
-- Hub quant tablosunda gerçek dosya boyutları (GB) — Hugging Face tree API
-- “Sıfır KB” gösterimi düzeltildi; indirme ilerlemesi doğru toplam boyut kullanır
+- Jan.ai tarzı arayüz: kenar çubuğu nav, ortalanmış model seçici, sohbet balonları
+- Bağlam halkası — llama tokenizer ile gerçek prompt token sayımı
+- Mesaj işlemleri: kopyala, düzenle, yeniden üret, sil; düşünme bloğu katlanır
+- Üretim istatistiği (token/sn); kod bloğu kopyala
+- **Projeler** (⌘P): sohbet gruplama; hızlı prompt chip’leri
+- Sistem istemi sheet; sohbeti Markdown olarak dışa aktar; ⌘K arama
 
 ### Önceki (1.13)
 
-- Hub arama, sütun sıralama, yüklü model için **Kullan**, canlı sonuç filtresi
+- Hub dosya boyutları (HF tree API); arama, sıralama, **Kullan**
 
 ### Önceki (1.11–1.12)
 
-- Model Hub arayüzü, quant filtreleri, README Markdown, indirme popover
+- Model Hub arayüzü, quant filtreleri, README Markdown
 
 ### Önceki (1.8–1.10)
 

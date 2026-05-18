@@ -16,14 +16,22 @@ final class AppModel {
     var statusMessage: String?
     var isLoadingModel = false
     var showCatalog = false
+    var showNewProjectSheet = false
+    var showSystemPromptSheet = false
+    var projects: [ChatProject] = []
+    var selectedProjectId: UUID?
+    var contextTokenCount: Int = 0
+    var contextTokenCountIsEstimate = true
 
     private let modelStore = ModelStore.shared
     private var statusClearTask: Task<Void, Never>?
+    private var contextRefreshTask: Task<Void, Never>?
     private let catalogService = ModelCatalogService.shared
     private let recommendationService = ModelRecommendationService.shared
     private let downloadService = HuggingFaceDownloadService.shared
     private let inferenceService = InferenceService.shared
     private let chatStore = ChatHistoryStore.shared
+    private let projectStore = ChatProjectStore.shared
     private var modelLoadGeneration: UInt = 0
 
     var selectedModel: InstalledModel? {
@@ -44,6 +52,16 @@ final class AppModel {
         return ByteCountFormatter.string(fromByteCount: used, countStyle: .file)
     }
 
+    var filteredSessions: [ChatSession] {
+        guard let selectedProjectId else { return sessions }
+        return sessions.filter { $0.projectId == selectedProjectId }
+    }
+
+    func projectName(for id: UUID?) -> String? {
+        guard let id else { return nil }
+        return projects.first(where: { $0.id == id })?.name
+    }
+
     init() {
         currentSession = ChatSession()
         Task { await bootstrap() }
@@ -61,6 +79,7 @@ final class AppModel {
                 profile: systemProfile
             )
             sessions = try chatStore.loadSessionIndex()
+            projects = (try? projectStore.load()) ?? []
             if let saved = UserDefaults.standard.data(forKey: "inferenceSettings"),
                let decoded = try? JSONDecoder().decode(InferenceSettings.self, from: saved) {
                 settings = decoded
@@ -311,8 +330,71 @@ final class AppModel {
         if !currentSession.messages.isEmpty {
             try? await saveCurrentSession()
         }
-        currentSession = ChatSession(modelId: selectedModelId)
+        currentSession = ChatSession(modelId: selectedModelId, projectId: selectedProjectId)
         setStatusMessage(nil)
+    }
+
+    func createProject(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let project = ChatProject(name: trimmed)
+        do {
+            try projectStore.save(project)
+            projects.insert(project, at: 0)
+            selectedProjectId = project.id
+            currentSession.projectId = project.id
+            setStatusMessage("Proje oluşturuldu: \(trimmed)")
+        } catch {
+            setStatusMessage(error.localizedDescription, persistent: true)
+        }
+    }
+
+    func deleteProject(_ project: ChatProject) {
+        do {
+            try projectStore.delete(id: project.id)
+            projects.removeAll { $0.id == project.id }
+            if selectedProjectId == project.id {
+                selectedProjectId = nil
+            }
+            for session in sessions where session.projectId == project.id {
+                if var full = try? chatStore.loadSession(id: session.id) {
+                    full.projectId = nil
+                    try? chatStore.saveSession(full)
+                }
+            }
+            for index in sessions.indices where sessions[index].projectId == project.id {
+                sessions[index].projectId = nil
+            }
+            if currentSession.projectId == project.id {
+                currentSession.projectId = nil
+            }
+            setStatusMessage("Proje silindi")
+        } catch {
+            setStatusMessage(error.localizedDescription, persistent: true)
+        }
+    }
+
+    func assignSession(_ sessionId: UUID, to projectId: UUID?) async {
+        guard var session = try? chatStore.loadSession(id: sessionId) else { return }
+        session.projectId = projectId
+        try? chatStore.saveSession(session)
+        if let index = sessions.firstIndex(where: { $0.id == sessionId }) {
+            sessions[index].projectId = projectId
+        }
+        if currentSession.id == sessionId {
+            currentSession.projectId = projectId
+        }
+        if let projectId, var project = projects.first(where: { $0.id == projectId }) {
+            project.updatedAt = .now
+            try? projectStore.save(project)
+            if let pIndex = projects.firstIndex(where: { $0.id == projectId }) {
+                projects[pIndex] = project
+            }
+        }
+    }
+
+    func exportCurrentSessionMarkdown() -> String {
+        ChatExporter.markdown(for: currentSession, modelName: selectedModel?.name)
     }
 
     func saveCurrentSession() async throws {
@@ -345,9 +427,15 @@ final class AppModel {
         }
     }
 
-    func sendMessage(_ text: String, pendingAttachments: [MessageAttachment] = []) async {
+    func sendMessage(
+        _ text: String,
+        pendingAttachments: [MessageAttachment] = [],
+        appendUserMessage: Bool = true
+    ) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || !pendingAttachments.isEmpty else { return }
+        if appendUserMessage {
+            guard !trimmed.isEmpty || !pendingAttachments.isEmpty else { return }
+        }
         guard !inferenceService.isGenerating else {
             setStatusMessage("Önce mevcut yanıtın bitmesini bekleyin veya «Yanıtı Durdur» kullanın.")
             return
@@ -429,10 +517,12 @@ final class AppModel {
             }
         }
 
-        let displayText = trimmed.isEmpty ? attachments.map(\.fileName).joined(separator: ", ") : trimmed
-        currentSession.messages.append(
-            ChatMessage(role: .user, content: displayText, attachments: attachments)
-        )
+        if appendUserMessage {
+            let displayText = trimmed.isEmpty ? attachments.map(\.fileName).joined(separator: ", ") : trimmed
+            currentSession.messages.append(
+                ChatMessage(role: .user, content: displayText, attachments: attachments)
+            )
+        }
         let assistantIndex = currentSession.messages.count
         let assistantMessageId = UUID()
         currentSession.messages.append(
@@ -509,6 +599,84 @@ final class AppModel {
 
     func stopGenerationAndWait() async {
         await inferenceService.stopGeneration()
+    }
+
+    func estimatedContextTokens() -> Int {
+        currentSession.messages.reduce(0) { partial, message in
+            let attachmentCost = message.attachments.reduce(0) { sum, attachment in
+                sum + (attachment.extractedText?.count ?? 0) / 4 + 64
+            }
+            return partial + max(1, message.content.count / 3 + attachmentCost)
+        }
+    }
+
+    func scheduleContextTokenRefresh() {
+        contextRefreshTask?.cancel()
+        contextRefreshTask = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            await refreshContextTokenCount()
+        }
+    }
+
+    func refreshContextTokenCount() async {
+        guard let model = selectedModel, inferenceService.isModelLoaded else {
+            contextTokenCount = estimatedContextTokens()
+            contextTokenCountIsEstimate = true
+            return
+        }
+        let trimmed = Self.trimMessagesForContext(
+            currentSession.messages,
+            maxContextTokens: Int(settings.contextLength)
+        )
+        do {
+            contextTokenCount = try await inferenceService.countPromptTokens(
+                messages: trimmed,
+                chatTemplate: model.chatTemplate,
+                sessionId: currentSession.id
+            )
+            contextTokenCountIsEstimate = false
+        } catch {
+            contextTokenCount = estimatedContextTokens()
+            contextTokenCountIsEstimate = true
+        }
+    }
+
+    func editUserMessage(id: UUID, newText: String) async {
+        await stopGenerationAndWait()
+        guard let index = currentSession.messages.firstIndex(where: { $0.id == id }),
+              currentSession.messages[index].role == .user else { return }
+        let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let attachments = currentSession.messages[index].attachments
+        currentSession.messages[index].content = trimmed
+        if index + 1 < currentSession.messages.count {
+            currentSession.messages.removeSubrange((index + 1)...)
+        }
+        await sendMessage(trimmed, pendingAttachments: attachments, appendUserMessage: false)
+    }
+
+    func deleteMessage(id: UUID) async {
+        await stopGenerationAndWait()
+        guard let index = currentSession.messages.firstIndex(where: { $0.id == id }) else { return }
+        currentSession.messages.remove(at: index)
+        try? await saveCurrentSession()
+    }
+
+    func regenerate(from messageId: UUID) async {
+        await stopGenerationAndWait()
+        guard let index = currentSession.messages.firstIndex(where: { $0.id == messageId }) else { return }
+        let message = currentSession.messages[index]
+        guard message.role == .assistant else { return }
+
+        currentSession.messages.removeSubrange(index...)
+        guard let userMessage = currentSession.messages.last(where: { $0.role == .user }) else { return }
+        await sendMessage(
+            userMessage.content,
+            pendingAttachments: userMessage.attachments,
+            appendUserMessage: false
+        )
     }
 
     private static func trimMessagesForContext(_ messages: [ChatMessage], maxContextTokens: Int) -> [ChatMessage] {

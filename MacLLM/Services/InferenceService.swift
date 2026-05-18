@@ -7,6 +7,7 @@ final class InferenceService: ObservableObject {
     @Published private(set) var isModelLoaded = false
     @Published private(set) var loadedModelId: String?
     @Published private(set) var isGenerating = false
+    @Published private(set) var lastGenerationStats: GenerationStats?
     @Published var settings: InferenceSettings = .default
 
     private var llamaContext: LlamaContext?
@@ -72,8 +73,12 @@ final class InferenceService: ObservableObject {
             Task { @MainActor in
                 await self.stopGeneration()
                 self.generationTask = Task.detached(priority: .userInitiated) {
+                let started = Date()
                 do {
-                    await MainActor.run { self.isGenerating = true }
+                    await MainActor.run {
+                        self.isGenerating = true
+                        self.lastGenerationStats = nil
+                    }
                     defer {
                         Task { @MainActor in
                             self.isGenerating = false
@@ -110,6 +115,17 @@ final class InferenceService: ObservableObject {
                     if !tail.isEmpty {
                         continuation.yield(tail)
                     }
+
+                    let snapshot = await llamaContext.generationSnapshot()
+                    let duration = max(Date().timeIntervalSince(started), 0.001)
+                    let tps = Double(snapshot.outputTokens) / duration
+                    await MainActor.run {
+                        self.lastGenerationStats = GenerationStats(
+                            outputTokens: snapshot.outputTokens,
+                            tokensPerSecond: tps,
+                            durationSeconds: duration
+                        )
+                    }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -117,5 +133,22 @@ final class InferenceService: ObservableObject {
                 }
             }
         }
+    }
+
+    func countPromptTokens(
+        messages: [ChatMessage],
+        chatTemplate: String,
+        sessionId: UUID
+    ) async throws -> Int {
+        guard let llamaContext else {
+            throw LlamaError.couldNotInitializeContext
+        }
+        let payload = InferenceMessageBuilder.build(messages: messages, sessionId: sessionId)
+        let promptMessages = Self.messagesWithSystem(payload.messages, systemPrompt: settings.systemPrompt)
+        let prompt = try await llamaContext.applyChatTemplate(
+            messages: promptMessages,
+            templateName: chatTemplate
+        )
+        return await llamaContext.countTokens(in: prompt, addBos: true)
     }
 }

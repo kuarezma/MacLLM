@@ -20,22 +20,7 @@ struct MessageMarkdownView: View {
                         ProseMarkdownView(text: prose)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     case .code(let language, let code):
-                        VStack(alignment: .leading, spacing: 4) {
-                            if let language, !language.isEmpty {
-                                Text(language)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                Text(code)
-                                    .font(.system(.body, design: .monospaced))
-                                    .textSelection(.enabled)
-                                    .padding(10)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .background(Color.primary.opacity(0.06))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
+                        CodeBlockView(language: language, code: code)
                     }
                 }
             }
@@ -52,5 +37,4 @@ struct MessageMarkdownView: View {
             }
         }
     }
-
 }

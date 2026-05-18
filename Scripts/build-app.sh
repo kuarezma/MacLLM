@@ -78,6 +78,9 @@ SOURCES=(
   MacLLM/Core/MarkdownContentParser.swift
   MacLLM/Core/HubFileListLogic.swift
   MacLLM/Core/HFModelTypes.swift
+  MacLLM/Core/AppNotifications.swift
+  MacLLM/Core/GenerationStats.swift
+  MacLLM/Core/ReasoningContentSplitter.swift
   MacLLM/Services/AppUpdateService.swift
   MacLLM/Services/ModelStore.swift
   MacLLM/Services/ModelCatalogService.swift
@@ -94,6 +97,7 @@ SOURCES=(
   MacLLM/Services/HuggingFaceHubService.swift
   MacLLM/Services/HuggingFaceCredentials.swift
   MacLLM/Services/ChatHistoryStore.swift
+  MacLLM/Services/ChatProjectStore.swift
   MacLLM/Services/InferenceService.swift
   MacLLM/Services/InferenceMessageBuilder.swift
   MacLLM/Services/AttachmentStore.swift
@@ -102,8 +106,15 @@ SOURCES=(
   MacLLM/Bridge/LibLlama.swift
   MacLLM/Bridge/LibMtmd.swift
   MacLLM/Features/Main/MainView.swift
+  MacLLM/Features/Main/NewProjectSheet.swift
   MacLLM/Features/Main/AppUpdateBannerView.swift
   MacLLM/Features/Chat/ChatView.swift
+  MacLLM/Features/Chat/ChatHeaderView.swift
+  MacLLM/Features/Chat/ContextUsageView.swift
+  MacLLM/Features/Chat/CodeBlockView.swift
+  MacLLM/Features/Chat/QuickPromptChips.swift
+  MacLLM/Features/Chat/SystemPromptSheet.swift
+  MacLLM/Features/Chat/ComposerToolsView.swift
   MacLLM/Features/Chat/MessageRow.swift
   MacLLM/Features/Chat/MessageMarkdownView.swift
   MacLLM/Features/Chat/ProseMarkdownView.swift
