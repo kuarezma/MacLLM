@@ -129,6 +129,7 @@ SOURCES=(
   MacLLM/Features/Models/DownloadManagerPopover.swift
   MacLLM/Features/Models/ReadmeMarkdownView.swift
   MacLLM/Features/Settings/SettingsView.swift
+  MacLLM/Features/Settings/SettingsComponents.swift
 )
 
 echo "Swift derleniyor..."

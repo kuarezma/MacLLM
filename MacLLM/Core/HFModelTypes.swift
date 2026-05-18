@@ -14,6 +14,14 @@ struct HFModelSummary: Identifiable, Hashable {
         ModelMetadataParser.parseParameterSize(from: "\(repoId) \(tags.joined(separator: " "))")
     }
 
+    var parameterSizeDisplay: String? {
+        ModelMetadataParser.parameterSizeDisplay(from: "\(repoId) \(tags.joined(separator: " "))")
+    }
+
+    var parameterSizeBadge: String? {
+        parameterSize
+    }
+
     var displayTags: [String] {
         ModelMetadataParser.displayTags(tags)
     }
@@ -29,6 +37,14 @@ struct HFRepoDetail: Hashable {
     let pipelineTag: String?
     let tags: [String]
     let files: [HFGGUFile]
+
+    var parameterSizeDisplay: String? {
+        ModelMetadataParser.parameterSizeDisplay(from: "\(repoId) \(tags.joined(separator: " "))")
+    }
+
+    var parameterSizeBadge: String? {
+        ModelMetadataParser.parameterSizeBadge(from: "\(repoId) \(tags.joined(separator: " "))")
+    }
 }
 
 struct HFGGUFile: Identifiable, Hashable {

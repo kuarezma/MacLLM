@@ -255,6 +255,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.14.1** | Jan tarzı Ayarlar yenilemesi; Hub aramada parametre boyutu (7B, “7 milyar param.”) bilgi barında |
 | **1.14.0** | Jan.ai tarzı arayüz: kenar çubuğu nav, üst model seçici, sohbet balonları, bağlam halkası (gerçek token); mesaj düzenle/yeniden üret/kopyala; projeler (⌘P); hızlı promptlar; kod kopyala; Markdown dışa aktarma |
 | **1.13.1** | Hub’da gerçek GGUF dosya boyutları (HF tree API); “Sıfır KB” hatası giderildi; indirme toplamları doğru |
 | **1.13.0** | Hub dosya arama; tıklanabilir sütun sıralama; yüklü quant için **Kullan**; anlık sonuç filtresi |

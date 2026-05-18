@@ -20,10 +20,27 @@ enum ModelMetadataParser {
 
     static func parseParameterSize(from text: String) -> String? {
         let lower = text.lowercased()
-        if let match = lower.range(of: #"\d+(\.\d+)?b"#, options: .regularExpression) {
-            return String(lower[match]).uppercased()
+        if let match = lower.range(of: #"\d+(\.\d+)?\s*b(?![a-z])"#, options: .regularExpression) {
+            let raw = String(lower[match]).replacingOccurrences(of: " ", with: "")
+            return raw.uppercased()
         }
         return nil
+    }
+
+    /// Örn. "7B" → "7 milyar param."
+    static func parameterSizeDisplay(from text: String) -> String? {
+        guard let raw = parseParameterSize(from: text) else { return nil }
+        let numPart = String(raw.dropLast()).replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(numPart) else { return raw }
+        if value.truncatingRemainder(dividingBy: 1) == 0 {
+            return "\(Int(value)) milyar param."
+        }
+        return String(format: "%.1f milyar param.", value)
+    }
+
+    /// Kompakt rozet: "7B", "3.5B"
+    static func parameterSizeBadge(from text: String) -> String? {
+        parseParameterSize(from: text)
     }
 
     static func displayTags(_ tags: [String], limit: Int = 4) -> [String] {

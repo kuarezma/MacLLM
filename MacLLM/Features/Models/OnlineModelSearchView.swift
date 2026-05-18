@@ -139,6 +139,9 @@ private struct OnlineModelRow: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .lineLimit(1)
+                    if let badge = model.parameterSizeBadge {
+                        AppTheme.badge(badge, color: AppTheme.accent)
+                    }
                     if model.gated {
                         AppTheme.badge("Gated", color: .orange)
                     }
@@ -147,6 +150,11 @@ private struct OnlineModelRow: View {
                     Text(author)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+                if let paramDisplay = model.parameterSizeDisplay {
+                    Text(paramDisplay)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
                 HStack(spacing: 10) {
                     Label(ModelMetadataParser.formatCount(model.downloads), systemImage: "arrow.down.circle")

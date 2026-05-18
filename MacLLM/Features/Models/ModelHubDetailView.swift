@@ -80,6 +80,7 @@ struct ModelHubDetailView: View {
             }
         }
         .navigationTitle(ModelMetadataParser.repoDisplayName(repo.repoId))
+        .navigationSubtitle(repo.parameterSizeDisplay ?? "")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 if let url = HuggingFaceHubService.huggingFaceURL(repoId: repo.repoId) {
@@ -293,6 +294,12 @@ struct ModelHubDetailView: View {
     @ViewBuilder
     private func repoMetaBar(_ detail: HFRepoDetail) -> some View {
         HStack(spacing: 16) {
+            if let badge = detail.parameterSizeBadge {
+                AppTheme.badge(badge, color: AppTheme.accent)
+            }
+            if let paramDisplay = detail.parameterSizeDisplay {
+                Label(paramDisplay, systemImage: "cpu")
+            }
             Label(ModelMetadataParser.formatCount(detail.downloads), systemImage: "arrow.down.circle")
             Label(ModelMetadataParser.formatCount(detail.likes), systemImage: "heart")
             if let tag = detail.pipelineTag {

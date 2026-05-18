@@ -44,14 +44,14 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.0)
+### Bu sürümde (1.14.1)
 
-- Jan.ai tarzı arayüz: kenar çubuğu nav, ortalanmış model seçici, sohbet balonları
-- Bağlam halkası — llama tokenizer ile gerçek prompt token sayımı
-- Mesaj işlemleri: kopyala, düzenle, yeniden üret, sil; düşünme bloğu katlanır
-- Üretim istatistiği (token/sn); kod bloğu kopyala
-- **Projeler** (⌘P): sohbet gruplama; hızlı prompt chip’leri
-- Sistem istemi sheet; sohbeti Markdown olarak dışa aktar; ⌘K arama
+- Ayarlar penceresi Jan tarzı: sol nav, kart düzeni, turuncu vurgu
+- Hub model arama ve detay bilgi barında parametre boyutu (7B, 7 milyar param.)
+
+### Önceki (1.14)
+
+- Jan.ai tarzı sohbet arayüzü, projeler, bağlam halkası, mesaj işlemleri
 
 ### Önceki (1.13)
 
@@ -60,10 +60,6 @@ gh release create "$TAG" \
 ### Önceki (1.11–1.12)
 
 - Model Hub arayüzü, quant filtreleri, README Markdown
-
-### Önceki (1.8–1.10)
-
-- Oturum başına sohbet; asistan Markdown; sohbet arama; canlı akış
 
 ### Kurulum (Terminal gerekmez)
 

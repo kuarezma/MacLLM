@@ -19,6 +19,16 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .huggingFace: return "cloud"
         }
     }
+
+    var subtitle: String {
+        switch self {
+        case .general: return "Sürüm, güncelleme, depolama"
+        case .model: return "Bağlam, GPU, CPU"
+        case .sampling: return "Sıcaklık, top-p, mirostat"
+        case .chat: return "Sistem istemi, stop, limit"
+        case .huggingFace: return "İndirme, token"
+        }
+    }
 }
 
 @MainActor
@@ -32,54 +42,36 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var model = appModel
 
-        NavigationSplitView {
-            List(selection: $tab) {
-                ForEach(SettingsTab.allCases) { item in
-                    Label(item.rawValue, systemImage: item.icon)
-                        .tag(item)
-                }
-            }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
-        } detail: {
-            Form {
-                switch tab {
-                case .general:
-                    generalSection(model: appModel)
-                case .model:
-                    modelSection(model: appModel)
-                case .sampling:
-                    samplingSection(model: appModel)
-                case .chat:
-                    chatSection(model: appModel)
-                case .huggingFace:
-                    huggingFaceSection()
-                }
-            }
-            .formStyle(.grouped)
-            .padding()
-            .navigationTitle(tab.rawValue)
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button("Ollama varsayılanları") {
-                        model.settings = InferenceSettings.ollamaDefaults
-                        model.settings.threadCount = Int32(
-                            max(1, min(8, model.systemProfile.processorCount - 2))
-                        )
-                        syncStopText(from: model.settings)
+        HStack(spacing: 0) {
+            settingsSidebar
+
+            VStack(spacing: 0) {
+                settingsHeader
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        switch tab {
+                        case .general:
+                            generalSection(model: appModel)
+                        case .model:
+                            modelSection(model: appModel)
+                        case .sampling:
+                            samplingSection(model: appModel)
+                        case .chat:
+                            chatSection(model: appModel)
+                        case .huggingFace:
+                            huggingFaceSection()
+                        }
                     }
-                    Button("Kaydet") {
-                        model.settings.stopSequencesText = stopText
-                        model.saveSettingsIfNeeded(comparedTo: settingsBaseline)
-                        settingsBaseline = model.settings
-                    }
-                    .keyboardShortcut("s", modifiers: .command)
-                    .buttonStyle(.borderedProminent)
-                    .help("Kapatırken de otomatik kaydedilir")
+                    .padding(20)
+                    .frame(maxWidth: 560, alignment: .leading)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .background(AppTheme.chatBackground)
         }
-        .frame(minWidth: 640, minHeight: 480)
+        .frame(minWidth: 720, minHeight: 520)
+        .background(AppTheme.sidebarBackground)
         .onAppear {
             settingsBaseline = model.settings
             syncStopText(from: model.settings)
@@ -91,21 +83,100 @@ struct SettingsView: View {
         }
     }
 
+    private var settingsSidebar: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Ayarlar")
+                    .font(.title3.weight(.semibold))
+                Text("MacLLM")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 16)
+
+            VStack(spacing: 4) {
+                ForEach(SettingsTab.allCases) { item in
+                    SettingsNavRow(
+                        icon: item.icon,
+                        title: item.rawValue,
+                        isSelected: tab == item
+                    ) {
+                        tab = item
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+
+            Spacer()
+        }
+        .frame(width: 200)
+        .background(AppTheme.sidebarBackground)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(width: 1)
+        }
+    }
+
+    private var settingsHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tab.rawValue)
+                    .font(.title2.weight(.semibold))
+                Text(tab.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            Spacer()
+            Button("Ollama varsayılanları") {
+                appModel.settings = InferenceSettings.ollamaDefaults
+                appModel.settings.threadCount = Int32(
+                    max(1, min(8, appModel.systemProfile.processorCount - 2))
+                )
+                syncStopText(from: appModel.settings)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(AppTheme.secondaryText)
+            Button("Kaydet") {
+                appModel.settings.stopSequencesText = stopText
+                appModel.saveSettingsIfNeeded(comparedTo: settingsBaseline)
+                settingsBaseline = appModel.settings
+            }
+            .keyboardShortcut("s", modifiers: .command)
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.accent)
+            .help("Kapatırken de otomatik kaydedilir")
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(AppTheme.chatBackground)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(height: 1)
+        }
+    }
+
     @ViewBuilder
     private func generalSection(model: AppModel) -> some View {
         @Bindable var updates = appUpdate
-        Section("Uygulama") {
-            LabeledContent("Sürüm", value: appUpdate.currentVersion)
-            LabeledContent("Bu Mac", value: model.systemProfile.displaySummary)
-            LabeledContent("Çıkarım motoru", value: "llama.cpp + Metal")
+
+        SettingsCard("Uygulama") {
+            SettingsInfoRow(label: "Sürüm", value: appUpdate.currentVersion)
+            SettingsInfoRow(label: "Bu Mac", value: model.systemProfile.displaySummary)
+            SettingsInfoRow(label: "Çıkarım motoru", value: "llama.cpp + Metal")
         }
 
-        Section("Güncellemeler") {
+        SettingsCard("Güncellemeler") {
             Toggle("Açılışta güncellemeleri kontrol et", isOn: $updates.autoCheckEnabled)
             if let last = appUpdate.lastCheckDate {
-                LabeledContent("Son kontrol", value: last.formatted(date: .abbreviated, time: .shortened))
+                SettingsInfoRow(
+                    label: "Son kontrol",
+                    value: last.formatted(date: .abbreviated, time: .shortened)
+                )
             }
-            HStack {
+            HStack(spacing: 10) {
                 Button {
                     Task { await appUpdate.checkForUpdates(userInitiated: true) }
                 } label: {
@@ -115,56 +186,58 @@ struct SettingsView: View {
                         Text("Güncellemeleri denetle")
                     }
                 }
-                .disabled(appUpdate.isChecking || appUpdate.isDownloading)
-
                 if appUpdate.availableUpdate != nil {
                     Button("İndir ve kur") {
                         Task { await appUpdate.downloadAndOpenUpdate() }
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.accent)
                     .disabled(appUpdate.isDownloading)
                 }
             }
             if let update = appUpdate.availableUpdate {
-                Text("Yeni sürüm: \(update.version) (\(update.preferredAssetLabel))")
-                    .font(.caption)
-                    .foregroundStyle(.blue)
+                SettingsCaption(text: "Yeni sürüm: \(update.version) (\(update.preferredAssetLabel))")
             }
             if let status = appUpdate.downloadStatus {
-                Text(status).font(.caption).foregroundStyle(.secondary)
+                SettingsCaption(text: status)
             }
         }
 
-        Section("Depolama (Ollama: models dizini)") {
-            LabeledContent("Modeller") {
+        SettingsCard("Depolama", subtitle: "Ollama: models dizini") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Modeller")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppTheme.secondaryText)
                 Text(ModelStore.shared.modelsDirectory.path)
                     .font(.caption)
                     .textSelection(.enabled)
-                    .lineLimit(3)
-            }
-            LabeledContent("Sohbetler") {
+                    .foregroundStyle(AppTheme.primaryText)
+                Text("Sohbetler")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding(.top, 4)
                 Text(ModelStore.shared.appSupportURL.appendingPathComponent("chats").path)
                     .font(.caption)
                     .textSelection(.enabled)
-                    .lineLimit(2)
-            }
-            LabeledContent("Disk kullanımı", value: model.diskUsageFormatted)
-            Button("Klasörü Finder’da aç") {
-                NSWorkspace.shared.open(ModelStore.shared.appSupportURL)
+                SettingsInfoRow(label: "Disk kullanımı", value: model.diskUsageFormatted)
+                Button("Klasörü Finder’da aç") {
+                    NSWorkspace.shared.open(ModelStore.shared.appSupportURL)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AppTheme.accent)
             }
         }
 
-        Section {
-            Text("Değişiklikler pencere kapanırken veya **Kaydet** (⌘S) ile uygulanır; model ayarları değişince seçili model yeniden yüklenir.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        SettingsCaption(
+            text: "Değişiklikler pencere kapanırken veya Kaydet (⌘S) ile uygulanır; model ayarları değişince seçili model yeniden yüklenir."
+        )
     }
 
     @ViewBuilder
     private func modelSection(model: AppModel) -> some View {
         let bindable = Bindable(model)
-        Section("Bağlam (num_ctx)") {
+
+        SettingsCard("Bağlam", subtitle: "num_ctx — maksimum token penceresi") {
             Picker("Bağlam uzunluğu", selection: bindable.intBinding(\.contextLength)) {
                 Text("2048").tag(2048)
                 Text("4096").tag(4096)
@@ -172,12 +245,11 @@ struct SettingsView: View {
                 Text("16384").tag(16384)
                 Text("32768").tag(32768)
             }
-            Text("Modelin işleyebileceği maksimum token penceresi. Yüksek değer daha fazla RAM kullanır.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .pickerStyle(.segmented)
+            SettingsCaption(text: "Yüksek değer daha fazla RAM kullanır.")
         }
 
-        Section("Donanım (num_gpu, num_thread)") {
+        SettingsCard("Donanım", subtitle: "num_gpu, num_thread") {
             Stepper(
                 "GPU katmanları: \(model.settings.gpuLayers < 0 ? "tümü (-1)" : "\(model.settings.gpuLayers)")",
                 value: bindable.int32Binding(\.gpuLayers),
@@ -188,22 +260,15 @@ struct SettingsView: View {
                 value: bindable.int32Binding(\.threadCount),
                 in: 1...32
             )
-            Text("GPU katmanları -1: tüm katmanlar Metal’de (Ollama’daki varsayılan tam offload).")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-
-        Section {
-            Text("Bağlam veya GPU ayarı değişince model yeniden yüklenir (Kaydet).")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            SettingsCaption(text: "GPU katmanları -1: tüm katmanlar Metal’de.")
         }
     }
 
     @ViewBuilder
     private func samplingSection(model: AppModel) -> some View {
         let bindable = Bindable(model)
-        Section("Mirostat (Ollama: mirostat)") {
+
+        SettingsCard("Mirostat") {
             Picker("Mod", selection: bindable.int32Binding(\.mirostat)) {
                 Text("Kapalı (0)").tag(0)
                 Text("Mirostat v1 (1)").tag(1)
@@ -220,7 +285,7 @@ struct SettingsView: View {
         }
 
         if !model.settings.usesMirostat {
-            Section("Sıcaklık ve çekirdek örnekleme") {
+            SettingsCard("Sıcaklık ve çekirdek örnekleme") {
                 Slider(value: bindable.floatBinding(\.temperature), in: 0...2, step: 0.05) {
                     Text("Sıcaklık: \(model.settings.temperature, specifier: "%.2f")")
                 }
@@ -237,7 +302,7 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Tekrar cezası (repeat_penalty)") {
+            SettingsCard("Tekrar cezası", subtitle: "repeat_penalty") {
                 Slider(value: bindable.floatBinding(\.repeatPenalty), in: 1...2, step: 0.05) {
                     Text("Cezası: \(model.settings.repeatPenalty, specifier: "%.2f") (1.0 = kapalı)")
                 }
@@ -246,29 +311,28 @@ struct SettingsView: View {
                     value: bindable.int32Binding(\.repeatLastN),
                     in: -1...512
                 )
-                Text("repeat_last_n: -1 = tüm bağlam, 0 = kapalı")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                SettingsCaption(text: "repeat_last_n: -1 = tüm bağlam, 0 = kapalı")
             }
         }
 
-        Section("Tohum (seed)") {
+        SettingsCard("Tohum", subtitle: "seed") {
             Stepper(
                 "Seed: \(model.settings.seed == 0 ? "rastgele" : "\(model.settings.seed)")",
                 value: bindable.uint32Binding(\.seed),
                 in: 0...999_999
             )
-            Button("Rastgele tohum (0)") {
-                model.settings.seed = 0
-            }
-            .font(.caption)
+            Button("Rastgele tohum (0)") { model.settings.seed = 0 }
+                .buttonStyle(.plain)
+                .foregroundStyle(AppTheme.accent)
+                .font(.caption)
         }
     }
 
     @ViewBuilder
     private func chatSection(model: AppModel) -> some View {
         let bindable = Bindable(model)
-        Section("Üretim limiti (num_predict)") {
+
+        SettingsCard("Üretim limiti", subtitle: "num_predict") {
             Stepper(
                 "Maks. üretilecek token: \(model.settings.maxTokens)",
                 value: bindable.int32Binding(\.maxTokens),
@@ -277,32 +341,26 @@ struct SettingsView: View {
             )
         }
 
-        Section("Sistem mesajı (system)") {
-            TextEditor(text: bindable.stringBinding(\.systemPrompt))
-                .font(.body)
-                .frame(minHeight: 80, maxHeight: 140)
-            Text("Her sohbete eklenir; model şablonuna göre system rolü olarak iletilir.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        SettingsCard("Sistem mesajı", subtitle: "system") {
+            SettingsTextEditor(text: bindable.stringBinding(\.systemPrompt), minHeight: 100)
+            SettingsCaption(text: "Her sohbete eklenir; model şablonuna göre system rolü olarak iletilir.")
         }
 
-        Section("Durdurma dizileri (stop)") {
-            TextEditor(text: $stopText)
-                .font(.system(.body, design: .monospaced))
-                .frame(minHeight: 72, maxHeight: 120)
-            Text("Her satır bir stop dizisi (Ollama stop). Örn. </s>")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        SettingsCard("Durdurma dizileri", subtitle: "stop") {
+            SettingsTextEditor(text: $stopText, minHeight: 88, monospaced: true)
+            SettingsCaption(text: "Her satır bir stop dizisi. Örn. </s>")
             Button("Varsayılan stop listesi") {
                 stopText = InferenceSettings.ollamaDefaults.stopSequencesText
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(AppTheme.accent)
             .font(.caption)
         }
     }
 
     @ViewBuilder
     private func huggingFaceSection() -> some View {
-        Section("İndirme hızı") {
+        SettingsCard("İndirme hızı") {
             Stepper(
                 "Paralel bağlantı: \(DownloadPreferences.parallelConnections)",
                 value: Binding(
@@ -311,19 +369,18 @@ struct SettingsView: View {
                 ),
                 in: 1...8
             )
-            Text("50 MB üzeri modellerde aynı anda birden fazla HTTP bağlantısı kullanılır (varsayılan 6). 1 = tek bağlantı, duraklat/devam destekli.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            SettingsCaption(
+                text: "50 MB üzeri modellerde birden fazla HTTP bağlantısı kullanılır (varsayılan 6)."
+            )
         }
 
-        Section("Çevrimiçi indirme") {
+        SettingsCard("Çevrimiçi indirme") {
             SecureField("Access Token (opsiyonel)", text: Binding(
                 get: { HuggingFaceCredentials.token ?? "" },
                 set: { HuggingFaceCredentials.token = $0.isEmpty ? nil : $0 }
             ))
-            Text("Gated modeller için huggingface.co → Settings → Access Tokens")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .textFieldStyle(.roundedBorder)
+            SettingsCaption(text: "Gated modeller için huggingface.co → Settings → Access Tokens")
         }
     }
 
@@ -332,7 +389,7 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Bindable helpers (MainActor-safe settings bindings)
+// MARK: - Bindable helpers
 
 @MainActor
 private extension Bindable where Value == AppModel {
