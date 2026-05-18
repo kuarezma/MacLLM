@@ -13,7 +13,7 @@ enum RangeDownloadEngine {
         config.timeoutIntervalForResource = 60 * 60 * 6
         config.httpMaximumConnectionsPerHost = max(1, maxConnections)
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        config.waitsForConnectivity = true
+        config.waitsForConnectivity = false
         return URLSession(configuration: config)
     }
 
@@ -23,6 +23,7 @@ enum RangeDownloadEngine {
         var request = URLRequest(url: resolveURL)
         request.httpMethod = "GET"
         request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+        request.setValue("MacLLM", forHTTPHeaderField: "User-Agent")
         HuggingFaceCredentials.applyAuth(to: &request)
 
         let session = makeSession(maxConnections: 2)
@@ -80,7 +81,7 @@ enum RangeDownloadEngine {
 
         let progressPoller = Task {
             while !Task.isCancelled {
-                try await Task.sleep(for: .milliseconds(350))
+                try await Task.sleep(for: .milliseconds(200))
                 let received = aggregator.sumPartFiles(in: tempDir)
                 let (speed, eta) = speedTracker.sample(bytesReceived: received, totalBytes: total)
                 await onProgress(DownloadTaskInfo(
@@ -112,7 +113,8 @@ enum RangeDownloadEngine {
                         url: metadata.url,
                         start: start,
                         end: end,
-                        destination: partURL
+                        destination: partURL,
+                        isCancelled: isCancelled
                     )
                     return (index, partURL)
                 }
@@ -134,29 +136,49 @@ enum RangeDownloadEngine {
         session.finishTasksAndInvalidate()
     }
 
+    private static let streamBufferSize = 512 * 1024
+
     private static func downloadRange(
         session: URLSession,
         url: URL,
         start: Int64,
         end: Int64,
-        destination: URL
+        destination: URL,
+        isCancelled: @escaping @Sendable () -> Bool
     ) async throws {
         var request = URLRequest(url: url)
         request.setValue("bytes=\(start)-\(end)", forHTTPHeaderField: "Range")
+        request.setValue("MacLLM", forHTTPHeaderField: "User-Agent")
         HuggingFaceCredentials.applyAuth(to: &request)
-
-        let (tempURL, response) = try await session.download(for: request)
-        defer { try? FileManager.default.removeItem(at: tempURL) }
-
-        guard let http = response as? HTTPURLResponse,
-              http.statusCode == 206 || http.statusCode == 200 else {
-            throw downloadError("Parça indirilemedi (HTTP).")
-        }
 
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
         }
-        try FileManager.default.moveItem(at: tempURL, to: destination)
+        FileManager.default.createFile(atPath: destination.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: destination)
+        defer { try? handle.close() }
+
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw downloadError("Parça yanıtı geçersiz.")
+        }
+        guard http.statusCode == 206 || http.statusCode == 200 else {
+            throw downloadError("Parça indirilemedi (HTTP \(http.statusCode)).")
+        }
+
+        var buffer = Data()
+        buffer.reserveCapacity(streamBufferSize)
+        for try await byte in bytes {
+            if isCancelled() { throw CancellationError() }
+            buffer.append(byte)
+            if buffer.count >= streamBufferSize {
+                try handle.write(contentsOf: buffer)
+                buffer.removeAll(keepingCapacity: true)
+            }
+        }
+        if !buffer.isEmpty {
+            try handle.write(contentsOf: buffer)
+        }
     }
 
     private static func mergeParts(_ parts: [URL], into destination: URL) throws {
@@ -179,6 +201,10 @@ enum RangeDownloadEngine {
            let slash = range.lastIndex(of: "/") {
             let totalStr = range[range.index(after: slash)...]
             if let total = Int64(totalStr) { return total }
+        }
+        if let linked = response.value(forHTTPHeaderField: "X-Linked-Size"),
+           let total = Int64(linked) {
+            return total
         }
         let length = response.expectedContentLength
         if length > 0 { return length }

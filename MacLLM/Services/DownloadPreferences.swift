@@ -8,7 +8,7 @@ enum DownloadPreferences {
     static var parallelConnections: Int {
         get {
             let stored = UserDefaults.standard.integer(forKey: connectionsKey)
-            if stored == 0 { return 6 }
+            if stored == 0 { return 4 }
             return min(8, max(1, stored))
         }
         set {

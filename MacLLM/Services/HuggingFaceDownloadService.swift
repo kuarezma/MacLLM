@@ -111,14 +111,40 @@ final class HuggingFaceDownloadService: ObservableObject {
             && totalBytes >= DownloadPreferences.parallelMinimumBytes
 
         if useParallel {
-            return try await downloadParallel(
-                entry: entry,
-                destination: dest,
-                metadata: metadata,
-                totalBytes: totalBytes,
-                connections: connections,
-                onUpdate: onUpdate
-            )
+            do {
+                return try await downloadParallel(
+                    entry: entry,
+                    destination: dest,
+                    metadata: metadata,
+                    totalBytes: totalBytes,
+                    connections: connections,
+                    onUpdate: onUpdate
+                )
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                parallelContexts.removeValue(forKey: entry.id)
+                if FileManager.default.fileExists(atPath: dest.path) {
+                    try? FileManager.default.removeItem(at: dest)
+                }
+                var fallbackInfo = makeTaskInfo(
+                    entry: entry,
+                    bytesReceived: 0,
+                    totalBytes: totalBytes,
+                    speed: 0,
+                    eta: nil,
+                    state: .downloading
+                )
+                upsertActive(fallbackInfo)
+                onUpdate(fallbackInfo)
+                return try await downloadSingleStream(
+                    entry: entry,
+                    destination: dest,
+                    url: metadata.url,
+                    totalBytes: totalBytes,
+                    onUpdate: onUpdate
+                )
+            }
         }
 
         return try await downloadSingleStream(
@@ -227,8 +253,9 @@ final class HuggingFaceDownloadService: ObservableObject {
 
             let session = URLSession(configuration: config, delegate: delegate, delegateQueue: delegateQueue)
 
-            var request = URLRequest(url: url)
-            HuggingFaceCredentials.applyAuth(to: &request)
+        var request = URLRequest(url: url)
+        request.setValue("MacLLM", forHTTPHeaderField: "User-Agent")
+        HuggingFaceCredentials.applyAuth(to: &request)
             let task = session.downloadTask(with: request)
             delegate.task = task
 
