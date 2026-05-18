@@ -244,13 +244,11 @@ final class AppModel {
             for index in sessions.indices where sessions[index].modelId == model.id {
                 sessions[index].modelId = nil
             }
-            if let stored = try? chatStore.loadSessionIndex() {
-                var updated = stored
-                for index in updated.indices where updated[index].modelId == model.id {
-                    updated[index].modelId = nil
-                }
-                for session in updated {
-                    try? chatStore.saveSession(session)
+            if let summaries = try? chatStore.loadSessionIndex() {
+                for summary in summaries where summary.modelId == model.id {
+                    guard var full = try? chatStore.loadSession(id: summary.id) else { continue }
+                    full.modelId = nil
+                    try? chatStore.saveSession(full)
                 }
                 sessions = try chatStore.loadSessionIndex()
             }
@@ -261,7 +259,13 @@ final class AppModel {
         }
     }
 
-    func importGGUF(from url: URL) async {
+    func ggufImportDestinationExists(for url: URL) -> Bool {
+        let filename = url.lastPathComponent
+        let dest = modelStore.destinationURL(repoId: "imported", filename: filename)
+        return FileManager.default.fileExists(atPath: dest.path)
+    }
+
+    func importGGUF(from url: URL, replaceExisting: Bool = false) async {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
 
@@ -272,6 +276,10 @@ final class AppModel {
             let dest = modelStore.destinationURL(repoId: "imported", filename: filename)
             try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: dest.path) {
+                guard replaceExisting else {
+                    setStatusMessage("«\(filename)» zaten yüklü. Üzerine yazmak için onaylayın.", persistent: true)
+                    return
+                }
                 try FileManager.default.removeItem(at: dest)
             }
             try FileManager.default.copyItem(at: url, to: dest)

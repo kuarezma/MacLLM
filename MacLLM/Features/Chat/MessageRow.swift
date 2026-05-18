@@ -41,9 +41,14 @@ struct MessageRow: View {
                     }
                     .padding(.vertical, 4)
                 } else if !displayContent.isEmpty {
-                    Text(displayContent)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if message.role == .assistant {
+                        MessageMarkdownView(text: displayContent)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Text(displayContent)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
         }

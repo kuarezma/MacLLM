@@ -44,6 +44,12 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
+### Bu sürümde (1.8+)
+
+- Sohbetler oturum başına dosyada; eski tek dosyalı indeks otomatik taşınır
+- Asistan yanıtlarında Markdown (kod blokları, \`inline\`, **kalın**)
+- Aynı GGUF tekrar içe aktarılırken üzerine yazma onayı
+
 ### Kurulum (Terminal gerekmez)
 
 | Yöntem | Dosya |

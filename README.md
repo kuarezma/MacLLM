@@ -257,6 +257,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.8.0** | Per-session chat files (lighter index + auto-migration); assistant Markdown (code blocks, inline code, bold); GGUF import overwrite confirmation; `Scripts/smoke-test.sh` |
 | **1.7.0** | Reliable model switching, generation lock, session safety; attachment validation; delete confirmations; clearer status and loading UI |
 | **1.6.1** | KV cache reset per message; clearer inference errors; composer layout fix |
 | **1.6.0** | Chat attachments (image, audio, video, documents); **libmtmd** + mmproj for vision models; reply token sanitization; graceful app quit; model eject & chat delete UI |

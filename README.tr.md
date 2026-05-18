@@ -255,6 +255,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.8.0** | Oturum başına sohbet dosyası (hafif indeks + otomatik geçiş); asistan Markdown (kod blokları, satır içi kod, kalın); GGUF üzerine yazma onayı; `Scripts/smoke-test.sh` |
 | **1.7.0** | Güvenilir model değişimi, üretim kilidi, oturum güvenliği; ek doğrulama; silme onayları; durum ve yükleme arayüzü |
 | **1.6.1** | Mesaj başına KV sıfırlama; çıkarım hata mesajları; composer düzeni |
 | **1.6.0** | Sohbet ekleri (görüntü, ses, video, belge); **libmtmd** + mmproj; yanıt token temizliği; güvenli çıkış; model çıkarma ve sohbet silme |

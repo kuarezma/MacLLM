@@ -16,6 +16,9 @@ struct ModelCatalogView: View {
 
     @State private var tab: ModelCatalogTab = .recommended
     @State private var showImporter = false
+    @State private var pendingImportURL: URL?
+    @State private var pendingImportName = ""
+    @State private var showOverwriteImportConfirm = false
     @State private var manualRepoId = ""
     @State private var manualFilename = ""
 
@@ -67,11 +70,37 @@ struct ModelCatalogView: View {
                 allowsMultipleSelection: false
             ) { result in
                 if case .success(let urls) = result, let url = urls.first {
-                    Task { await model.importGGUF(from: url) }
+                    handleImportSelection(url: url, model: model)
                 }
+            }
+            .alert("Model zaten var", isPresented: $showOverwriteImportConfirm) {
+                Button("İptal", role: .cancel) {
+                    pendingImportURL = nil
+                    pendingImportName = ""
+                }
+                Button("Üzerine Yaz", role: .destructive) {
+                    guard let url = pendingImportURL else { return }
+                    Task {
+                        await model.importGGUF(from: url, replaceExisting: true)
+                        pendingImportURL = nil
+                        pendingImportName = ""
+                    }
+                }
+            } message: {
+                Text("«\(pendingImportName)» klasörde zaten var. Üzerine yazılsın mı?")
             }
         }
         .frame(minWidth: 560, minHeight: 520)
+    }
+
+    private func handleImportSelection(url: URL, model: AppModel) {
+        if model.ggufImportDestinationExists(for: url) {
+            pendingImportURL = url
+            pendingImportName = url.lastPathComponent
+            showOverwriteImportConfirm = true
+        } else {
+            Task { await model.importGGUF(from: url) }
+        }
     }
 
     @ViewBuilder
