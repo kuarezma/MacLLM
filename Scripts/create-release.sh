@@ -48,7 +48,7 @@ gh release create "$TAG" \
 
 - LM Studio tarzı Model Hub: split arama + detay paneli, metadata, quant seçici
 - Paralel indirme ilerleme düzeltmesi (0% takılması giderildi)
-- PDF ekleri: metin çıkarımı, taranmış PDF sayfa görüntüleri, hata banner'ı
+- PDF ekleri: metin çıkarımı, taranmış PDF sayfa görüntüleri, hata banner
 - CI derleme düzeltmeleri (openSettings, MainActor)
 
 ### Önceki (1.14.2)
