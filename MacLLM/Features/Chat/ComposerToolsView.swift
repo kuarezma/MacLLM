@@ -53,6 +53,7 @@ struct ComposerToolsView: View {
         }
     }
 
+    @MainActor
     private func exportChat() {
         let markdown = appModel.exportCurrentSessionMarkdown()
         let panel = NSSavePanel()
