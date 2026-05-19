@@ -3,7 +3,7 @@
 
 cask "macllm" do
   version "1.14.19"
-  sha256 "a6b8e7d06f47ae8163765b3cb1d4b5209b7b2cb647efdf21057e6b042a139158"
+  sha256 "b3202ce05a748e565900c141294e6f9d243e665ba1e6d633083d7978646198c2"
 
   url "https://github.com/kuarezma/MacLLM/releases/download/v\#{version}/MacLLM-\#{version}-macOS-arm64.dmg"
   name "MacLLM"

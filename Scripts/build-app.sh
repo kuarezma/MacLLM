@@ -25,6 +25,13 @@ cp MacLLM/Info.plist "$APP/Contents/Info.plist"
 
 cp MacLLM/Resources/default-catalog.json "$APP/Contents/Resources/"
 cp -R "$FW_DIR/llama.framework" "$APP/Contents/Frameworks/"
+if [[ -d "$APP/Contents/Frameworks/llama.framework/Resources" && ! -L "$APP/Contents/Frameworks/llama.framework/Resources" ]]; then
+  mkdir -p "$APP/Contents/Frameworks/llama.framework/Versions/A/Resources"
+  cp -R "$APP/Contents/Frameworks/llama.framework/Resources/." \
+    "$APP/Contents/Frameworks/llama.framework/Versions/A/Resources/"
+  rm -rf "$APP/Contents/Frameworks/llama.framework/Resources"
+  ln -s "Versions/Current/Resources" "$APP/Contents/Frameworks/llama.framework/Resources"
+fi
 
 echo "Uygulama simgesi hazırlanıyor..."
 if [[ -f "$ROOT/MacLLM/Resources/MacLLMIcon-1024-v2.png" ]]; then

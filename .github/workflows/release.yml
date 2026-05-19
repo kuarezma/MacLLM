@@ -11,6 +11,15 @@ permissions:
 jobs:
   build-and-release:
     runs-on: macos-15
+    env:
+      APP_SIGN_IDENTITY: ${{ secrets.APP_SIGN_IDENTITY }}
+      PKG_SIGN_IDENTITY: ${{ secrets.PKG_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,9 +29,44 @@ jobs:
       - name: Install build tools
         run: brew install cmake ninja
 
+      - name: Validate signing secrets
+        run: |
+          [[ -n "$APP_SIGN_IDENTITY" ]]
+          [[ -n "$PKG_SIGN_IDENTITY" ]]
+          [[ -n "$APPLE_ID" ]]
+          [[ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]]
+          [[ -n "$APPLE_TEAM_ID" ]]
+          [[ -n "$MACOS_CERTIFICATE_P12_BASE64" ]]
+          [[ -n "$MACOS_CERTIFICATE_PASSWORD" ]]
+          [[ -n "$MACOS_KEYCHAIN_PASSWORD" ]]
+
+      - name: Install Developer ID certificate
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/macos-signing.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/macos-signing.p12"
+          echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v "$KEYCHAIN_PATH"
+
+      - name: Configure notarytool profile
+        run: |
+          xcrun notarytool store-credentials "macllm-notary" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD"
+
       - name: Build release packages
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          REQUIRE_SIGNING=1 \
+          APP_SIGN_IDENTITY="$APP_SIGN_IDENTITY" \
+          PKG_SIGN_IDENTITY="$PKG_SIGN_IDENTITY" \
+          NOTARYTOOL_PROFILE="macllm-notary" \
           SKIP_GITHUB=1 ./Scripts/create-release.sh "$VERSION"
 
       - name: Validate release artifacts

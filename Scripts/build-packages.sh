@@ -8,6 +8,10 @@ cd "$ROOT"
 VERSION="${1:-$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' MacLLM/Info.plist)}"
 DIST="${DIST:-$ROOT/dist}"
 APP_PATH="${APP_PATH:-$ROOT/build/MacLLM.app}"
+APP_SIGN_IDENTITY="${APP_SIGN_IDENTITY:-}"
+PKG_SIGN_IDENTITY="${PKG_SIGN_IDENTITY:-}"
+NOTARYTOOL_PROFILE="${NOTARYTOOL_PROFILE:-}"
+REQUIRE_SIGNING="${REQUIRE_SIGNING:-0}"
 
 ZIP_NAME="MacLLM-${VERSION}-macOS-arm64.zip"
 DMG_NAME="MacLLM-${VERSION}-macOS-arm64.dmg"
@@ -16,6 +20,27 @@ PKG_NAME="MacLLM-${VERSION}-macOS-arm64.pkg"
 if [[ ! -d "$APP_PATH" ]]; then
   echo "Hata: $APP_PATH bulunamadı. Önce ./Scripts/build-app.sh çalıştırın."
   exit 1
+fi
+
+if [[ "$REQUIRE_SIGNING" == "1" ]]; then
+  if [[ -z "$APP_SIGN_IDENTITY" || -z "$PKG_SIGN_IDENTITY" || -z "$NOTARYTOOL_PROFILE" ]]; then
+    echo "Hata: REQUIRE_SIGNING=1 için APP_SIGN_IDENTITY, PKG_SIGN_IDENTITY ve NOTARYTOOL_PROFILE zorunlu."
+    exit 1
+  fi
+fi
+
+if [[ -n "$APP_SIGN_IDENTITY" ]]; then
+  echo "Uygulama imzalanıyor..."
+  codesign --force --sign "$APP_SIGN_IDENTITY" --options runtime --timestamp \
+    "$APP_PATH/Contents/Frameworks/llama.framework/Versions/A/llama"
+  codesign --force --sign "$APP_SIGN_IDENTITY" --options runtime --timestamp \
+    "$APP_PATH/Contents/Frameworks/llama.framework"
+  codesign --force --sign "$APP_SIGN_IDENTITY" --options runtime --timestamp \
+    "$APP_PATH/Contents/MacOS/MacLLM"
+  codesign --force --sign "$APP_SIGN_IDENTITY" --options runtime --timestamp "$APP_PATH"
+  codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+else
+  echo "Uyarı: APP_SIGN_IDENTITY yok; uygulama ad-hoc/unsigned kalacak."
 fi
 
 mkdir -p "$DIST"
@@ -66,6 +91,26 @@ pkgbuild \
   --version "$VERSION" \
   "$DIST/$PKG_NAME"
 rm -rf "$PKG_STAGING"
+
+if [[ -n "$PKG_SIGN_IDENTITY" ]]; then
+  echo "PKG imzalanıyor..."
+  productsign --sign "$PKG_SIGN_IDENTITY" "$DIST/$PKG_NAME" "$DIST/$PKG_NAME.signed"
+  mv -f "$DIST/$PKG_NAME.signed" "$DIST/$PKG_NAME"
+  pkgutil --check-signature "$DIST/$PKG_NAME" >/dev/null
+else
+  echo "Uyarı: PKG_SIGN_IDENTITY yok; pkg unsigned kalacak."
+fi
+
+if [[ -n "$NOTARYTOOL_PROFILE" ]]; then
+  echo "DMG notarize ediliyor..."
+  xcrun notarytool submit "$DIST/$DMG_NAME" --keychain-profile "$NOTARYTOOL_PROFILE" --wait
+  xcrun stapler staple "$DIST/$DMG_NAME"
+  echo "PKG notarize ediliyor..."
+  xcrun notarytool submit "$DIST/$PKG_NAME" --keychain-profile "$NOTARYTOOL_PROFILE" --wait
+  xcrun stapler staple "$DIST/$PKG_NAME"
+else
+  echo "Uyarı: NOTARYTOOL_PROFILE yok; notarization atlandı."
+fi
 
 DMG_SHA="$(shasum -a 256 "$DIST/$DMG_NAME" | awk '{print $1}')"
 ZIP_SHA="$(shasum -a 256 "$DIST/$ZIP_NAME" | awk '{print $1}')"
