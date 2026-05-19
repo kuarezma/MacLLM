@@ -44,7 +44,11 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.23)
+### Bu sürümde (1.14.24)
+
+- Qwopus / Qwen3.5: «Yanıt üretilemedi» düzeltmesi — `im_start` stop kaldırıldı, Flash Attention otomatik kapalı, boş yanıtta yeniden deneme
+
+### Önceki (1.14.23)
 
 - Arayüz: önceki turuncu-kırmızı tema ve cam görünüm geri yüklendi
 - Ayarlar: sol yan menülü düzen ve eski buton stilleri

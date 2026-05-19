@@ -113,6 +113,7 @@ final class AppModel {
             mergeDefaultStopSequences()
             migrateImportedModelFlashAttentionIfNeeded()
             repairQwopusProfilesIfNeeded()
+            repairQwopusGenerationRuntimeIfNeeded()
             await configureLaunchModelSelection()
         } catch {
             reportError(error, context: "Baslatma hatasi")
@@ -300,10 +301,7 @@ final class AppModel {
 
     /// Qwopus / Qwen3.5: redacted_im_end stop listesi ve chatml şablonu (v1.14.16).
     private func repairQwopusProfilesIfNeeded() {
-        let hasQwopus = installedModels.contains { model in
-            let haystack = "\(model.name) \(model.filename) \(model.repoId)".lowercased()
-            return haystack.contains("qwopus") || haystack.contains("qwen3.5")
-        }
+        let hasQwopus = installedModels.contains { ModelFamily.isQwopusFamily($0) }
         guard hasQwopus else {
             ImportedModelPreferences.qwopusStopMigrationCompleted = true
             return
@@ -324,6 +322,37 @@ final class AppModel {
             try? modelStore.saveInstalledModels(installedModels)
         }
         mergeDefaultStopSequences()
+        repairQwopusGenerationRuntimeIfNeeded()
+    }
+
+    /// Qwopus: Flash Attention kapalı, `im_start` stop kaldırılmış olmalı.
+    private func repairQwopusGenerationRuntimeIfNeeded() {
+        let hasQwopus = installedModels.contains { ModelFamily.isQwopusFamily($0) }
+        guard hasQwopus else { return }
+
+        var changed = false
+        if settings.flashAttention {
+            settings.flashAttention = false
+            changed = true
+        }
+        let imStart = "<|" + "im_start" + "|>"
+        if settings.stopSequences.contains(imStart) {
+            settings.stopSequences.removeAll { $0 == imStart }
+            changed = true
+        }
+        guard changed else { return }
+
+        inferenceService.settings = settings
+        if let data = try? JSONEncoder().encode(settings) {
+            UserDefaults.standard.set(data, forKey: "inferenceSettings")
+        }
+        if inferenceService.isModelLoaded,
+           let model = selectedModel,
+           ModelFamily.isQwopusFamily(model) {
+            Task {
+                try? await inferenceService.loadModel(model, settingsOverride: settings)
+            }
+        }
     }
 
     private func repairMmprojLinks() {
@@ -360,8 +389,18 @@ final class AppModel {
 
         do {
             try Task.checkCancellation()
-            inferenceService.settings = settings
-            try await inferenceService.loadModel(model)
+            var loadSettings = settings
+            if ModelFamily.prefersQwopusTuning(model), loadSettings.flashAttention {
+                loadSettings.flashAttention = false
+                settings.flashAttention = false
+                inferenceService.settings = settings
+                if let data = try? JSONEncoder().encode(settings) {
+                    UserDefaults.standard.set(data, forKey: "inferenceSettings")
+                }
+            } else {
+                inferenceService.settings = settings
+            }
+            try await inferenceService.loadModel(model, settingsOverride: loadSettings)
             guard generation == modelLoadGeneration else { return false }
 
             selectedModelId = model.id

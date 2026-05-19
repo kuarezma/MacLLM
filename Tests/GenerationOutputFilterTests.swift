@@ -8,6 +8,7 @@ enum GenerationOutputFilterTests {
         testStopPrefixHoldback()
         testStopTruncatesOutput()
         testRedactedImEndStop()
+        testImStartDoesNotTruncateVisibleText()
         testFinishDrainsRemainder()
         finish()
     }
@@ -36,6 +37,13 @@ enum GenerationOutputFilterTests {
         let last = filter.push(stop)
         expect(last == "", "redacted_im_end stops output")
         expect(filter.finish() == "", "no tail after redacted stop")
+    }
+
+    private static func testImStartDoesNotTruncateVisibleText() {
+        let imStart = "<|" + "im_start" + "|>"
+        var filter = GenerationOutputFilter(stopSequences: [imStart])
+        let out = filter.push("Merhaba dünya")
+        expect(out == "Merhaba dünya", "im_start stop must not cut normal text")
     }
 
     private static func testFinishDrainsRemainder() {

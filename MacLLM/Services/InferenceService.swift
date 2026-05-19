@@ -28,17 +28,6 @@ final class InferenceService: ObservableObject {
         Int(Date().timeIntervalSince(startedAt) * 1000)
     }
 
-    private static func modelHaystack(_ model: InstalledModel?) -> String {
-        guard let model else { return "" }
-        return "\(model.name) \(model.filename) \(model.repoId)".lowercased()
-    }
-
-    private static func prefersConservativeKVCache(for model: InstalledModel?) -> Bool {
-        let haystack = modelHaystack(model)
-        return haystack.contains("qwopus") || haystack.contains("qwen3.5")
-            || (model?.repoId == "imported" && haystack.contains("qwopus"))
-    }
-
     func loadModel(_ model: InstalledModel, settingsOverride: InferenceSettings? = nil) async throws {
         let startedAt = Date()
         logger.info("Model load start id=\(model.id) name=\(model.name)")
@@ -209,11 +198,7 @@ final class InferenceService: ObservableObject {
                         }
 
                         let resolvedTemplate = await llamaContext.resolvedChatTemplate()
-                        let inferenceSettings = await MainActor.run { self.settings }
-                        let stops = stopSequences ?? ChatTemplateResolver.mergedStopSequences(
-                            settings: inferenceSettings,
-                            template: resolvedTemplate
-                        )
+                        var inferenceSettings = await MainActor.run { self.settings }
 
                         let prompt = try await llamaContext.applyChatTemplate(
                             messages: promptMessages,
@@ -223,17 +208,30 @@ final class InferenceService: ObservableObject {
 
                         var emittedOutput = ""
                         var didRetryWithoutFlash = false
+                        var useQwopusNarrowStops = false
+                        let initialModel = await MainActor.run { self.lastLoadedModel }
+                        let maxAttempts = ModelFamily.isQwopusFamily(initialModel) ? 4 : 3
 
-                        generationAttempt: for attempt in 0..<3 {
+                        generationAttempt: for attempt in 0..<maxAttempts {
                             self.logger.debug("Generation attempt run=\(runID) attempt=\(attempt + 1)")
-                            var outputFilter = GenerationOutputFilter(stopSequences: stops)
                             emittedOutput = ""
 
-                            let kvPosition = await llamaContext.kvPosition
                             let loadedModel = await MainActor.run { self.lastLoadedModel }
+                            let attemptStops: [String]
+                            if useQwopusNarrowStops {
+                                attemptStops = ChatTemplateResolver.qwopusGenerationStopSequences
+                            } else {
+                                attemptStops = stopSequences ?? ChatTemplateResolver.mergedStopSequences(
+                                    settings: inferenceSettings,
+                                    template: resolvedTemplate
+                                )
+                            }
+                            var outputFilter = GenerationOutputFilter(stopSequences: attemptStops)
+
+                            let kvPosition = await llamaContext.kvPosition
                             let cacheReuseAllowed = await MainActor.run {
                                 !forceFullPrefill
-                                    && !Self.prefersConservativeKVCache(for: loadedModel)
+                                    && !ModelFamily.prefersConservativeKVCache(for: loadedModel)
                                     && self.canReusePromptCache(
                                         sessionId: sessionId,
                                         messages: promptMessages,
@@ -269,19 +267,30 @@ final class InferenceService: ObservableObject {
                                     outputFilter: &outputFilter,
                                     continuation: continuation
                                 )
-                                break generationAttempt
                             } catch let error as LlamaError {
                                 switch error {
                                 case .decodeFailed:
                                     await MainActor.run { self.invalidatePromptCache() }
                                     if attempt == 0 {
                                         await llamaContext.clear()
+                                        if ModelFamily.isQwopusFamily(loadedModel),
+                                           inferenceSettings.flashAttention,
+                                           !didRetryWithoutFlash,
+                                           let model = loadedModel {
+                                            didRetryWithoutFlash = true
+                                            self.logger.notice(
+                                                "Decode failed run=\(runID), Qwopus flash attention off retry"
+                                            )
+                                            var relaxed = inferenceSettings
+                                            relaxed.flashAttention = false
+                                            try await self.loadModel(model, settingsOverride: relaxed)
+                                            inferenceSettings = await MainActor.run { self.settings }
+                                        }
                                         continue generationAttempt
                                     }
-                                    if attempt == 1,
+                                    if !didRetryWithoutFlash,
                                        inferenceSettings.flashAttention,
-                                       !didRetryWithoutFlash,
-                                       let model = await MainActor.run(body: { self.lastLoadedModel }) {
+                                       let model = loadedModel {
                                         didRetryWithoutFlash = true
                                         self.logger.notice(
                                             "Decode failed run=\(runID), retrying with flash attention off"
@@ -289,16 +298,18 @@ final class InferenceService: ObservableObject {
                                         var relaxed = inferenceSettings
                                         relaxed.flashAttention = false
                                         try await self.loadModel(model, settingsOverride: relaxed)
+                                        inferenceSettings = await MainActor.run { self.settings }
                                         continue generationAttempt
                                     }
                                     throw error
                                 case .generationStalled, .generationEmpty:
                                     await MainActor.run { self.invalidatePromptCache() }
-                                    if attempt < 2 {
+                                    if attempt + 1 < maxAttempts {
                                         self.logger.notice(
                                             "Generation retry run=\(runID) reason=\(String(describing: error)) nextAttempt=\(attempt + 2)"
                                         )
                                         await llamaContext.clear()
+                                        useQwopusNarrowStops = ModelFamily.isQwopusFamily(loadedModel)
                                         continue generationAttempt
                                     }
                                     self.logger.error(
@@ -309,15 +320,39 @@ final class InferenceService: ObservableObject {
                                     throw error
                                 }
                             }
+
+                            if ControlTokenSanitizer.hasMeaningfulText(emittedOutput) {
+                                break generationAttempt
+                            }
+
+                            guard ModelFamily.isQwopusFamily(loadedModel), attempt + 1 < maxAttempts else {
+                                throw LlamaError.generationEmpty
+                            }
+
+                            useQwopusNarrowStops = true
+                            await MainActor.run { self.invalidatePromptCache() }
+                            await llamaContext.clear()
+                            if inferenceSettings.flashAttention,
+                               !didRetryWithoutFlash,
+                               let model = loadedModel {
+                                didRetryWithoutFlash = true
+                                self.logger.notice(
+                                    "Empty Qwopus output run=\(runID), reloading with flash attention off"
+                                )
+                                var relaxed = inferenceSettings
+                                relaxed.flashAttention = false
+                                try await self.loadModel(model, settingsOverride: relaxed)
+                                inferenceSettings = await MainActor.run { self.settings }
+                            } else {
+                                self.logger.notice(
+                                    "Empty Qwopus output run=\(runID), narrow-stop retry attempt=\(attempt + 2)"
+                                )
+                            }
                         }
 
                         let snapshot = await llamaContext.generationSnapshot()
                         let savedOutputTokens = snapshot.outputTokens
                         let finalKVPosition = await llamaContext.kvPosition
-                        let savedEmitted = emittedOutput
-                        guard ControlTokenSanitizer.hasMeaningfulText(savedEmitted) else {
-                            throw LlamaError.generationEmpty
-                        }
                         let duration = max(Date().timeIntervalSince(started), 0.001)
                         let tps = Double(savedOutputTokens) / duration
                         self.logger.info(

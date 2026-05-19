@@ -144,8 +144,7 @@ enum ModelProfileBuilder {
         )
 
         var hints: [ComposerHint] = []
-        let modelHaystack = "\(model.name) \(model.filename) \(model.repoId)".lowercased()
-        if modelHaystack.contains("qwopus") || modelHaystack.contains("qwen3.5") {
+        if ModelFamily.isQwopusFamily(model) {
             hints.append(ComposerHint(
                 kind: .info,
                 message: "Qwopus: sorun yaşarsanız yeni sohbet açın ve Flash Attention kapalı tutun.",

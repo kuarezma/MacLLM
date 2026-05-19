@@ -307,7 +307,6 @@ struct InferenceSettings: Codable, Equatable {
             "</s>", "<|eot_id|>",
             "<|" + "redacted_im_end" + "|>",
             "<|" + "im_end" + "|>",
-            "<|" + "im_start" + "|>",
         ]
     ) {
         self.temperature = temperature
@@ -359,7 +358,6 @@ struct InferenceSettings: Codable, Equatable {
                 "</s>", "<|eot_id|>",
                 "<|" + "redacted_im_end" + "|>",
                 "<|" + "im_end" + "|>",
-                "<|" + "im_start" + "|>",
             ]
     }
 

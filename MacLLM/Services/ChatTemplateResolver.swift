@@ -8,8 +8,14 @@ enum ChatTemplateResolver {
     /// llama.cpp builtin chatml (Qwopus / Qwen3.5) mesaj kapanışı
     private static let chatmlRedactedEnd = "<|" + "redacted_im_end" + "|>"
 
+    /// ChatML üretiminde `im_start` stop olarak kullanılmaz — erken kesilip boş yanıt oluşur.
     static var defaultChatMLStopSequences: [String] {
-        ["</s>", chatmlRedactedEnd, chatmlEnd, chatmlStart]
+        ["</s>", "<|eot_id|>", chatmlRedactedEnd, chatmlEnd]
+    }
+
+    /// Qwopus / Qwen3.5 için güvenli üretim stop listesi (yeniden deneme).
+    static var qwopusGenerationStopSequences: [String] {
+        [chatmlRedactedEnd, chatmlEnd, "</s>", "<|eot_id|>"]
     }
 
     /// Bilinen kısa adları llama.cpp built-in şablon adlarına çevirir.

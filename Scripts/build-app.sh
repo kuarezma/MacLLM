@@ -104,6 +104,7 @@ SOURCES=(
   MacLLM/Services/GGUFFileValidator.swift
   MacLLM/Services/ModelMetadataParser.swift
   MacLLM/Services/ChatTemplateResolver.swift
+  MacLLM/Services/ModelFamily.swift
   MacLLM/Services/GenerationOutputFilter.swift
   MacLLM/Services/HuggingFaceHubService.swift
   MacLLM/Services/HuggingFaceCredentials.swift
