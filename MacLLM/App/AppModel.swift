@@ -1,10 +1,12 @@
 import Foundation
+import OSLog
 import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
 @Observable
 final class AppModel {
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "MacLLM", category: "AppModel")
     var installedModels: [InstalledModel] = []
     var catalogEntries: [CatalogEntry] = []
     var modelRecommendations: [ScoredCatalogEntry] = []
@@ -365,18 +367,14 @@ final class AppModel {
             }
             setStatusMessage("\(model.name) kullanıma hazır")
             refreshModels()
-            AppDiagnostics.appModel.info(
-                "Select model success id=\(model.id, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms"
-            )
+            logger.info("Select model success id=\(model.id) elapsed=\(Int(Date().timeIntervalSince(startedAt) * 1000))ms")
             return true
         } catch is CancellationError {
-            AppDiagnostics.appModel.notice("Select model cancelled id=\(model.id, privacy: .public)")
+            logger.notice("Select model cancelled id=\(model.id)")
             return false
         } catch {
             guard generation == modelLoadGeneration else { return false }
-            AppDiagnostics.appModel.error(
-                "Select model failed id=\(model.id, privacy: .public) error=\(String(describing: error), privacy: .public)"
-            )
+            logger.error("Select model failed id=\(model.id) error=\(String(describing: error))")
             reportError(error, context: "Yukleme hatasi")
             return false
         }
@@ -954,8 +952,8 @@ final class AppModel {
                 contextTokenFingerprint = ""
                 scheduleSaveCurrentSession()
                 GenerationNotificationService.notifyGenerationComplete(sessionTitle: currentSession.title)
-                AppDiagnostics.appModel.info(
-                    "Send message success session=\(activeSessionId.uuidString, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: sendStartedAt), privacy: .public)ms"
+                logger.info(
+                    "Send message success session=\(activeSessionId.uuidString) elapsed=\(Int(Date().timeIntervalSince(sendStartedAt) * 1000))ms"
                 )
             }
         } catch is CancellationError {
@@ -967,9 +965,7 @@ final class AppModel {
             }
             setStatusMessage("Üretim durduruldu")
             try? await saveCurrentSession()
-            AppDiagnostics.appModel.notice(
-                "Send message cancelled session=\(activeSessionId.uuidString, privacy: .public)"
-            )
+            logger.notice("Send message cancelled session=\(activeSessionId.uuidString)")
         } catch let llamaError as LlamaError {
             guard currentSession.id == activeSessionId,
                   assistantIndex < currentSession.messages.count else { return }
@@ -987,9 +983,7 @@ final class AppModel {
             }
             await inferenceService.clearKVCache()
             try? await saveCurrentSession()
-            AppDiagnostics.appModel.error(
-                "Send message llama failure session=\(activeSessionId.uuidString, privacy: .public) error=\(String(describing: llamaError), privacy: .public)"
-            )
+            logger.error("Send message llama failure session=\(activeSessionId.uuidString) error=\(String(describing: llamaError))")
         } catch {
             guard currentSession.id == activeSessionId,
                   assistantIndex < currentSession.messages.count else { return }
@@ -1000,9 +994,7 @@ final class AppModel {
             reportError(error, context: "Uretim hatasi")
             await inferenceService.clearKVCache()
             try? await saveCurrentSession()
-            AppDiagnostics.appModel.error(
-                "Send message failure session=\(activeSessionId.uuidString, privacy: .public) error=\(String(describing: error), privacy: .public)"
-            )
+            logger.error("Send message failure session=\(activeSessionId.uuidString) error=\(String(describing: error))")
         }
     }
 

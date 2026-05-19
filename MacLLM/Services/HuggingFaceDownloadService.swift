@@ -1,8 +1,14 @@
 import Foundation
+import OSLog
 
 @MainActor
 final class HuggingFaceDownloadService: ObservableObject {
     static let shared = HuggingFaceDownloadService()
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "MacLLM", category: "Downloads")
+
+    private static func elapsedMilliseconds(since startedAt: Date) -> Int {
+        Int(Date().timeIntervalSince(startedAt) * 1000)
+    }
 
     @Published private(set) var activeDownloads: [DownloadTaskInfo] = []
 
@@ -71,9 +77,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         onUpdate: @escaping (DownloadTaskInfo) -> Void
     ) async throws -> URL {
         let startedAt = Date()
-        AppDiagnostics.downloads.info(
-            "Download request start id=\(entry.id, privacy: .public) repo=\(entry.repoId, privacy: .public) file=\(entry.filename, privacy: .public)"
-        )
+        logger.info("Download request start id=\(entry.id) repo=\(entry.repoId) file=\(entry.filename)")
         if contexts[entry.id] != nil || parallelContexts[entry.id] != nil {
             if activeDownloads.first(where: { $0.id == entry.id })?.state == .paused {
                 resumeDownload(id: entry.id)
@@ -113,9 +117,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         let useParallel = connections > 1
             && metadata.supportsRanges
             && totalBytes >= DownloadPreferences.parallelMinimumBytes
-        AppDiagnostics.downloads.debug(
-            "Download mode id=\(entry.id, privacy: .public) parallel=\(useParallel, privacy: .public) size=\(totalBytes, privacy: .public)"
-        )
+        logger.debug("Download mode id=\(entry.id) parallel=\(useParallel) size=\(totalBytes)")
 
         if useParallel {
             do {
@@ -127,23 +129,17 @@ final class HuggingFaceDownloadService: ObservableObject {
                     connections: connections,
                     onUpdate: onUpdate
                 )
-                AppDiagnostics.downloads.info(
-                    "Download success id=\(entry.id, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms mode=parallel"
-                )
+                logger.info("Download success id=\(entry.id) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms mode=parallel")
                 return output
             } catch is CancellationError {
-                AppDiagnostics.downloads.notice("Download cancelled id=\(entry.id, privacy: .public)")
+                logger.notice("Download cancelled id=\(entry.id)")
                 throw CancellationError()
             } catch {
                 if shouldSkipParallelFallback(for: error) {
-                    AppDiagnostics.downloads.error(
-                        "Download failed id=\(entry.id, privacy: .public) mode=parallel error=\(String(describing: error), privacy: .public)"
-                    )
+                    logger.error("Download failed id=\(entry.id) mode=parallel error=\(String(describing: error))")
                     throw error
                 }
-                AppDiagnostics.downloads.notice(
-                    "Download fallback id=\(entry.id, privacy: .public) from=parallel to=single reason=\(String(describing: error), privacy: .public)"
-                )
+                logger.notice("Download fallback id=\(entry.id) from=parallel to=single reason=\(String(describing: error))")
                 parallelContexts.removeValue(forKey: entry.id)
                 if FileManager.default.fileExists(atPath: dest.path) {
                     try? FileManager.default.removeItem(at: dest)
@@ -165,9 +161,7 @@ final class HuggingFaceDownloadService: ObservableObject {
                     totalBytes: totalBytes,
                     onUpdate: onUpdate
                 )
-                AppDiagnostics.downloads.info(
-                    "Download success id=\(entry.id, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms mode=single-fallback"
-                )
+                logger.info("Download success id=\(entry.id) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms mode=single-fallback")
                 return output
             }
         }
@@ -179,9 +173,7 @@ final class HuggingFaceDownloadService: ObservableObject {
             totalBytes: totalBytes,
             onUpdate: onUpdate
         )
-        AppDiagnostics.downloads.info(
-            "Download success id=\(entry.id, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms mode=single"
-        )
+        logger.info("Download success id=\(entry.id) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms mode=single")
         return output
     }
 
@@ -347,7 +339,7 @@ final class HuggingFaceDownloadService: ObservableObject {
     }
 
     func cancelDownload(id: String) {
-        AppDiagnostics.downloads.notice("Download cancel requested id=\(id, privacy: .public)")
+        logger.notice("Download cancel requested id=\(id)")
         if let pctx = parallelContexts[id] {
             pctx.cancelled = true
             pctx.task?.cancel()
