@@ -25,6 +25,21 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           SKIP_GITHUB=1 ./Scripts/create-release.sh "$VERSION"
 
+      - name: Validate release artifacts
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DMG="dist/MacLLM-${VERSION}-macOS-arm64.dmg"
+          PKG="dist/MacLLM-${VERSION}-macOS-arm64.pkg"
+          ZIP="dist/MacLLM-${VERSION}-macOS-arm64.zip"
+          test -f "$DMG" && test -f "$PKG" && test -f "$ZIP" && test -f "dist/SHA256SUMS.txt"
+          hdiutil verify "$DMG"
+          MOUNTPOINT="$(mktemp -d)"
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNTPOINT"
+          test -d "$MOUNTPOINT/MacLLM.app"
+          hdiutil detach "$MOUNTPOINT"
+          rmdir "$MOUNTPOINT"
+          (cd dist && shasum -a 256 -c SHA256SUMS.txt)
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:

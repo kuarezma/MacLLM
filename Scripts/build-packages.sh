@@ -19,7 +19,7 @@ if [[ ! -d "$APP_PATH" ]]; then
 fi
 
 mkdir -p "$DIST"
-rm -f "$DIST/$ZIP_NAME" "$DIST/$DMG_NAME" "$DIST/$PKG_NAME"
+rm -f "$DIST/$ZIP_NAME" "$DIST/$DMG_NAME" "$DIST/$PKG_NAME" "$DIST/SHA256SUMS.txt"
 
 echo "ZIP oluşturuluyor..."
 ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$DIST/$ZIP_NAME"
@@ -30,8 +30,29 @@ rm -rf "$DMG_STAGING"
 mkdir -p "$DMG_STAGING"
 cp -R "$APP_PATH" "$DMG_STAGING/"
 ln -sf /Applications "$DMG_STAGING/Applications"
-hdiutil create -volname "MacLLM" -srcfolder "$DMG_STAGING" -ov -format UDZO "$DIST/$DMG_NAME" >/dev/null
+hdiutil create \
+  -volname "MacLLM" \
+  -srcfolder "$DMG_STAGING" \
+  -ov \
+  -format UDZO \
+  -fs HFS+ \
+  "$DIST/$DMG_NAME" >/dev/null
 rm -rf "$DMG_STAGING"
+
+echo "DMG doğrulanıyor..."
+hdiutil verify "$DIST/$DMG_NAME" >/dev/null
+DMG_MOUNT="$DIST/.dmg-mount-$$"
+rm -rf "$DMG_MOUNT"
+mkdir -p "$DMG_MOUNT"
+hdiutil attach "$DIST/$DMG_NAME" -nobrowse -readonly -mountpoint "$DMG_MOUNT" >/dev/null
+if [[ ! -d "$DMG_MOUNT/MacLLM.app" ]]; then
+  hdiutil detach "$DMG_MOUNT" -force >/dev/null || true
+  rm -rf "$DMG_MOUNT"
+  echo "Hata: DMG mount edildi ama MacLLM.app bulunamadı."
+  exit 1
+fi
+hdiutil detach "$DMG_MOUNT" >/dev/null
+rm -rf "$DMG_MOUNT"
 
 echo "PKG oluşturuluyor..."
 PKG_STAGING="$DIST/.pkg-staging-$$"
@@ -50,11 +71,10 @@ DMG_SHA="$(shasum -a 256 "$DIST/$DMG_NAME" | awk '{print $1}')"
 ZIP_SHA="$(shasum -a 256 "$DIST/$ZIP_NAME" | awk '{print $1}')"
 PKG_SHA="$(shasum -a 256 "$DIST/$PKG_NAME" | awk '{print $1}')"
 
-{
-  shasum -a 256 "$DIST/$ZIP_NAME"
-  shasum -a 256 "$DIST/$DMG_NAME"
-  shasum -a 256 "$DIST/$PKG_NAME"
-} > "$DIST/SHA256SUMS.txt"
+(
+  cd "$DIST"
+  shasum -a 256 "$ZIP_NAME" "$DMG_NAME" "$PKG_NAME"
+) > "$DIST/SHA256SUMS.txt"
 
 CASK_DIR="$ROOT/packaging/homebrew"
 mkdir -p "$CASK_DIR"
