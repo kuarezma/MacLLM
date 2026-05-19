@@ -255,6 +255,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.14.18** | Stabilite + premium UX geçişi: kullanıcı hatalarında tek tip ve yönlendirici mesajlar, Sohbet/Ayarlar/Hub etkileşim stillerinde tutarlılık, streaming sırasında daha akıcı otomatik kaydırma, release için smoke/perf/runbook checklistleri |
 | **1.14.17** | Polish: DOCX metin çıkarma; HF token Keychain; DuckDuckGo web araması; sohbet içe/dışa aktarma; proje sistemi istemi; üretim bildirimi; birim testler |
 | **1.14.16** | Qwopus düzeltmesi: `redacted_im_end` stop/sanitize; üretim zaman aşımı; boş yanıt hatası; Qwopus için güvenli KV |
 | **1.14.15** | Akışta otomatik kaydırma; sohbet açılışında model yükleme tercihi; içe aktarılmış modeller için flash migration + banner; `bench-inference.sh`; sanitizer/filter/launch birim testleri |

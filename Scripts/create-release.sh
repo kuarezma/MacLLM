@@ -44,13 +44,12 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.17)
+### Bu sürümde (1.14.18)
 
-- DOCX belge metin çıkarma; eski .doc için net yönlendirme
-- Hugging Face token Keychain’de (UserDefaults migrasyonu)
-- Web araması: DuckDuckGo Instant Answer ile composer globe düğmesi
-- Sohbet Markdown içe aktarma; proje bazlı sistem istemi
-- Ayarlarda «Yanıt hazır olunca bildir»; genişletilmiş birim testler
+- Stabilite: AppModel genelinde kullanıcı hataları tek formatta ve çözüm önerisiyle gösteriliyor
+- UI/UX: Ayarlar, sohbet ve Model Hub için premium buton stilleri ve daha tutarlı etkileşim geri bildirimi
+- Performans: Streaming sırasında otomatik scroll yoğunluğu azaltıldı; uzun yanıtlarda daha akıcı deneyim
+- Kalite kapısı: UserErrorFormatter birim testleri eklendi, release/smoke/perf checklist runbook ile birleştirildi
 
 ### Önceki (1.14.16)
 
