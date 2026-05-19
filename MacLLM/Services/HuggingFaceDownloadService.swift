@@ -70,6 +70,10 @@ final class HuggingFaceDownloadService: ObservableObject {
         entry: CatalogEntry,
         onUpdate: @escaping (DownloadTaskInfo) -> Void
     ) async throws -> URL {
+        let startedAt = Date()
+        AppDiagnostics.downloads.info(
+            "Download request start id=\(entry.id, privacy: .public) repo=\(entry.repoId, privacy: .public) file=\(entry.filename, privacy: .public)"
+        )
         if contexts[entry.id] != nil || parallelContexts[entry.id] != nil {
             if activeDownloads.first(where: { $0.id == entry.id })?.state == .paused {
                 resumeDownload(id: entry.id)
@@ -109,10 +113,13 @@ final class HuggingFaceDownloadService: ObservableObject {
         let useParallel = connections > 1
             && metadata.supportsRanges
             && totalBytes >= DownloadPreferences.parallelMinimumBytes
+        AppDiagnostics.downloads.debug(
+            "Download mode id=\(entry.id, privacy: .public) parallel=\(useParallel, privacy: .public) size=\(totalBytes, privacy: .public)"
+        )
 
         if useParallel {
             do {
-                return try await downloadParallel(
+                let output = try await downloadParallel(
                     entry: entry,
                     destination: dest,
                     metadata: metadata,
@@ -120,12 +127,23 @@ final class HuggingFaceDownloadService: ObservableObject {
                     connections: connections,
                     onUpdate: onUpdate
                 )
+                AppDiagnostics.downloads.info(
+                    "Download success id=\(entry.id, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms mode=parallel"
+                )
+                return output
             } catch is CancellationError {
+                AppDiagnostics.downloads.notice("Download cancelled id=\(entry.id, privacy: .public)")
                 throw CancellationError()
             } catch {
                 if shouldSkipParallelFallback(for: error) {
+                    AppDiagnostics.downloads.error(
+                        "Download failed id=\(entry.id, privacy: .public) mode=parallel error=\(String(describing: error), privacy: .public)"
+                    )
                     throw error
                 }
+                AppDiagnostics.downloads.notice(
+                    "Download fallback id=\(entry.id, privacy: .public) from=parallel to=single reason=\(String(describing: error), privacy: .public)"
+                )
                 parallelContexts.removeValue(forKey: entry.id)
                 if FileManager.default.fileExists(atPath: dest.path) {
                     try? FileManager.default.removeItem(at: dest)
@@ -140,23 +158,31 @@ final class HuggingFaceDownloadService: ObservableObject {
                 )
                 upsertActive(fallbackInfo)
                 onUpdate(fallbackInfo)
-                return try await downloadSingleStream(
+                let output = try await downloadSingleStream(
                     entry: entry,
                     destination: dest,
                     url: metadata.url,
                     totalBytes: totalBytes,
                     onUpdate: onUpdate
                 )
+                AppDiagnostics.downloads.info(
+                    "Download success id=\(entry.id, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms mode=single-fallback"
+                )
+                return output
             }
         }
 
-        return try await downloadSingleStream(
+        let output = try await downloadSingleStream(
             entry: entry,
             destination: dest,
             url: metadata.url,
             totalBytes: totalBytes,
             onUpdate: onUpdate
         )
+        AppDiagnostics.downloads.info(
+            "Download success id=\(entry.id, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms mode=single"
+        )
+        return output
     }
 
     private func downloadParallel(
@@ -321,6 +347,7 @@ final class HuggingFaceDownloadService: ObservableObject {
     }
 
     func cancelDownload(id: String) {
+        AppDiagnostics.downloads.notice("Download cancel requested id=\(id, privacy: .public)")
         if let pctx = parallelContexts[id] {
             pctx.cancelled = true
             pctx.task?.cancel()

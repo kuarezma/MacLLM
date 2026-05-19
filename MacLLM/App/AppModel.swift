@@ -342,6 +342,7 @@ final class AppModel {
     func selectModel(_ model: InstalledModel) async -> Bool {
         modelLoadGeneration &+= 1
         let generation = modelLoadGeneration
+        let startedAt = Date()
 
         isLoadingModel = true
         setStatusMessage("\(model.name) hazırlanıyor…")
@@ -364,11 +365,18 @@ final class AppModel {
             }
             setStatusMessage("\(model.name) kullanıma hazır")
             refreshModels()
+            AppDiagnostics.appModel.info(
+                "Select model success id=\(model.id, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms"
+            )
             return true
         } catch is CancellationError {
+            AppDiagnostics.appModel.notice("Select model cancelled id=\(model.id, privacy: .public)")
             return false
         } catch {
             guard generation == modelLoadGeneration else { return false }
+            AppDiagnostics.appModel.error(
+                "Select model failed id=\(model.id, privacy: .public) error=\(String(describing: error), privacy: .public)"
+            )
             reportError(error, context: "Yukleme hatasi")
             return false
         }
@@ -765,6 +773,7 @@ final class AppModel {
         appendUserMessage: Bool = true,
         forceFullPrefill: Bool = false
     ) async {
+        let sendStartedAt = Date()
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if appendUserMessage {
             guard !trimmed.isEmpty || !pendingAttachments.isEmpty else { return }
@@ -945,6 +954,9 @@ final class AppModel {
                 contextTokenFingerprint = ""
                 scheduleSaveCurrentSession()
                 GenerationNotificationService.notifyGenerationComplete(sessionTitle: currentSession.title)
+                AppDiagnostics.appModel.info(
+                    "Send message success session=\(activeSessionId.uuidString, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: sendStartedAt), privacy: .public)ms"
+                )
             }
         } catch is CancellationError {
             streamingBuffer.reset()
@@ -955,6 +967,9 @@ final class AppModel {
             }
             setStatusMessage("Üretim durduruldu")
             try? await saveCurrentSession()
+            AppDiagnostics.appModel.notice(
+                "Send message cancelled session=\(activeSessionId.uuidString, privacy: .public)"
+            )
         } catch let llamaError as LlamaError {
             guard currentSession.id == activeSessionId,
                   assistantIndex < currentSession.messages.count else { return }
@@ -972,6 +987,9 @@ final class AppModel {
             }
             await inferenceService.clearKVCache()
             try? await saveCurrentSession()
+            AppDiagnostics.appModel.error(
+                "Send message llama failure session=\(activeSessionId.uuidString, privacy: .public) error=\(String(describing: llamaError), privacy: .public)"
+            )
         } catch {
             guard currentSession.id == activeSessionId,
                   assistantIndex < currentSession.messages.count else { return }
@@ -982,6 +1000,9 @@ final class AppModel {
             reportError(error, context: "Uretim hatasi")
             await inferenceService.clearKVCache()
             try? await saveCurrentSession()
+            AppDiagnostics.appModel.error(
+                "Send message failure session=\(activeSessionId.uuidString, privacy: .public) error=\(String(describing: error), privacy: .public)"
+            )
         }
     }
 

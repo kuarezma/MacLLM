@@ -35,6 +35,10 @@ final class InferenceService: ObservableObject {
     }
 
     func loadModel(_ model: InstalledModel, settingsOverride: InferenceSettings? = nil) async throws {
+        let startedAt = Date()
+        AppDiagnostics.inference.info(
+            "Model load start id=\(model.id, privacy: .public) name=\(model.name, privacy: .public)"
+        )
         defer { modelLoadingStage = nil }
         modelLoadingStage = "Mevcut model kapatiliyor"
         await stopGeneration()
@@ -55,6 +59,9 @@ final class InferenceService: ObservableObject {
         }.value
         if Task.isCancelled {
             await loadedContext.shutdown()
+            AppDiagnostics.inference.notice(
+                "Model load cancelled id=\(model.id, privacy: .public) after=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms"
+            )
             throw CancellationError()
         }
         modelLoadingStage = "Calisma profili hazirlaniyor"
@@ -63,6 +70,9 @@ final class InferenceService: ObservableObject {
         loadedModelId = model.id
         lastLoadedModel = model
         try ModelStore.shared.touchLastUsed(id: model.id)
+        AppDiagnostics.inference.info(
+            "Model load success id=\(model.id, privacy: .public) elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms"
+        )
     }
 
     func buildLoadedProfile(
@@ -116,8 +126,10 @@ final class InferenceService: ObservableObject {
     }
 
     func stopGeneration() async {
+        let startedAt = Date()
         let task = generationTask
         guard task != nil || isGenerating || isStoppingGeneration else { return }
+        AppDiagnostics.inference.debug("Stop generation requested hasTask=\(task != nil, privacy: .public)")
         isStoppingGeneration = true
         generationRunID &+= 1
         generationTask = nil
@@ -128,6 +140,9 @@ final class InferenceService: ObservableObject {
         }
         isGenerating = false
         isStoppingGeneration = false
+        AppDiagnostics.inference.debug(
+            "Stop generation finished elapsed=\(AppDiagnostics.elapsedMilliseconds(since: startedAt), privacy: .public)ms"
+        )
     }
 
     private static func messagesWithSystem(_ messages: [ChatMessage], systemPrompt: String) -> [ChatMessage] {
@@ -180,6 +195,9 @@ final class InferenceService: ObservableObject {
                 await self.stopGeneration()
                 self.generationRunID &+= 1
                 let runID = self.generationRunID
+                AppDiagnostics.inference.info(
+                    "Generation start run=\(runID, privacy: .public) session=\(sessionId.uuidString, privacy: .public)"
+                )
                 self.isStoppingGeneration = false
                 self.isGenerating = true
                 self.lastGenerationStats = nil
@@ -212,6 +230,9 @@ final class InferenceService: ObservableObject {
                         var didRetryWithoutFlash = false
 
                         generationAttempt: for attempt in 0..<3 {
+                            AppDiagnostics.inference.debug(
+                                "Generation attempt run=\(runID, privacy: .public) attempt=\(attempt + 1, privacy: .public)"
+                            )
                             var outputFilter = GenerationOutputFilter(stopSequences: stops)
                             emittedOutput = ""
 
@@ -269,6 +290,9 @@ final class InferenceService: ObservableObject {
                                        !didRetryWithoutFlash,
                                        let model = await MainActor.run(body: { self.lastLoadedModel }) {
                                         didRetryWithoutFlash = true
+                                        AppDiagnostics.inference.notice(
+                                            "Decode failed run=\(runID, privacy: .public), retrying with flash attention off"
+                                        )
                                         var relaxed = inferenceSettings
                                         relaxed.flashAttention = false
                                         try await self.loadModel(model, settingsOverride: relaxed)
@@ -297,6 +321,9 @@ final class InferenceService: ObservableObject {
                         }
                         let duration = max(Date().timeIntervalSince(started), 0.001)
                         let tps = Double(savedOutputTokens) / duration
+                        AppDiagnostics.inference.info(
+                            "Generation success run=\(runID, privacy: .public) tokens=\(savedOutputTokens, privacy: .public) elapsed=\(Int(duration * 1000), privacy: .public)ms tps=\(tps, privacy: .public)"
+                        )
 
                         await MainActor.run {
                             self.lastGenerationStats = GenerationStats(
@@ -314,6 +341,9 @@ final class InferenceService: ObservableObject {
                         }
                         continuation.finish()
                     } catch {
+                        AppDiagnostics.inference.error(
+                            "Generation failure run=\(runID, privacy: .public) error=\(String(describing: error), privacy: .public)"
+                        )
                         await self.clearKVCache()
                         continuation.finish(throwing: error)
                     }
