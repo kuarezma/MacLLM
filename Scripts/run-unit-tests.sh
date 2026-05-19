@@ -71,6 +71,7 @@ swiftc \
   MacLLM/Services/AttachmentStore.swift \
   MacLLM/Services/ModelStore.swift \
   MacLLM/Core/MessageAttachment.swift \
+  MacLLM/Core/GenerationStats.swift \
   MacLLM/Core/Models.swift \
   MacLLM/Services/MacSystemProfile.swift \
   Tests/MediaContentProcessorTests.swift
@@ -86,6 +87,7 @@ swiftc \
   MacLLM/Services/AttachmentStore.swift \
   MacLLM/Services/ModelStore.swift \
   MacLLM/Core/MessageAttachment.swift \
+  MacLLM/Core/GenerationStats.swift \
   MacLLM/Core/Models.swift \
   MacLLM/Services/MacSystemProfile.swift \
   Tests/AttachmentStoreKindTests.swift
@@ -98,6 +100,7 @@ swiftc \
   -target arm64-apple-macos14.0 \
   -O \
   -o "$EXPORT_BIN" \
+  MacLLM/Core/GenerationStats.swift \
   MacLLM/Core/Models.swift \
   MacLLM/Core/MessageAttachment.swift \
   MacLLM/Services/ModelStore.swift \
