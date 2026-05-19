@@ -222,6 +222,23 @@ enum DownloadState: String {
 
 // MARK: - Inference settings (Ollama-compatible parameters)
 
+/// Donanım performans kademesi — varsayılan çıkarım ayarları için.
+enum PerformanceTier: String, Codable, Equatable, Sendable {
+    case low
+    case medium
+    case high
+    case ultra
+
+    var label: String {
+        switch self {
+        case .low: return "Düşük"
+        case .medium: return "Orta"
+        case .high: return "Yüksek"
+        case .ultra: return "Ultra"
+        }
+    }
+}
+
 /// Ollama `Modelfile` / API parametreleriyle uyumlu çıkarım ayarları.
 struct InferenceSettings: Codable, Equatable {
     // Örnekleme (temperature, top_p, top_k, min_p, seed, mirostat)
@@ -243,6 +260,10 @@ struct InferenceSettings: Codable, Equatable {
     var contextLength: UInt32
     var gpuLayers: Int32
     var threadCount: Int32
+    var batchSize: UInt32
+    var flashAttention: Bool
+    var usePromptCache: Bool
+    var performancePreset: PerformancePreset
 
     // Sohbet (system, stop)
     var systemPrompt: String
@@ -252,7 +273,14 @@ struct InferenceSettings: Codable, Equatable {
         case temperature, topP, topK, minP, seed, mirostat, mirostatTau, mirostatEta
         case repeatPenalty, repeatLastN
         case maxTokens, contextLength, gpuLayers, threadCount
+        case batchSize, flashAttention, usePromptCache, performancePreset
         case systemPrompt, stopSequences
+    }
+
+    enum PerformancePreset: String, Codable, CaseIterable, Equatable {
+        case speed = "Hız"
+        case balanced = "Denge"
+        case quality = "Kalite"
     }
 
     init(
@@ -269,7 +297,11 @@ struct InferenceSettings: Codable, Equatable {
         maxTokens: Int32 = 1024,
         contextLength: UInt32 = 4096,
         gpuLayers: Int32 = -1,
-        threadCount: Int32 = Int32(max(1, min(8, ProcessInfo.processInfo.processorCount - 2))),
+        threadCount: Int32 = Int32(max(1, min(12, ProcessInfo.processInfo.processorCount - 2))),
+        batchSize: UInt32 = 512,
+        flashAttention: Bool = true,
+        usePromptCache: Bool = true,
+        performancePreset: PerformancePreset = .balanced,
         systemPrompt: String = "",
         stopSequences: [String] = ["</s>", "<|eot_id|>", "<|" + "im_end" + "|>", "<|" + "im_start" + "|>"]
     ) {
@@ -287,6 +319,10 @@ struct InferenceSettings: Codable, Equatable {
         self.contextLength = contextLength
         self.gpuLayers = gpuLayers
         self.threadCount = threadCount
+        self.batchSize = batchSize
+        self.flashAttention = flashAttention
+        self.usePromptCache = usePromptCache
+        self.performancePreset = performancePreset
         self.systemPrompt = systemPrompt
         self.stopSequences = stopSequences
     }
@@ -307,7 +343,11 @@ struct InferenceSettings: Codable, Equatable {
         contextLength = try c.decodeIfPresent(UInt32.self, forKey: .contextLength) ?? 4096
         gpuLayers = try c.decodeIfPresent(Int32.self, forKey: .gpuLayers) ?? -1
         threadCount = try c.decodeIfPresent(Int32.self, forKey: .threadCount)
-            ?? Int32(max(1, min(8, ProcessInfo.processInfo.processorCount - 2)))
+            ?? Int32(max(1, min(12, ProcessInfo.processInfo.processorCount - 2)))
+        batchSize = try c.decodeIfPresent(UInt32.self, forKey: .batchSize) ?? 512
+        flashAttention = try c.decodeIfPresent(Bool.self, forKey: .flashAttention) ?? true
+        usePromptCache = try c.decodeIfPresent(Bool.self, forKey: .usePromptCache) ?? true
+        performancePreset = try c.decodeIfPresent(PerformancePreset.self, forKey: .performancePreset) ?? .balanced
         systemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt) ?? ""
         stopSequences = try c.decodeIfPresent([String].self, forKey: .stopSequences)
             ?? ["</s>", "<|eot_id|>", "<|" + "im_end" + "|>", "<|" + "im_start" + "|>"]
@@ -322,26 +362,62 @@ struct InferenceSettings: Codable, Equatable {
 
     static func defaults(for profile: MacSystemProfile) -> InferenceSettings {
         var settings = InferenceSettings.ollamaDefaults
-        switch profile.physicalMemoryGB {
-        case ..<10:
+        switch profile.performanceTier {
+        case .low:
             settings.contextLength = 2048
             settings.maxTokens = 768
             settings.gpuLayers = 20
-        case 10..<18:
+            settings.batchSize = 256
+            settings.flashAttention = false
+        case .medium:
             settings.contextLength = 4096
             settings.maxTokens = 1024
             settings.gpuLayers = 40
-        case 18..<26:
+            settings.batchSize = 512
+            settings.flashAttention = true
+        case .high:
             settings.contextLength = 6144
             settings.maxTokens = 1536
             settings.gpuLayers = 60
-        default:
+            settings.batchSize = 512
+            settings.flashAttention = true
+        case .ultra:
             settings.contextLength = 8192
             settings.maxTokens = 2048
             settings.gpuLayers = -1
+            settings.batchSize = 512
+            settings.flashAttention = true
         }
-        settings.threadCount = Int32(max(1, min(8, profile.processorCount - 2)))
+        settings.threadCount = profile.recommendedThreadCount
         return settings
+    }
+
+    mutating func apply(preset: PerformancePreset, tier: PerformanceTier) {
+        performancePreset = preset
+        switch preset {
+        case .speed:
+            batchSize = tier == .low ? 256 : 512
+            flashAttention = tier != .low
+            usePromptCache = true
+            if tier == .low { contextLength = min(contextLength, 2048) }
+        case .balanced:
+            batchSize = tier == .low ? 256 : 512
+            flashAttention = tier != .low
+            usePromptCache = true
+        case .quality:
+            batchSize = 512
+            flashAttention = tier != .low
+            usePromptCache = true
+            if tier == .ultra { contextLength = max(contextLength, 8192) }
+        }
+    }
+
+    func needsModelReload(comparedTo baseline: InferenceSettings) -> Bool {
+        baseline.contextLength != contextLength
+            || baseline.gpuLayers != gpuLayers
+            || baseline.threadCount != threadCount
+            || baseline.batchSize != batchSize
+            || baseline.flashAttention != flashAttention
     }
 
     var stopSequencesText: String {

@@ -113,6 +113,28 @@ final class ChatHistoryStore: Sendable {
         try writeIndex(summaries)
     }
 
+    /// Oturum dosyasını kaydeder; indeks güncellemesi çağırana bırakılır (debounced save).
+    func writeSessionFile(_ session: ChatSession) throws {
+        try ModelStore.shared.ensureDirectories()
+        let url = sessionFileURL(id: session.id)
+        var encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(session)
+        try data.write(to: url, options: .atomic)
+    }
+
+    func upsertSummary(for session: ChatSession) throws -> ChatSessionSummary {
+        var summaries = try loadSummaries()
+        let summary = ChatSessionSummary(from: session)
+        if let index = summaries.firstIndex(where: { $0.id == session.id }) {
+            summaries[index] = summary
+        } else {
+            summaries.insert(summary, at: 0)
+        }
+        try writeIndex(summaries)
+        return summary
+    }
+
     /// Başlık veya mesaj içeriğinde arama (büyük/küçük harf duyarsız).
     func searchSessionSummaries(matching query: String) throws -> [ChatSessionSummary] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

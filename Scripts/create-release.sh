@@ -44,7 +44,16 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.11)
+### Bu sürümde (1.14.12)
+
+- **Inference performansı:** chunked prefill, flash attention, ayarlanabilir batch size
+- **KV prompt cache:** çok turlu sohbette yalnızca yeni mesaj prefill (TTFT düşer)
+- **Hot-apply ayarlar:** maxTokens ve sampling model reload gerektirmeden güncellenir
+- **Donanım profili:** RAM/çekirdeğe göre Hız / Denge / Kalite preset ve tier varsayılanları
+- **Streaming UI:** izole buffer — sidebar ve bağlam halkası stream sırasında donmaz
+- **I/O:** debounced session save, detached disk yazımı, context token fingerprint cache
+
+### Önceki (1.14.11)
 
 - Silinen sohbetlerin geri gelmesi düzeltildi: aktif sohbet silinince artık yeniden kaydedilmez
 - Streaming sonrası arka plan kaydı silme ile yarışmayacak şekilde korundu

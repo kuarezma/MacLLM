@@ -12,8 +12,21 @@ struct MacSystemProfile: Equatable, Sendable {
         max(1, Int(physicalMemoryBytes / 1_073_741_824))
     }
 
+    var performanceTier: PerformanceTier {
+        switch physicalMemoryGB {
+        case ..<10: return .low
+        case 10..<18: return .medium
+        case 18..<26: return .high
+        default: return .ultra
+        }
+    }
+
+    var recommendedThreadCount: Int32 {
+        Int32(max(1, min(12, processorCount - 2)))
+    }
+
     var displaySummary: String {
-        "\(chipName) · \(physicalMemoryGB) GB RAM"
+        "\(chipName) · \(physicalMemoryGB) GB RAM · \(performanceTier.label)"
     }
 
     static func current() -> MacSystemProfile {

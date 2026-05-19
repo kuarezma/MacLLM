@@ -23,6 +23,7 @@ final class AppModel {
     var contextTokenCount: Int = 0
     var contextTokenCountIsEstimate = true
     var activeProfile: LoadedModelProfile?
+    var streamingBuffer = StreamingTextBuffer()
 
     private let modelStore = ModelStore.shared
     private var statusClearTask: Task<Void, Never>?
@@ -36,6 +37,7 @@ final class AppModel {
     private var modelLoadGeneration: UInt = 0
     private var deletedSessionIDs: Set<UUID> = []
     private var pendingSaveTask: Task<Void, Never>?
+    private var contextTokenFingerprint: String = ""
 
     var selectedModel: InstalledModel? {
         installedModels.first { $0.id == selectedModelId }
@@ -135,6 +137,7 @@ final class AppModel {
         pendingSaveTask?.cancel()
         pendingSaveTask = nil
         deletedSessionIDs.insert(session.id)
+        invalidateInferenceCache()
         do {
             try chatStore.deleteSession(id: session.id)
             AttachmentStore.shared.deleteSessionAttachments(sessionId: session.id)
@@ -233,6 +236,7 @@ final class AppModel {
 
             selectedModelId = model.id
             currentSession.modelId = model.id
+            invalidateInferenceCache()
             if let profile = await inferenceService.buildLoadedProfile(
                 for: model,
                 systemProfile: systemProfile
@@ -408,6 +412,8 @@ final class AppModel {
         if saveCurrent, !currentSession.messages.isEmpty {
             try? await saveCurrentSession()
         }
+        invalidateInferenceCache()
+        streamingBuffer.reset()
         currentSession = ChatSession(modelId: selectedModelId, projectId: selectedProjectId)
         setStatusMessage(nil)
     }
@@ -483,20 +489,52 @@ final class AppModel {
             currentSession.title = String(firstUser.content.prefix(48))
         }
         currentSession.updatedAt = .now
-        try chatStore.saveSession(currentSession)
-        sessions = try chatStore.loadSessionIndex()
+        let snapshot = currentSession
+        try await Task.detached(priority: .utility) {
+            try ChatHistoryStore.shared.writeSessionFile(snapshot)
+            _ = try ChatHistoryStore.shared.upsertSummary(for: snapshot)
+        }.value
+        patchLocalSessionSummary(snapshot)
+    }
+
+    private func patchLocalSessionSummary(_ session: ChatSession) {
+        if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+            sessions[index].title = session.title
+            sessions[index].updatedAt = session.updatedAt
+            sessions[index].modelId = session.modelId
+            sessions[index].projectId = session.projectId
+        } else {
+            sessions.insert(
+                ChatSession(
+                    id: session.id,
+                    title: session.title,
+                    modelId: session.modelId,
+                    projectId: session.projectId,
+                    messages: [],
+                    createdAt: session.createdAt,
+                    updatedAt: session.updatedAt
+                ),
+                at: 0
+            )
+        }
+        sessions.sort { $0.updatedAt > $1.updatedAt }
     }
 
     private func scheduleSaveCurrentSession() {
         pendingSaveTask?.cancel()
         let sessionId = currentSession.id
-        pendingSaveTask = Task(priority: .utility) { [weak self] in
-            guard let self else { return }
-            guard !Task.isCancelled else { return }
+        pendingSaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(750))
+            guard let self, !Task.isCancelled else { return }
             guard !deletedSessionIDs.contains(sessionId) else { return }
             guard currentSession.id == sessionId else { return }
             try? await saveCurrentSession()
         }
+    }
+
+    private func invalidateInferenceCache() {
+        inferenceService.invalidatePromptCache()
+        contextTokenFingerprint = ""
     }
 
     func loadSession(_ session: ChatSession) async {
@@ -521,7 +559,8 @@ final class AppModel {
     func sendMessage(
         _ text: String,
         pendingAttachments: [MessageAttachment] = [],
-        appendUserMessage: Bool = true
+        appendUserMessage: Bool = true,
+        forceFullPrefill: Bool = false
     ) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if appendUserMessage {
@@ -655,42 +694,40 @@ final class AppModel {
             currentSession.messages.dropLast().map { $0 },
             maxContextTokens: effectiveContextLength
         )
+        streamingBuffer.begin(sessionId: activeSessionId, messageId: assistantMessageId)
         let stream = inferenceService.streamResponse(
             messages: messagesForInference,
             chatTemplate: template,
             sessionId: currentSession.id,
-            stopSequences: activeProfile?.recommendedStopSequences
+            stopSequences: activeProfile?.recommendedStopSequences,
+            forceFullPrefill: forceFullPrefill
         )
 
         do {
-            var pending = ""
-            var lastFlush = Date()
             for try await chunk in stream {
                 guard currentSession.id == activeSessionId,
                       assistantIndex < currentSession.messages.count,
                       currentSession.messages[assistantIndex].id == assistantMessageId else {
                     break
                 }
-                pending += chunk
-                let now = Date()
-                if now.timeIntervalSince(lastFlush) >= 0.032 {
-                    currentSession.messages[assistantIndex].content += pending
-                    pending = ""
-                    lastFlush = now
-                }
+                streamingBuffer.append(chunk)
             }
             if currentSession.id == activeSessionId,
                assistantIndex < currentSession.messages.count,
                currentSession.messages[assistantIndex].id == assistantMessageId {
-                if !pending.isEmpty {
-                    currentSession.messages[assistantIndex].content += pending
-                }
-                currentSession.messages[assistantIndex].content = ControlTokenSanitizer.sanitizeForDisplay(
-                    currentSession.messages[assistantIndex].content
+                let finalText = ControlTokenSanitizer.sanitizeForDisplay(streamingBuffer.finish())
+                currentSession.messages[assistantIndex].content = finalText
+                streamingBuffer.reset()
+                await inferenceService.updatePromptCache(
+                    sessionId: currentSession.id,
+                    messages: currentSession.messages,
+                    chatTemplate: template
                 )
+                contextTokenFingerprint = ""
                 scheduleSaveCurrentSession()
             }
         } catch is CancellationError {
+            streamingBuffer.reset()
             if currentSession.id == activeSessionId,
                assistantIndex < currentSession.messages.count,
                currentSession.messages[assistantIndex].content.isEmpty {
@@ -731,16 +768,24 @@ final class AppModel {
         guard !inferenceService.isGenerating else { return }
         contextRefreshTask?.cancel()
         contextRefreshTask = Task {
-            try? await Task.sleep(for: .milliseconds(350))
+            try? await Task.sleep(for: .milliseconds(1500))
             guard !Task.isCancelled else { return }
             await refreshContextTokenCount()
         }
+    }
+
+    private func contextMessagesFingerprint() -> String {
+        InferenceService.messageFingerprint(messages: currentSession.messages)
     }
 
     func refreshContextTokenCount() async {
         guard !inferenceService.isGenerating else {
             contextTokenCount = estimatedContextTokens()
             contextTokenCountIsEstimate = true
+            return
+        }
+        let fingerprint = contextMessagesFingerprint()
+        if fingerprint == contextTokenFingerprint, !contextTokenCountIsEstimate {
             return
         }
         guard let model = selectedModel, inferenceService.isModelLoaded else {
@@ -759,6 +804,7 @@ final class AppModel {
                 sessionId: currentSession.id
             )
             contextTokenCountIsEstimate = false
+            contextTokenFingerprint = fingerprint
         } catch {
             contextTokenCount = estimatedContextTokens()
             contextTokenCountIsEstimate = true
@@ -767,6 +813,7 @@ final class AppModel {
 
     func editUserMessage(id: UUID, newText: String) async {
         await stopGenerationAndWait()
+        invalidateInferenceCache()
         guard let index = currentSession.messages.firstIndex(where: { $0.id == id }),
               currentSession.messages[index].role == .user else { return }
         let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -777,11 +824,12 @@ final class AppModel {
         if index + 1 < currentSession.messages.count {
             currentSession.messages.removeSubrange((index + 1)...)
         }
-        await sendMessage(trimmed, pendingAttachments: attachments, appendUserMessage: false)
+        await sendMessage(trimmed, pendingAttachments: attachments, appendUserMessage: false, forceFullPrefill: true)
     }
 
     func deleteMessage(id: UUID) async {
         await stopGenerationAndWait()
+        invalidateInferenceCache()
         guard let index = currentSession.messages.firstIndex(where: { $0.id == id }) else { return }
         currentSession.messages.remove(at: index)
         try? await saveCurrentSession()
@@ -789,6 +837,7 @@ final class AppModel {
 
     func regenerate(from messageId: UUID) async {
         await stopGenerationAndWait()
+        invalidateInferenceCache()
         guard let index = currentSession.messages.firstIndex(where: { $0.id == messageId }) else { return }
         let message = currentSession.messages[index]
         guard message.role == .assistant else { return }
@@ -798,7 +847,8 @@ final class AppModel {
         await sendMessage(
             userMessage.content,
             pendingAttachments: userMessage.attachments,
-            appendUserMessage: false
+            appendUserMessage: false,
+            forceFullPrefill: true
         )
     }
 
@@ -836,20 +886,23 @@ final class AppModel {
             UserDefaults.standard.set(data, forKey: "inferenceSettings")
         }
         mergeDefaultStopSequences()
-        if !reloadModel, inferenceService.isModelLoaded, let model = selectedModel {
-            Task {
-                if let profile = await inferenceService.buildLoadedProfile(
-                    for: model,
-                    systemProfile: systemProfile
-                ) {
-                    applyRuntimeProfile(profile)
-                }
+        if reloadModel, let model = selectedModel {
+            invalidateInferenceCache()
+            setStatusMessage("Ayarlar kaydedildi")
+            Task { await selectModel(model) }
+            return
+        }
+        Task {
+            await inferenceService.applyRuntimeSettingsIfLoaded()
+            if inferenceService.isModelLoaded, let model = selectedModel,
+               let profile = await inferenceService.buildLoadedProfile(
+                   for: model,
+                   systemProfile: systemProfile
+               ) {
+                applyRuntimeProfile(profile)
             }
         }
         setStatusMessage("Ayarlar kaydedildi")
-        if reloadModel, let model = selectedModel {
-            Task { await selectModel(model) }
-        }
     }
 
     private func applyRuntimeProfile(_ profile: LoadedModelProfile) {
@@ -862,10 +915,6 @@ final class AppModel {
     }
 
     func saveSettingsIfNeeded(comparedTo baseline: InferenceSettings) {
-        let needsReload =
-            baseline.contextLength != settings.contextLength
-            || baseline.gpuLayers != settings.gpuLayers
-            || baseline.threadCount != settings.threadCount
-        saveSettings(reloadModel: needsReload)
+        saveSettings(reloadModel: settings.needsModelReload(comparedTo: baseline))
     }
 }

@@ -266,6 +266,35 @@ struct SettingsView: View {
             }
         }
 
+        SettingsCard("Performans", subtitle: "Donanım kademesi: \(model.systemProfile.performanceTier.label)") {
+            Picker("Profil", selection: Binding(
+                get: { model.settings.performancePreset },
+                set: { model.settings.apply(preset: $0, tier: model.systemProfile.performanceTier) }
+            )) {
+                ForEach(InferenceSettings.PerformancePreset.allCases, id: \.self) { preset in
+                    Text(preset.rawValue).tag(preset)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Toggle("Flash Attention", isOn: bindable.boolBinding(\.flashAttention))
+            Toggle("Prompt önbelleği (KV reuse)", isOn: bindable.boolBinding(\.usePromptCache))
+
+            Picker("Batch boyutu", selection: Binding(
+                get: { model.settings.batchSize },
+                set: { model.settings.batchSize = $0 }
+            )) {
+                Text("256").tag(UInt32(256))
+                Text("512").tag(UInt32(512))
+                Text("1024").tag(UInt32(1024))
+            }
+            .pickerStyle(.segmented)
+
+            SettingsCaption(
+                text: "Batch / Flash Attention değişince model yeniden yüklenir. Örnekleme ayarları anında uygulanır."
+            )
+        }
+
         SettingsCard("Bağlam", subtitle: "num_ctx — maksimum token penceresi") {
             Picker("Bağlam uzunluğu", selection: bindable.intBinding(\.contextLength)) {
                 Text("2048").tag(2048)
@@ -451,6 +480,13 @@ private extension Bindable where Value == AppModel {
     }
 
     func stringBinding(_ keyPath: WritableKeyPath<InferenceSettings, String>) -> Binding<String> {
+        Binding(
+            get: { wrappedValue.settings[keyPath: keyPath] },
+            set: { wrappedValue.settings[keyPath: keyPath] = $0 }
+        )
+    }
+
+    func boolBinding(_ keyPath: WritableKeyPath<InferenceSettings, Bool>) -> Binding<Bool> {
         Binding(
             get: { wrappedValue.settings[keyPath: keyPath] },
             set: { wrappedValue.settings[keyPath: keyPath] = $0 }

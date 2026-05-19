@@ -1,6 +1,26 @@
 import AppKit
 import SwiftUI
 
+enum AttachmentImageCache {
+    private static var storage: [String: NSImage] = [:]
+    private static let lock = NSLock()
+
+    static func image(for url: URL) -> NSImage? {
+        let key = url.path
+        lock.lock()
+        if let cached = storage[key] {
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+        guard let image = NSImage(contentsOf: url) else { return nil }
+        lock.lock()
+        storage[key] = image
+        lock.unlock()
+        return image
+    }
+}
+
 struct MessageAttachmentsView: View {
     let attachments: [MessageAttachment]
     let sessionId: UUID
@@ -20,7 +40,7 @@ struct MessageAttachmentsView: View {
         let url = AttachmentStore.shared.fileURL(sessionId: sessionId, attachment: attachment)
         switch attachment.kind {
         case .image:
-            if let image = NSImage(contentsOf: url) {
+            if let image = AttachmentImageCache.image(for: url) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()

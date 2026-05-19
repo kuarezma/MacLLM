@@ -9,6 +9,7 @@ struct MessageRow: View {
     var sessionId: UUID
     var showsTypingIndicator: Bool = false
     var isStreaming: Bool = false
+    var streamingText: String? = nil
     var generationStats: GenerationStats?
     var reserveStatsSpace: Bool = false
 
@@ -23,6 +24,7 @@ struct MessageRow: View {
 
     private var displayContent: String {
         if showsTypingIndicator { return "" }
+        if isStreaming, let streamingText { return streamingText }
         let raw = message.content
         if message.role == .assistant {
             return ControlTokenSanitizer.sanitizeForDisplay(raw)
@@ -31,7 +33,8 @@ struct MessageRow: View {
     }
 
     private var contentSplit: ReasoningContentSplitter.Split {
-        ReasoningContentSplitter.split(displayContent)
+        if isStreaming { return ReasoningContentSplitter.Split(thought: nil, answer: displayContent, thoughtSeconds: nil) }
+        return ReasoningContentSplitter.split(displayContent)
     }
 
     var body: some View {

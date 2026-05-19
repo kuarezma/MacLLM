@@ -123,6 +123,7 @@ SOURCES=(
   MacLLM/Features/Chat/MessageMarkdownView.swift
   MacLLM/Features/Chat/ProseMarkdownView.swift
   MacLLM/Features/Chat/ChatComposerAttachments.swift
+  MacLLM/Features/Chat/StreamingTextBuffer.swift
   MacLLM/Features/Chat/MessageAttachmentsView.swift
   MacLLM/Features/Models/DownloadProgressView.swift
   MacLLM/Features/Models/ActiveDownloadsPanel.swift

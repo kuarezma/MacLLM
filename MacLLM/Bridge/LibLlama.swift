@@ -83,6 +83,7 @@ actor LlamaContext {
     private let mtmdShim = MtmdShim()
     private var multimodalPrefill = false
     private var threadCount: Int32 = 4
+    private var batchSizeLimit: Int32 = 512
 
     init(
         model: OpaquePointer,
@@ -95,11 +96,14 @@ actor LlamaContext {
         self.context = context
         self.chatTemplate = ChatTemplateResolver.templateForModel(model, hint: chatTemplateHint)
         self.tokens_list = []
-        self.batch = llama_batch_init(512, 0, 1)
         self.temporary_invalid_cchars = []
         self.n_len = settings.maxTokens
         self.threadCount = settings.threadCount
+        self.batchSizeLimit = Int32(max(128, min(Int(settings.batchSize), 1024)))
         vocab = llama_model_get_vocab(model)
+
+        let batchCap = Int32(max(128, min(Int(settings.batchSize), 1024)))
+        self.batch = llama_batch_init(batchCap, 0, 1)
 
         let sparams = llama_sampler_chain_default_params()
         sampling = llama_sampler_chain_init(sparams)
@@ -108,6 +112,15 @@ actor LlamaContext {
         if let path = mmprojPath, !path.isEmpty, FileManager.default.fileExists(atPath: path) {
             try mtmdShim.load(mmprojPath: path, model: model, nThreads: threadCount)
         }
+    }
+
+    func updateRuntimeSettings(_ settings: InferenceSettings) {
+        n_len = settings.maxTokens
+        threadCount = settings.threadCount
+        llama_sampler_free(sampling)
+        let sparams = llama_sampler_chain_default_params()
+        sampling = llama_sampler_chain_init(sparams)
+        Self.configureSamplerChain(sampling, vocab: vocab, settings: settings)
     }
 
     private static func configureSamplerChain(
@@ -215,10 +228,16 @@ actor LlamaContext {
         }
 
         let n_threads = settings.threadCount
+        let batchSize = UInt32(max(128, min(Int(settings.batchSize), 1024)))
         var ctx_params = llama_context_default_params()
         ctx_params.n_ctx = settings.contextLength
         ctx_params.n_threads = n_threads
         ctx_params.n_threads_batch = n_threads
+        ctx_params.n_batch = batchSize
+        ctx_params.n_ubatch = batchSize
+        ctx_params.flash_attn_type = settings.flashAttention
+            ? LLAMA_FLASH_ATTN_TYPE_ENABLED
+            : LLAMA_FLASH_ATTN_TYPE_DISABLED
 
         guard let context = llama_init_from_model(model, ctx_params) else {
             llama_model_free(model)
@@ -281,9 +300,10 @@ actor LlamaContext {
         throw LlamaError.templateFailed
     }
 
-    func completionInit(text: String, mediaPaths: [String] = []) throws {
+    func completionInit(text: String, mediaPaths: [String] = [], cachedPrefix: String? = nil) throws {
         cancelled = false
         is_done = false
+        n_decode = 0
         multimodalPrefill = false
 
         if !mediaPaths.isEmpty, hasMultimodalEncoder {
@@ -297,10 +317,24 @@ actor LlamaContext {
                 mediaPaths: mediaPaths,
                 llamaContext: context,
                 nPast: 0,
-                nBatch: 512
+                nBatch: batchSizeLimit
             )
             n_cur = nPast
             n_decode = 0
+            return
+        }
+
+        if let cachedPrefix,
+           !cachedPrefix.isEmpty,
+           text.hasPrefix(cachedPrefix),
+           text.count > cachedPrefix.count,
+           n_cur > 0 {
+            let suffix = String(text.dropFirst(cachedPrefix.count))
+            let suffixTokens = tokenize(text: suffix, add_bos: false)
+            try validateContextBudget(adding: suffixTokens.count)
+            try decodePrefillChunks(suffixTokens, startPos: n_cur)
+            tokens_list.append(contentsOf: suffixTokens)
+            lastPromptTokenCount = tokens_list.count
             return
         }
 
@@ -308,23 +342,36 @@ actor LlamaContext {
         temporary_invalid_cchars = []
         lastPromptTokenCount = tokens_list.count
 
+        try validateContextBudget(adding: tokens_list.count)
+        try decodePrefillChunks(tokens_list, startPos: 0)
+    }
+
+    private func validateContextBudget(adding newTokens: Int) throws {
         let n_ctx = Int(llama_n_ctx(context))
-        let promptTokens = tokens_list.count
+        let total = Int(n_cur) + newTokens
         let reserveForGeneration = max(64, Int(n_len))
-        if promptTokens + reserveForGeneration > n_ctx {
-            throw LlamaError.contextOverflow(promptTokens: promptTokens, contextSize: n_ctx)
+        if total + reserveForGeneration > n_ctx {
+            throw LlamaError.contextOverflow(promptTokens: total, contextSize: n_ctx)
         }
+    }
 
-        llama_batch_clear(&batch)
-        for i in 0..<tokens_list.count {
-            llama_batch_add(&batch, tokens_list[i], Int32(i), [0], false)
+    private func decodePrefillChunks(_ tokens: [llama_token], startPos: Int32) throws {
+        guard !tokens.isEmpty else { return }
+        let chunkLimit = Int(batchSizeLimit)
+        var offset = 0
+        while offset < tokens.count {
+            let end = min(offset + chunkLimit, tokens.count)
+            llama_batch_clear(&batch)
+            for index in offset..<end {
+                let isLast = index == tokens.count - 1
+                llama_batch_add(&batch, tokens[index], startPos + Int32(index), [0], isLast)
+            }
+            if llama_decode(context, batch) != 0 {
+                throw LlamaError.decodeFailed
+            }
+            offset = end
         }
-        batch.logits[Int(batch.n_tokens) - 1] = 1
-
-        if llama_decode(context, batch) != 0 {
-            throw LlamaError.decodeFailed
-        }
-        n_cur = batch.n_tokens
+        n_cur = startPos + Int32(tokens.count)
     }
 
     func completionLoop() throws -> String {

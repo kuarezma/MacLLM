@@ -4,8 +4,16 @@ struct MessageMarkdownView: View {
     let text: String
     var isStreaming: Bool = false
 
+    @State private var cachedHash: Int = 0
+    @State private var cachedBlocks: [MarkdownBlock] = []
+
     private var blocks: [MarkdownBlock] {
-        MarkdownContentParser.blocks(from: text)
+        if isStreaming { return [] }
+        let hash = text.hashValue
+        if hash == cachedHash, !cachedBlocks.isEmpty {
+            return cachedBlocks
+        }
+        return MarkdownContentParser.blocks(from: text)
     }
 
     var body: some View {
@@ -18,7 +26,7 @@ struct MessageMarkdownView: View {
                 Text(text)
                     .textSelection(.enabled)
             } else {
-                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                     switch block {
                     case .text(let prose):
                         ProseMarkdownView(text: prose)
@@ -40,6 +48,16 @@ struct MessageMarkdownView: View {
                 .frame(height: 20, alignment: .leading)
                 .padding(.top, 2)
             }
+        }
+        .onChange(of: text) { _, newValue in
+            guard !isStreaming else { return }
+            cachedHash = newValue.hashValue
+            cachedBlocks = MarkdownContentParser.blocks(from: newValue)
+        }
+        .onAppear {
+            guard !isStreaming else { return }
+            cachedHash = text.hashValue
+            cachedBlocks = MarkdownContentParser.blocks(from: text)
         }
     }
 }

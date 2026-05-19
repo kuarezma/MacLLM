@@ -132,11 +132,15 @@ struct ChatView: View {
                         let isLastAssistant = message.role == .assistant
                             && message.id == model.currentSession.messages.last?.id
                         let isGeneratingReply = inferenceService.isGenerating && isLastAssistant
+                        let streamText = isGeneratingReply && model.streamingBuffer.messageId == message.id
+                            ? model.streamingBuffer.text
+                            : nil
                         MessageRow(
                             message: message,
                             sessionId: model.currentSession.id,
-                            showsTypingIndicator: isGeneratingReply && message.content.isEmpty,
-                            isStreaming: isGeneratingReply && !message.content.isEmpty,
+                            showsTypingIndicator: isGeneratingReply && message.content.isEmpty && (streamText ?? "").isEmpty,
+                            isStreaming: isGeneratingReply && !(streamText ?? message.content).isEmpty,
+                            streamingText: streamText,
                             generationStats: stats(for: message, isLastAssistant: isLastAssistant),
                             reserveStatsSpace: isLastAssistant && message.role == .assistant
                         )
@@ -152,6 +156,7 @@ struct ChatView: View {
             .scrollBounceBehavior(.basedOnSize, axes: .vertical)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onChange(of: model.currentSession.messages.count) { _, _ in
+                guard !inferenceService.isGenerating else { return }
                 model.scheduleContextTokenRefresh()
                 guard messageSearchNeedle.isEmpty else { return }
                 scrollToBottom(proxy: proxy, animated: true)
