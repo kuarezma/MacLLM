@@ -44,7 +44,14 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.18)
+### Bu sürümde (1.14.19)
+
+- Gözlemlenebilirlik: model yükleme, üretim yaşam döngüsü, durdurma akışı ve indirme süreçlerine süre/durum bazlı yapılandırılmış tanı logları eklendi
+- Tanı sinyalleri: generation stalled/empty retry denemeleri ile terminal üretim hataları ayrıştırıldı; fallback/cancel akışları loglandı
+- Destek hızı: kalıcı kullanıcı hatalarına kısa “Hata Kodu” eklendi ve aynı kimlik uygulama loglarıyla eşleştirildi
+- Yayın hazırlığı: paket artefact akışı 1.14.19 sürümüne hizalandı (DMG/PKG/ZIP + Homebrew cask checksum güncellemesi)
+
+### Önceki (1.14.18)
 
 - Stabilite: AppModel genelinde kullanıcı hataları tek formatta ve çözüm önerisiyle gösteriliyor
 - UI/UX: Ayarlar, sohbet ve Model Hub için premium buton stilleri ve daha tutarlı etkileşim geri bildirimi

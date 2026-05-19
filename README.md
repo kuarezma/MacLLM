@@ -257,6 +257,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.14.19** | Full diagnostics release: structured telemetry for model load/generation/stop/download lifecycles, explicit stalled-or-empty retry vs terminal failure signals, user-facing short error IDs mapped to app logs, and refreshed 1.14.19 release package metadata (DMG/PKG/ZIP + Homebrew cask checksum) |
 | **1.14.18** | Stability + premium UX pass: unified user-facing error handling, refined shared interaction styles across Chat/Settings/Hub, smoother streaming auto-scroll, and release-ready smoke/perf/runbook checklists |
 | **1.14.17** | Polish: DOCX text extraction; HF token in Keychain; DuckDuckGo web search context; chat import/export; per-project system prompt; generation notification; unit tests |
 | **1.14.16** | Qwopus fix: `redacted_im_end` stop/sanitize alignment with llama.cpp chatml; generation stall timeout; empty-output error; conservative KV for Qwopus |
