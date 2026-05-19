@@ -34,6 +34,8 @@ final class AppModel {
     private let chatStore = ChatHistoryStore.shared
     private let projectStore = ChatProjectStore.shared
     private var modelLoadGeneration: UInt = 0
+    private var deletedSessionIDs: Set<UUID> = []
+    private var pendingSaveTask: Task<Void, Never>?
 
     var selectedModel: InstalledModel? {
         installedModels.first { $0.id == selectedModelId }
@@ -130,12 +132,17 @@ final class AppModel {
 
     func deleteSession(_ session: ChatSession) async {
         await stopGenerationAndWait()
+        pendingSaveTask?.cancel()
+        pendingSaveTask = nil
+        deletedSessionIDs.insert(session.id)
         do {
             try chatStore.deleteSession(id: session.id)
             AttachmentStore.shared.deleteSessionAttachments(sessionId: session.id)
             sessions.removeAll { $0.id == session.id }
             if currentSession.id == session.id {
-                await newChat()
+                await newChat(saveCurrent: false)
+            } else {
+                sessions = try chatStore.loadSessionIndex()
             }
             setStatusMessage("Sohbet silindi")
         } catch {
@@ -394,9 +401,11 @@ final class AppModel {
         }
     }
 
-    func newChat() async {
+    func newChat(saveCurrent: Bool = true) async {
         await stopGenerationAndWait()
-        if !currentSession.messages.isEmpty {
+        pendingSaveTask?.cancel()
+        pendingSaveTask = nil
+        if saveCurrent, !currentSession.messages.isEmpty {
             try? await saveCurrentSession()
         }
         currentSession = ChatSession(modelId: selectedModelId, projectId: selectedProjectId)
@@ -467,6 +476,7 @@ final class AppModel {
     }
 
     func saveCurrentSession() async throws {
+        guard !deletedSessionIDs.contains(currentSession.id) else { return }
         guard !currentSession.messages.isEmpty else { return }
         if currentSession.title == "Yeni sohbet",
            let firstUser = currentSession.messages.first(where: { $0.role == .user }) {
@@ -475,6 +485,18 @@ final class AppModel {
         currentSession.updatedAt = .now
         try chatStore.saveSession(currentSession)
         sessions = try chatStore.loadSessionIndex()
+    }
+
+    private func scheduleSaveCurrentSession() {
+        pendingSaveTask?.cancel()
+        let sessionId = currentSession.id
+        pendingSaveTask = Task(priority: .utility) { [weak self] in
+            guard let self else { return }
+            guard !Task.isCancelled else { return }
+            guard !deletedSessionIDs.contains(sessionId) else { return }
+            guard currentSession.id == sessionId else { return }
+            try? await saveCurrentSession()
+        }
     }
 
     func loadSession(_ session: ChatSession) async {
@@ -666,7 +688,7 @@ final class AppModel {
                 currentSession.messages[assistantIndex].content = ControlTokenSanitizer.sanitizeForDisplay(
                     currentSession.messages[assistantIndex].content
                 )
-                Task(priority: .utility) { try? await self.saveCurrentSession() }
+                scheduleSaveCurrentSession()
             }
         } catch is CancellationError {
             if currentSession.id == activeSessionId,

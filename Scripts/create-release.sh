@@ -44,7 +44,12 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.10)
+### Bu sürümde (1.14.11)
+
+- Silinen sohbetlerin geri gelmesi düzeltildi: aktif sohbet silinince artık yeniden kaydedilmez
+- Streaming sonrası arka plan kaydı silme ile yarışmayacak şekilde korundu
+
+### Önceki (1.14.10)
 
 - Model-adaptive runtime profile: model yüklendiğinde GGUF + mtmd + heuristics birleşir
 - UI ve inference tek kaynaktan: şablon, stop dizileri, vision, bağlam üst sınırı
