@@ -44,7 +44,13 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.12)
+### Bu sürümde (1.14.13)
+
+- KV prompt cache düzeltmesi: önbellek artık gerçek prefill + üretim metni ile hizalanır; token pozisyonu doğrulanır
+- `<|im_start|` gibi yarım ChatML kontrol token'ları ekranda gösterilmez
+- Önbellek uyuşmazlığında otomatik tam prefill'e düşülür
+
+### Önceki (1.14.12)
 
 - **Inference performansı:** chunked prefill, flash attention, ayarlanabilir batch size
 - **KV prompt cache:** çok turlu sohbette yalnızca yeni mesaj prefill (TTFT düşer)

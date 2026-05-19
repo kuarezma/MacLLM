@@ -75,6 +75,7 @@ actor LlamaContext {
     var n_len: Int32 = 1024
     var n_cur: Int32 = 0
     var n_decode: Int32 = 0
+    var kvPosition: Int32 { n_cur }
     private(set) var lastPromptTokenCount: Int = 0
 
     private var cancelled = false
@@ -329,6 +330,16 @@ actor LlamaContext {
            text.hasPrefix(cachedPrefix),
            text.count > cachedPrefix.count,
            n_cur > 0 {
+            let prefixTokens = tokenize(text: cachedPrefix, add_bos: true)
+            guard prefixTokens.count == Int(n_cur) else {
+                clear()
+                tokens_list = tokenize(text: text, add_bos: true)
+                temporary_invalid_cchars = []
+                lastPromptTokenCount = tokens_list.count
+                try validateContextBudget(adding: tokens_list.count)
+                try decodePrefillChunks(tokens_list, startPos: 0)
+                return
+            }
             let suffix = String(text.dropFirst(cachedPrefix.count))
             let suffixTokens = tokenize(text: suffix, add_bos: false)
             try validateContextBudget(adding: suffixTokens.count)

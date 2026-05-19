@@ -115,7 +115,16 @@ enum ControlTokenSanitizer {
                 withTemplate: ""
             )
         }
+        result = stripTrailingPartialControlToken(result)
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Yarım kalmış `<|im_start|` gibi kontrol token parçalarını kaldırır.
+    private static func stripTrailingPartialControlToken(_ text: String) -> String {
+        guard let lastOpen = text.lastIndex(of: "<") else { return text }
+        let suffix = text[lastOpen...]
+        guard suffix.hasPrefix("<|"), !suffix.hasSuffix("|>") else { return text }
+        return String(text[..<lastOpen])
     }
 
     static func sanitizeForDisplay(_ text: String) -> String {

@@ -24,7 +24,9 @@ struct MessageRow: View {
 
     private var displayContent: String {
         if showsTypingIndicator { return "" }
-        if isStreaming, let streamingText { return streamingText }
+        if isStreaming, let streamingText {
+            return ControlTokenSanitizer.sanitizeForDisplay(streamingText)
+        }
         let raw = message.content
         if message.role == .assistant {
             return ControlTokenSanitizer.sanitizeForDisplay(raw)

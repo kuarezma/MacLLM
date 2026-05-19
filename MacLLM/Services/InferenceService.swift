@@ -15,6 +15,7 @@ final class InferenceService: ObservableObject {
     private var promptCacheSessionId: UUID?
     private var promptCacheText: String = ""
     private var promptCacheFingerprint: String = ""
+    private var promptCacheTokenCount: Int = 0
 
     func loadModel(_ model: InstalledModel) async throws {
         await stopGeneration()
@@ -69,6 +70,7 @@ final class InferenceService: ObservableObject {
         promptCacheSessionId = nil
         promptCacheText = ""
         promptCacheFingerprint = ""
+        promptCacheTokenCount = 0
     }
 
     func applyRuntimeSettingsIfLoaded() async {
@@ -84,26 +86,6 @@ final class InferenceService: ObservableObject {
         }
         generationTask = nil
         isGenerating = false
-    }
-
-    func updatePromptCache(
-        sessionId: UUID,
-        messages: [ChatMessage],
-        chatTemplate: String
-    ) async {
-        guard settings.usePromptCache, let llamaContext else { return }
-        do {
-            let promptMessages = Self.messagesWithSystem(messages, systemPrompt: settings.systemPrompt)
-            let prompt = try await llamaContext.applyChatTemplate(
-                messages: promptMessages,
-                templateName: chatTemplate
-            )
-            promptCacheSessionId = sessionId
-            promptCacheText = prompt
-            promptCacheFingerprint = Self.messageFingerprint(messages: promptMessages)
-        } catch {
-            invalidatePromptCache()
-        }
     }
 
     private static func messagesWithSystem(_ messages: [ChatMessage], systemPrompt: String) -> [ChatMessage] {
@@ -123,15 +105,18 @@ final class InferenceService: ObservableObject {
         sessionId: UUID,
         messages: [ChatMessage],
         prompt: String,
-        hasMedia: Bool
+        hasMedia: Bool,
+        kvPosition: Int32
     ) -> Bool {
         guard settings.usePromptCache, !hasMedia else { return false }
         guard promptCacheSessionId == sessionId,
               !promptCacheText.isEmpty,
+              promptCacheTokenCount > 0,
+              Int(kvPosition) == promptCacheTokenCount,
               prompt.hasPrefix(promptCacheText),
               prompt.count > promptCacheText.count else { return false }
         let fingerprint = Self.messageFingerprint(messages: messages)
-        return fingerprint.hasPrefix(promptCacheFingerprint) || promptCacheFingerprint.isEmpty
+        return fingerprint.hasPrefix(promptCacheFingerprint) && !promptCacheFingerprint.isEmpty
     }
 
     func streamResponse(
@@ -171,30 +156,40 @@ final class InferenceService: ObservableObject {
                             template: resolvedTemplate
                         )
                         var outputFilter = GenerationOutputFilter(stopSequences: stops)
+                        var emittedOutput = ""
 
                         let prompt = try await llamaContext.applyChatTemplate(
                             messages: promptMessages,
                             templateName: chatTemplate
                         )
 
-                        let reuseCache = await MainActor.run {
+                        let kvPosition = await llamaContext.kvPosition
+                        var reuseCache = await MainActor.run {
                             !forceFullPrefill
                                 && self.canReusePromptCache(
                                     sessionId: sessionId,
                                     messages: promptMessages,
                                     prompt: prompt,
-                                    hasMedia: !mediaPaths.isEmpty
+                                    hasMedia: !mediaPaths.isEmpty,
+                                    kvPosition: kvPosition
                                 )
                         }
 
                         if reuseCache {
                             let cached = await MainActor.run { self.promptCacheText }
-                            try await llamaContext.completionInit(
-                                text: prompt,
-                                mediaPaths: mediaPaths,
-                                cachedPrefix: cached
-                            )
-                        } else {
+                            let prefixTokens = await llamaContext.countTokens(in: cached, addBos: true)
+                            if prefixTokens != Int(kvPosition) {
+                                reuseCache = false
+                            } else {
+                                try await llamaContext.completionInit(
+                                    text: prompt,
+                                    mediaPaths: mediaPaths,
+                                    cachedPrefix: cached
+                                )
+                            }
+                        }
+
+                        if !reuseCache {
                             await llamaContext.clear()
                             try await llamaContext.completionInit(text: prompt, mediaPaths: mediaPaths)
                         }
@@ -206,16 +201,19 @@ final class InferenceService: ObservableObject {
 
                             let safe = outputFilter.push(chunk)
                             if !safe.isEmpty {
+                                emittedOutput += safe
                                 continuation.yield(safe)
                             }
                         }
 
                         let tail = outputFilter.finish()
                         if !tail.isEmpty {
+                            emittedOutput += tail
                             continuation.yield(tail)
                         }
 
                         let snapshot = await llamaContext.generationSnapshot()
+                        let finalKVPosition = await llamaContext.kvPosition
                         let duration = max(Date().timeIntervalSince(started), 0.001)
                         let tps = Double(snapshot.outputTokens) / duration
                         await MainActor.run {
@@ -224,6 +222,12 @@ final class InferenceService: ObservableObject {
                                 tokensPerSecond: tps,
                                 durationSeconds: duration
                             )
+                            if inferenceSettings.usePromptCache, snapshot.outputTokens > 0 || !emittedOutput.isEmpty {
+                                self.promptCacheSessionId = sessionId
+                                self.promptCacheText = prompt + emittedOutput
+                                self.promptCacheFingerprint = Self.messageFingerprint(messages: promptMessages)
+                                self.promptCacheTokenCount = Int(finalKVPosition)
+                            }
                         }
                         continuation.finish()
                     } catch {

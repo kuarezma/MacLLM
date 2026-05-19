@@ -718,11 +718,6 @@ final class AppModel {
                 let finalText = ControlTokenSanitizer.sanitizeForDisplay(streamingBuffer.finish())
                 currentSession.messages[assistantIndex].content = finalText
                 streamingBuffer.reset()
-                await inferenceService.updatePromptCache(
-                    sessionId: currentSession.id,
-                    messages: currentSession.messages,
-                    chatTemplate: template
-                )
                 contextTokenFingerprint = ""
                 scheduleSaveCurrentSession()
             }
