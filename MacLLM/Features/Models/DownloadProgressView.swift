@@ -38,7 +38,7 @@ struct DownloadProgressView: View {
                 if isParallel {
                     Text("Paralel indirme (\(DownloadPreferences.parallelConnections) bağlantı)")
                         .font(.caption2)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
 
                 if download.state == .paused {
@@ -55,6 +55,7 @@ struct DownloadProgressView: View {
                             } label: {
                                 Label("Devam", systemImage: "play.fill")
                             }
+                            .buttonStyle(.bordered)
                             .controlSize(.small)
                         } else {
                             Button {
@@ -62,6 +63,7 @@ struct DownloadProgressView: View {
                             } label: {
                                 Label("Duraklat", systemImage: "pause.fill")
                             }
+                            .buttonStyle(.bordered)
                             .controlSize(.small)
                         }
                     }
@@ -71,6 +73,7 @@ struct DownloadProgressView: View {
                     } label: {
                         Label("İptal", systemImage: "xmark.circle")
                     }
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
             }
