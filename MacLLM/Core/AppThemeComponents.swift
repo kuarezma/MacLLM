@@ -175,7 +175,7 @@ struct AccentPrimaryButtonStyle: ButtonStyle {
             .padding(.vertical, 8)
             .background {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(disabled ? AppTheme.subtleInteractiveFill : AppTheme.accentGradient)
+                    .fill(disabled ? AnyShapeStyle(AppTheme.subtleInteractiveFill) : AnyShapeStyle(AppTheme.accentGradient))
                     .overlay {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .strokeBorder(
