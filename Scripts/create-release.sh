@@ -47,7 +47,7 @@ gh release create "$TAG" \
 ### Bu sürümde (1.14.13)
 
 - KV prompt cache düzeltmesi: önbellek artık gerçek prefill + üretim metni ile hizalanır; token pozisyonu doğrulanır
-- `<|im_start|` gibi yarım ChatML kontrol token'ları ekranda gösterilmez
+- Yarım ChatML kontrol token'ları (ör. im_start) ekranda gösterilmez
 - Önbellek uyuşmazlığında otomatik tam prefill'e düşülür
 
 ### Önceki (1.14.12)
