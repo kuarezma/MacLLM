@@ -123,11 +123,14 @@ final class HuggingFaceDownloadService: ObservableObject {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
+                if shouldSkipParallelFallback(for: error) {
+                    throw error
+                }
                 parallelContexts.removeValue(forKey: entry.id)
                 if FileManager.default.fileExists(atPath: dest.path) {
                     try? FileManager.default.removeItem(at: dest)
                 }
-                var fallbackInfo = makeTaskInfo(
+                let fallbackInfo = makeTaskInfo(
                     entry: entry,
                     bytesReceived: 0,
                     totalBytes: totalBytes,
@@ -190,8 +193,13 @@ final class HuggingFaceDownloadService: ObservableObject {
                         speedTracker: speedTracker,
                         isCancelled: { [weak ctx] in ctx?.cancelled == true },
                         onProgress: { [weak self] info in
-                            self?.upsertActive(info)
-                            self?.parallelContexts[entry.id]?.onUpdate(info)
+                            guard let self,
+                                  let pctx = self.parallelContexts[entry.id],
+                                  !pctx.cancelled,
+                                  !self.isTerminalState(for: entry.id)
+                            else { return }
+                            self.upsertActive(info)
+                            pctx.onUpdate(info)
                         },
                         entry: entry
                     )
@@ -231,8 +239,13 @@ final class HuggingFaceDownloadService: ObservableObject {
 
             delegate.onProgress = { [weak self] updated in
                 Task { @MainActor in
-                    self?.upsertActive(updated)
-                    self?.contexts[entry.id]?.onUpdate(updated)
+                    guard let self,
+                          let ctx = self.contexts[entry.id],
+                          !ctx.didFinish,
+                          !self.isTerminalState(for: entry.id)
+                    else { return }
+                    self.upsertActive(updated)
+                    ctx.onUpdate(updated)
                 }
             }
 
@@ -282,6 +295,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         ctx.task.suspend()
         var info = activeDownloads[index]
         info.state = .paused
+        info.errorMessage = nil
         upsertActive(info)
         ctx.onUpdate(info)
     }
@@ -295,6 +309,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         ctx.task.resume()
         var info = activeDownloads[index]
         info.state = .downloading
+        info.errorMessage = nil
         upsertActive(info)
         ctx.onUpdate(info)
     }
@@ -319,6 +334,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         guard let ctx = contexts[id] else {
             if let index = activeDownloads.firstIndex(where: { $0.id == id }) {
                 activeDownloads[index].state = .cancelled
+                scheduleRemoval(entryId: id, after: 2)
             }
             return
         }
@@ -370,7 +386,7 @@ final class HuggingFaceDownloadService: ObservableObject {
                     speed: 0, eta: nil, state: .failed
                 )
             failed.state = .failed
-            failed.errorMessage = UserErrorFormatter.message(for: error)
+            failed.errorMessage = UserErrorFormatter.details(for: error).displayText
             upsertActive(failed)
             scheduleRemoval(entryId: entryId)
             ctx.continuation?.resume(throwing: error)
@@ -398,7 +414,7 @@ final class HuggingFaceDownloadService: ObservableObject {
                         state: .failed
                     )
                 failed.state = .failed
-                failed.errorMessage = UserErrorFormatter.message(for: error)
+                failed.errorMessage = UserErrorFormatter.details(for: error).displayText
                 upsertActive(failed)
                 scheduleRemoval(entryId: entryId)
                 ctx.continuation?.resume(throwing: error)
@@ -460,7 +476,7 @@ final class HuggingFaceDownloadService: ObservableObject {
                     state: .failed
                 )
             failed.state = .failed
-            failed.errorMessage = UserErrorFormatter.message(for: error)
+            failed.errorMessage = UserErrorFormatter.details(for: error).displayText
             upsertActive(failed)
             scheduleRemoval(entryId: entryId)
             ctx.continuation?.resume(throwing: error)
@@ -518,6 +534,27 @@ final class HuggingFaceDownloadService: ObservableObject {
         } else {
             activeDownloads.append(info)
         }
+    }
+
+    private func isTerminalState(for id: String) -> Bool {
+        guard let state = activeDownloads.first(where: { $0.id == id })?.state else { return false }
+        switch state {
+        case .completed, .failed, .cancelled:
+            return true
+        case .queued, .downloading, .paused:
+            return false
+        }
+    }
+
+    private func shouldSkipParallelFallback(for error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == "MacLLM" {
+            let description = nsError.localizedDescription
+            return description.contains("HTTP 401")
+                || description.contains("HTTP 403")
+                || description.contains("HTTP 404")
+        }
+        return false
     }
 }
 
