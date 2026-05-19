@@ -1,4 +1,4 @@
-MacLLM — Kurulum (1.14.22)
+MacLLM — Kurulum (1.14.23)
 
 ÖNERİLEN (çift tık):
 → Bu klasördeki «MacLLM-…-macOS-arm64.pkg» dosyasına çift tık

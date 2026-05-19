@@ -42,62 +42,36 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var model = appModel
 
-        TabView(selection: $tab) {
-            settingsPane {
-                generalSection(model: appModel)
-            }
-            .tabItem { Label(SettingsTab.general.rawValue, systemImage: SettingsTab.general.icon) }
-            .tag(SettingsTab.general)
+        HStack(spacing: 0) {
+            settingsSidebar
 
-            settingsPane {
-                modelSection(model: appModel)
-            }
-            .tabItem { Label(SettingsTab.model.rawValue, systemImage: SettingsTab.model.icon) }
-            .tag(SettingsTab.model)
+            VStack(spacing: 0) {
+                settingsHeader
 
-            settingsPane {
-                samplingSection(model: appModel)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
+                        switch tab {
+                        case .general:
+                            generalSection(model: appModel)
+                        case .model:
+                            modelSection(model: appModel)
+                        case .sampling:
+                            samplingSection(model: appModel)
+                        case .chat:
+                            chatSection(model: appModel)
+                        case .huggingFace:
+                            huggingFaceSection()
+                        }
+                    }
+                    .padding(AppTheme.contentPadding)
+                    .frame(maxWidth: 620, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .tabItem { Label(SettingsTab.sampling.rawValue, systemImage: SettingsTab.sampling.icon) }
-            .tag(SettingsTab.sampling)
-
-            settingsPane {
-                chatSection(model: appModel)
-            }
-            .tabItem { Label(SettingsTab.chat.rawValue, systemImage: SettingsTab.chat.icon) }
-            .tag(SettingsTab.chat)
-
-            settingsPane {
-                huggingFaceSection()
-            }
-            .tabItem { Label(SettingsTab.huggingFace.rawValue, systemImage: SettingsTab.huggingFace.icon) }
-            .tag(SettingsTab.huggingFace)
+            .background(AppTheme.chatBackground)
         }
         .frame(minWidth: 760, minHeight: 560)
-        .background(AppTheme.chatBackground)
-        .toolbar {
-            ToolbarItemGroup(placement: .automatic) {
-                Text(tab.subtitle)
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.secondaryText)
-                Button("Ollama varsayılanları") {
-                    appModel.settings = InferenceSettings.ollamaDefaults
-                    appModel.settings.threadCount = Int32(
-                        max(1, min(8, appModel.systemProfile.processorCount - 2))
-                    )
-                    syncStopText(from: appModel.settings)
-                }
-                .buttonStyle(.bordered)
-
-                Button("Kaydet") {
-                    model.settings.stopSequencesText = stopText
-                    model.saveSettingsIfNeeded(comparedTo: settingsBaseline)
-                    settingsBaseline = model.settings
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut("s", modifiers: .command)
-            }
-        }
+        .background(AppTheme.sidebarBackground)
         .onAppear {
             settingsBaseline = model.settings
             syncStopText(from: model.settings)
@@ -109,15 +83,78 @@ struct SettingsView: View {
         }
     }
 
-    private func settingsPane<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                content()
+    private var settingsSidebar: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Ayarlar")
+                    .font(.title3.weight(.semibold))
+                Text("MacLLM")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
-            .padding(AppTheme.contentPadding)
-            .frame(maxWidth: 700, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.top, 16)
+
+            VStack(spacing: 4) {
+                ForEach(SettingsTab.allCases) { item in
+                    SettingsNavRow(
+                        icon: item.icon,
+                        title: item.rawValue,
+                        isSelected: tab == item
+                    ) {
+                        tab = item
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+
+            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(width: 220)
+        .background(AppTheme.sidebarBackground)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(width: 1)
+        }
+    }
+
+    private var settingsHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tab.rawValue)
+                    .font(.title2.weight(.semibold))
+                Text(tab.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            Spacer()
+            Button("Ollama varsayılanları") {
+                appModel.settings = InferenceSettings.ollamaDefaults
+                appModel.settings.threadCount = Int32(
+                    max(1, min(8, appModel.systemProfile.processorCount - 2))
+                )
+                syncStopText(from: appModel.settings)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .foregroundStyle(AppTheme.primaryText)
+            Button("Kaydet") {
+                appModel.settings.stopSequencesText = stopText
+                appModel.saveSettingsIfNeeded(comparedTo: settingsBaseline)
+                settingsBaseline = appModel.settings
+            }
+            .keyboardShortcut("s", modifiers: .command)
+            .buttonStyle(AccentPrimaryButtonStyle())
+            .help("Kapatırken de otomatik kaydedilir")
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(AppTheme.chatBackground)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(height: 1)
+        }
     }
 
     @ViewBuilder

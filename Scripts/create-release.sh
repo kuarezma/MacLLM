@@ -44,10 +44,15 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.22)
+### Bu sürümde (1.14.23)
 
-- Kurulum: DMG içinde **PKG kurulum sihirbazı**; kurulum sonrası karantina temizlenir, MacLLM çift tıkla açılır
-- `.command` kaldırıldı (Safari karantinasında aynı uyarıyı veriyordu)
+- Arayüz: önceki turuncu-kırmızı tema ve cam görünüm geri yüklendi
+- Ayarlar: sol yan menülü düzen ve eski buton stilleri
+
+### Önceki (1.14.22)
+
+- Kurulum: DMG içinde **PKG kurulum sihirbazı**; kurulum sonrası karantina temizlenir
+- `.command` kaldırıldı (Gatekeeper uyarısı)
 
 ### Önceki (1.14.20)
 

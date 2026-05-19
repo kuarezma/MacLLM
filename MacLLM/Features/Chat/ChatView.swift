@@ -237,13 +237,14 @@ struct ChatView: View {
         }
         .frame(maxWidth: .infinity)
         .background {
-            Rectangle()
-                .fill(.regularMaterial)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(AppTheme.border)
-                        .frame(height: 0.5)
-                }
+            LinearGradient(
+                colors: [
+                    AppTheme.chatBackground.opacity(0),
+                    AppTheme.chatBackground.opacity(0.92)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
             .ignoresSafeArea()
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
@@ -290,12 +291,13 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        .appGlassCard(cornerRadius: AppTheme.composerRadius, material: .thinMaterial)
+        .appGlassCard(cornerRadius: AppTheme.composerRadius, material: .regularMaterial)
         .overlay {
             RoundedRectangle(cornerRadius: AppTheme.composerRadius, style: .continuous)
                 .strokeBorder(inputFocused ? AppTheme.accent.opacity(0.45) : Color.clear, lineWidth: 1.2)
                 .animation(AppTheme.fadeQuick, value: inputFocused)
         }
+        .appFloatingShadow(radius: 18, y: 6)
     }
 
     private func composerIconButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
@@ -316,28 +318,44 @@ struct ChatView: View {
             Button {
                 Task { await model.stopGenerationAndWait() }
             } label: {
-                if inferenceService.isStoppingGeneration {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                ZStack {
+                    Circle()
+                        .fill(Color.red.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    if inferenceService.isStoppingGeneration {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.red)
+                    }
                 }
             }
-            .buttonStyle(.bordered)
-            .tint(.red)
-            .controlSize(.regular)
+            .buttonStyle(ModernScaleButtonStyle())
             .appHitTarget(minWidth: 40, minHeight: 40)
             .help(inferenceService.isStoppingGeneration ? "Durduruluyor…" : "Durdur")
             .disabled(inferenceService.isStoppingGeneration)
             .keyboardShortcut(.escape, modifiers: [])
         } else {
             Button(action: send) {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 13, weight: .semibold))
+                ZStack {
+                    if canSend {
+                        Circle()
+                            .fill(AppTheme.accentGradient)
+                            .frame(width: 36, height: 36)
+                            .shadow(color: AppTheme.glowAccent, radius: 8, y: 2)
+                    } else {
+                        Circle()
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(width: 36, height: 36)
+                    }
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(canSend ? .white : AppTheme.secondaryText.opacity(0.4))
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
+            .buttonStyle(ModernScaleButtonStyle())
             .appHitTarget(minWidth: 40, minHeight: 40)
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: [.command])
