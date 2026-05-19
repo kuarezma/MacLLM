@@ -21,6 +21,8 @@ final class InferenceService: ObservableObject {
     private var promptCacheSessionId: UUID?
     private var promptCacheFingerprint: String = ""
     private var promptCacheTokenCount: Int = 0
+    /// Her `loadModel` çağrısı artırır; tamamlanan eski yüklemeler belleğe alınmaz.
+    private var activeLoadGeneration: UInt = 0
 
     private static let generationStallSeconds: TimeInterval = 60
     private static let maxEmptyDecodeLoops = 8_192
@@ -30,12 +32,25 @@ final class InferenceService: ObservableObject {
 
     func loadModel(_ model: InstalledModel, settingsOverride: InferenceSettings? = nil) async throws {
         let startedAt = Date()
-        logger.info("Model load start id=\(model.id) name=\(model.name)")
-        defer { modelLoadingStage = nil }
+        activeLoadGeneration &+= 1
+        let loadGeneration = activeLoadGeneration
+        logger.info("Model load start id=\(model.id) name=\(model.name) gen=\(loadGeneration)")
+        defer {
+            if loadGeneration == activeLoadGeneration {
+                modelLoadingStage = nil
+            }
+        }
+
         modelLoadingStage = "Mevcut model kapatiliyor"
         await stopGeneration()
-        await unloadModel()
+        await shutdownLoadedContext()
         invalidatePromptCache()
+
+        try Task.checkCancellation()
+        guard loadGeneration == activeLoadGeneration else {
+            throw CancellationError()
+        }
+
         let effectiveSettings = settingsOverride ?? settings
         modelLoadingStage = "Model dosyasi yukleniyor"
         let path = model.localPath
@@ -49,18 +64,22 @@ final class InferenceService: ObservableObject {
                 mmprojPath: mmprojPath
             )
         }.value
-        if Task.isCancelled {
+
+        if Task.isCancelled || loadGeneration != activeLoadGeneration {
             await loadedContext.shutdown()
-            logger.notice("Model load cancelled id=\(model.id) after=\(Self.elapsedMilliseconds(since: startedAt))ms")
+            logger.notice(
+                "Model load superseded id=\(model.id) gen=\(loadGeneration) active=\(self.activeLoadGeneration) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms"
+            )
             throw CancellationError()
         }
+
         modelLoadingStage = "Calisma profili hazirlaniyor"
         llamaContext = loadedContext
         isModelLoaded = true
         loadedModelId = model.id
         lastLoadedModel = model
         try ModelStore.shared.touchLastUsed(id: model.id)
-        logger.info("Model load success id=\(model.id) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms")
+        logger.info("Model load success id=\(model.id) gen=\(loadGeneration) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms")
     }
 
     func buildLoadedProfile(
@@ -86,9 +105,13 @@ final class InferenceService: ObservableObject {
     }
 
     func unloadModel() async {
+        activeLoadGeneration &+= 1
         await stopGeneration()
         invalidatePromptCache()
+        await shutdownLoadedContext()
+    }
 
+    private func shutdownLoadedContext() async {
         if let llamaContext {
             await llamaContext.shutdown()
         }
@@ -179,6 +202,11 @@ final class InferenceService: ObservableObject {
         return AsyncThrowingStream { continuation in
             Task { @MainActor in
                 await self.stopGeneration()
+                guard self.isModelLoaded, self.llamaContext != nil else {
+                    continuation.finish(throwing: LlamaError.couldNotInitializeContext)
+                    return
+                }
+                let modelIdAtStart = self.loadedModelId
                 self.generationRunID &+= 1
                 let runID = self.generationRunID
                 self.logger.info("Generation start run=\(runID) session=\(sessionId.uuidString)")
@@ -195,6 +223,15 @@ final class InferenceService: ObservableObject {
                                 self.isStoppingGeneration = false
                                 self.generationTask = nil
                             }
+                        }
+
+                        let generationStillValid = await MainActor.run {
+                            self.generationRunID == runID
+                                && self.loadedModelId == modelIdAtStart
+                                && self.isModelLoaded
+                        }
+                        guard generationStillValid else {
+                            throw CancellationError()
                         }
 
                         let resolvedTemplate = await llamaContext.resolvedChatTemplate()

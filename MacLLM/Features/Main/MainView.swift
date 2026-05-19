@@ -176,7 +176,7 @@ struct JanSidebarView: View {
                     return
                 }
                 Task {
-                    await model.selectModel(installed)
+                    _ = await model.selectModel(installed)
                     await model.refreshContextTokenCount()
                 }
             }
@@ -373,8 +373,9 @@ struct JanSidebarView: View {
                     } else {
                         ForEach(model.installedModels) { installed in
                             Button {
-                                if model.isLoadingModel {
-                                    model.setStatusMessage("Model zaten yukleniyor, lutfen bekleyin.")
+                                if model.selectedModelId == installed.id,
+                                   inferenceService.loadedModelId == installed.id,
+                                   inferenceService.isModelLoaded {
                                     return
                                 }
                                 model.selectedModelId = installed.id

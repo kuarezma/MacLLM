@@ -47,6 +47,7 @@ final class AppModel {
     private let chatStore = ChatHistoryStore.shared
     private let projectStore = ChatProjectStore.shared
     private var modelLoadGeneration: UInt = 0
+    private var activeModelLoadTask: Task<Bool, Never>?
     private var deletedSessionIDs: Set<UUID> = []
     private var pendingSaveTask: Task<Void, Never>?
     private var contextTokenFingerprint: String = ""
@@ -367,9 +368,7 @@ final class AppModel {
         if inferenceService.isModelLoaded,
            let model = selectedModel,
            ModelFamily.isQwopusFamily(model) {
-            Task {
-                try? await inferenceService.loadModel(model, settingsOverride: settings)
-            }
+            Task { _ = await selectModel(model) }
         }
     }
 
@@ -399,11 +398,21 @@ final class AppModel {
     func selectModel(_ model: InstalledModel) async -> Bool {
         modelLoadGeneration &+= 1
         let generation = modelLoadGeneration
-        let startedAt = Date()
+        activeModelLoadTask?.cancel()
+        let task = Task { await performSelectModel(model, generation: generation) }
+        activeModelLoadTask = task
+        return await task.value
+    }
 
+    private func performSelectModel(_ model: InstalledModel, generation: UInt) async -> Bool {
+        let startedAt = Date()
         isLoadingModel = true
         setStatusMessage("\(model.name) hazırlanıyor…")
-        defer { isLoadingModel = false }
+        defer {
+            if generation == modelLoadGeneration {
+                isLoadingModel = false
+            }
+        }
 
         do {
             try Task.checkCancellation()
@@ -419,7 +428,9 @@ final class AppModel {
                 inferenceService.settings = settings
             }
             try await inferenceService.loadModel(model, settingsOverride: loadSettings)
+            try Task.checkCancellation()
             guard generation == modelLoadGeneration else { return false }
+            guard inferenceService.loadedModelId == model.id else { return false }
 
             selectedModelId = model.id
             currentSession.modelId = model.id
@@ -447,6 +458,8 @@ final class AppModel {
 
     func unloadCurrentModel() async {
         modelLoadGeneration &+= 1
+        activeModelLoadTask?.cancel()
+        activeModelLoadTask = nil
         await stopGenerationAndWait()
         await inferenceService.unloadModel()
         activeProfile = nil
@@ -522,6 +535,8 @@ final class AppModel {
 
     func deleteModel(_ model: InstalledModel) async {
         modelLoadGeneration &+= 1
+        activeModelLoadTask?.cancel()
+        activeModelLoadTask = nil
         if selectedModelId == model.id {
             await stopGenerationAndWait()
             await inferenceService.unloadModel()

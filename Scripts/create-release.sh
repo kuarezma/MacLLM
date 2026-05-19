@@ -44,7 +44,11 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.25)
+### Bu sürümde (1.14.26)
+
+- Bellek: aynı anda yalnızca bir model yüklü; hızlı geçişte en son seçilen kazanır, eski llama bağlamları kapatılır
+
+### Önceki (1.14.25)
 
 - Arayüz: indigo cam tema, 3D buton stilleri, sohbet kenar çubuğunda çöp kutusu ve «Hepsini sil» (görünen liste)
 - Sohbet: asistan mesajlarında token/hız istatistiği kalıcı; akış tamponu ~33 ms birleştirme

@@ -257,6 +257,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.14.26** | Single active model in memory: serialized loads, superseded contexts shut down; latest selection always wins when switching models quickly |
 | **1.14.25** | Indigo glass UI with 3D buttons; sidebar per-chat delete + delete-all visible chats; token/speed stats persisted per assistant message; coalesced streaming buffer (~33 ms); download slim bar + enhanced popover |
 | **1.14.19** | Full diagnostics release: structured telemetry for model load/generation/stop/download lifecycles, explicit stalled-or-empty retry vs terminal failure signals, user-facing short error IDs mapped to app logs, and refreshed 1.14.19 release package metadata (DMG/PKG/ZIP + Homebrew cask checksum) |
 | **1.14.18** | Stability + premium UX pass: unified user-facing error handling, refined shared interaction styles across Chat/Settings/Hub, smoother streaming auto-scroll, and release-ready smoke/perf/runbook checklists |
