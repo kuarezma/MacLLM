@@ -7,9 +7,11 @@ struct ChatHeaderView: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            modelMenu
+
             Spacer(minLength: 0)
 
-            modelMenu
+            AnimatedStatusDot(color: statusColor, pulse: shouldPulse)
 
             Button {
                 AppSettingsOpener.open()
@@ -28,15 +30,11 @@ struct ChatHeaderView: View {
             .help("Ayarlar")
             .accessibilityLabel("Ayarlar")
             .onHover { settingsHovered = $0 }
-
-            AnimatedStatusDot(color: statusColor, pulse: shouldPulse)
-
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, AppTheme.contentPadding)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .frame(height: AppTheme.chatHeaderHeight)
-        .background(.ultraThinMaterial)
+        .background(.bar)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(AppTheme.border)

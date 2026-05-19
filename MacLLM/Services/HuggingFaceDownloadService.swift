@@ -370,7 +370,7 @@ final class HuggingFaceDownloadService: ObservableObject {
                     speed: 0, eta: nil, state: .failed
                 )
             failed.state = .failed
-            failed.errorMessage = error.localizedDescription
+            failed.errorMessage = UserErrorFormatter.message(for: error)
             upsertActive(failed)
             scheduleRemoval(entryId: entryId)
             ctx.continuation?.resume(throwing: error)
@@ -398,7 +398,7 @@ final class HuggingFaceDownloadService: ObservableObject {
                         state: .failed
                     )
                 failed.state = .failed
-                failed.errorMessage = error.localizedDescription
+                failed.errorMessage = UserErrorFormatter.message(for: error)
                 upsertActive(failed)
                 scheduleRemoval(entryId: entryId)
                 ctx.continuation?.resume(throwing: error)
@@ -460,7 +460,7 @@ final class HuggingFaceDownloadService: ObservableObject {
                     state: .failed
                 )
             failed.state = .failed
-            failed.errorMessage = error.localizedDescription
+            failed.errorMessage = UserErrorFormatter.message(for: error)
             upsertActive(failed)
             scheduleRemoval(entryId: entryId)
             ctx.continuation?.resume(throwing: error)

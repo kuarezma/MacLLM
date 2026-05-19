@@ -28,8 +28,17 @@ struct MainView: View {
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
                 if model.isLoadingModel || inferenceService.isGenerating {
-                    ProgressView()
-                        .controlSize(.small)
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        if model.isLoadingModel,
+                           let stage = inferenceService.modelLoadingStage,
+                           !stage.isEmpty {
+                            Text(stage)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 DownloadToolbarButton(
                     downloadService: downloadService,
@@ -156,24 +165,25 @@ struct JanSidebarView: View {
                     .buttonStyle(.plain)
 
                     ForEach(model.projects) { project in
-                        HStack(spacing: 8) {
-                            Image(systemName: "folder")
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.secondaryText)
-                            Text(project.name)
-                                .lineLimit(1)
-                                .fontWeight(model.selectedProjectId == project.id ? .semibold : .regular)
-                            Spacer()
-                            if model.selectedProjectId == project.id {
-                                Circle()
-                                    .fill(AppTheme.accent)
-                                    .frame(width: 6, height: 6)
+                        Button {
+                            model.selectedProjectId = project.id
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "folder")
+                                    .font(.caption)
+                                    .foregroundStyle(AppTheme.secondaryText)
+                                Text(project.name)
+                                    .lineLimit(1)
+                                    .fontWeight(model.selectedProjectId == project.id ? .semibold : .regular)
+                                Spacer()
+                                if model.selectedProjectId == project.id {
+                                    Circle()
+                                        .fill(AppTheme.accent)
+                                        .frame(width: 6, height: 6)
+                                }
                             }
                         }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            model.selectedProjectId = project.id
-                        }
+                        .buttonStyle(.plain)
                         .contextMenu {
                             Button("Proje sistemi istemi…") {
                                 model.projectPromptEditId = project.id
@@ -224,26 +234,27 @@ struct JanSidebarView: View {
                             .font(.caption)
                     } else {
                         ForEach(model.installedModels) { installed in
-                            ModelRowView(
-                                model: installed,
-                                isSelected: model.selectedModelId == installed.id,
-                                isLoadedInMemory: model.selectedModelId == installed.id
-                                    && inferenceService.isModelLoaded
-                                    && inferenceService.loadedModelId == installed.id,
-                                modalityLabel: model.selectedModelId == installed.id
-                                    && inferenceService.isModelLoaded
-                                    ? model.activeProfile?.modality.label
-                                    : nil,
-                                onUnload: { Task { await model.unloadCurrentModel() } }
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture {
+                            Button {
                                 if model.isLoadingModel {
                                     model.setStatusMessage("Model zaten yukleniyor, lutfen bekleyin.")
                                     return
                                 }
                                 model.selectedModelId = installed.id
+                            } label: {
+                                ModelRowView(
+                                    model: installed,
+                                    isSelected: model.selectedModelId == installed.id,
+                                    isLoadedInMemory: model.selectedModelId == installed.id
+                                        && inferenceService.isModelLoaded
+                                        && inferenceService.loadedModelId == installed.id,
+                                    modalityLabel: model.selectedModelId == installed.id
+                                        && inferenceService.isModelLoaded
+                                        ? model.activeProfile?.modality.label
+                                        : nil,
+                                    onUnload: { Task { await model.unloadCurrentModel() } }
+                                )
                             }
+                            .buttonStyle(.plain)
                             .contextMenu {
                                 Button("Diskten Sil", role: .destructive) {
                                     modelPendingDelete = installed
@@ -338,21 +349,22 @@ struct JanSidebarView: View {
 
     @ViewBuilder
     private func sessionRow(_ session: ChatSession) -> some View {
-        HStack(spacing: 8) {
-            Text(session.title)
-                .lineLimit(1)
-                .fontWeight(session.id == appModel.currentSession.id ? .semibold : .regular)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if session.id == appModel.currentSession.id {
-                Capsule(style: .continuous)
-                    .fill(AppTheme.accentGradient)
-                    .frame(width: 3, height: 16)
+        Button {
+            Task { await appModel.loadSession(session) }
+        } label: {
+            HStack(spacing: 8) {
+                Text(session.title)
+                    .lineLimit(1)
+                    .fontWeight(session.id == appModel.currentSession.id ? .semibold : .regular)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if session.id == appModel.currentSession.id {
+                    Capsule(style: .continuous)
+                        .fill(AppTheme.accentGradient)
+                        .frame(width: 3, height: 16)
+                }
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            Task { await appModel.loadSession(session) }
-        }
+        .buttonStyle(.plain)
         .contextMenu {
             Menu("Projeye taşı") {
                 Button("Proje yok") {
@@ -364,11 +376,6 @@ struct JanSidebarView: View {
                     }
                 }
             }
-            Button("Sil", role: .destructive) {
-                sessionPendingDelete = session
-            }
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button("Sil", role: .destructive) {
                 sessionPendingDelete = session
             }

@@ -344,7 +344,7 @@ final class AppModel {
         let generation = modelLoadGeneration
 
         isLoadingModel = true
-        setStatusMessage("\(model.name) yükleniyor…")
+        setStatusMessage("\(model.name) hazırlanıyor…")
         defer { isLoadingModel = false }
 
         do {
@@ -362,7 +362,7 @@ final class AppModel {
             ) {
                 applyRuntimeProfile(profile)
             }
-            setStatusMessage("\(model.name) hazır")
+            setStatusMessage("\(model.name) kullanıma hazır")
             refreshModels()
             return true
         } catch is CancellationError {
@@ -442,6 +442,8 @@ final class AppModel {
             }
         } catch is CancellationError {
             setStatusMessage("İndirme iptal edildi")
+        } catch let error as NSError where error.domain == "MacLLM" && error.code == 101 {
+            setStatusMessage(UserErrorFormatter.details(for: error).displayText)
         } catch {
             reportError(error, context: "Indirme hatasi")
         }
@@ -487,7 +489,7 @@ final class AppModel {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
 
-        setStatusMessage("Model kopyalanıyor…")
+            setStatusMessage("Model dosyası kopyalanıyor…")
         do {
             let filename = url.lastPathComponent
             let id = filename.replacingOccurrences(of: ".gguf", with: "")
@@ -500,7 +502,9 @@ final class AppModel {
                 }
                 try FileManager.default.removeItem(at: dest)
             }
-            try FileManager.default.copyItem(at: url, to: dest)
+            try await Task.detached(priority: .utility) {
+                try FileManager.default.copyItem(at: url, to: dest)
+            }.value
             try GGUFFileValidator.validateDownload(at: dest, expectedBytes: 0)
             let mmproj = MmprojDiscovery.findSibling(to: dest)
             _ = try modelStore.registerModel(
@@ -966,6 +970,9 @@ final class AppModel {
     }
 
     func stopGenerationAndWait() async {
+        if inferenceService.isGenerating {
+            setStatusMessage("Üretim durduruluyor…")
+        }
         await inferenceService.stopGeneration()
     }
 

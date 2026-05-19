@@ -8,6 +8,7 @@ final class InferenceService: ObservableObject {
     @Published private(set) var loadedModelId: String?
     @Published private(set) var isGenerating = false
     @Published private(set) var lastGenerationStats: GenerationStats?
+    @Published private(set) var modelLoadingStage: String?
     @Published var settings: InferenceSettings = .default
 
     private var llamaContext: LlamaContext?
@@ -32,16 +33,30 @@ final class InferenceService: ObservableObject {
     }
 
     func loadModel(_ model: InstalledModel, settingsOverride: InferenceSettings? = nil) async throws {
+        defer { modelLoadingStage = nil }
+        modelLoadingStage = "Mevcut model kapatiliyor"
         await stopGeneration()
         await unloadModel()
         invalidatePromptCache()
         let effectiveSettings = settingsOverride ?? settings
-        llamaContext = try await LlamaContext.createContext(
-            path: model.localPath,
-            settings: effectiveSettings,
-            chatTemplateHint: model.chatTemplate,
-            mmprojPath: model.mmprojLocalPath
-        )
+        modelLoadingStage = "Model dosyasi yukleniyor"
+        let path = model.localPath
+        let chatTemplateHint = model.chatTemplate
+        let mmprojPath = model.mmprojLocalPath
+        let loadedContext = try await Task.detached(priority: .userInitiated) {
+            try LlamaContext.createContext(
+                path: path,
+                settings: effectiveSettings,
+                chatTemplateHint: chatTemplateHint,
+                mmprojPath: mmprojPath
+            )
+        }.value
+        if Task.isCancelled {
+            await loadedContext.shutdown()
+            throw CancellationError()
+        }
+        modelLoadingStage = "Calisma profili hazirlaniyor"
+        llamaContext = loadedContext
         isModelLoaded = true
         loadedModelId = model.id
         lastLoadedModel = model

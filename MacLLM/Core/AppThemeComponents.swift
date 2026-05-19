@@ -15,8 +15,8 @@ extension View {
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.14),
-                                    Color.white.opacity(0.04)
+                                    Color.primary.opacity(0.14),
+                                    Color.primary.opacity(0.04)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -28,7 +28,7 @@ extension View {
     }
 
     func appFloatingShadow(radius: CGFloat = 24, y: CGFloat = 10) -> some View {
-        shadow(color: .black.opacity(0.28), radius: radius, y: y)
+        shadow(color: .black.opacity(0.16), radius: radius, y: y)
             .shadow(color: AppTheme.glowAccent.opacity(0.08), radius: radius * 0.6, y: y * 0.5)
     }
 
@@ -82,8 +82,8 @@ struct ModernScaleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .contentShape(Rectangle())
-            .scaleEffect(configuration.isPressed ? pressedScale : 1)
-            .animation(AppTheme.springSnappy, value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(AppTheme.fadeQuick, value: configuration.isPressed)
     }
 }
 
@@ -105,8 +105,8 @@ struct SidebarNavButtonStyle: ButtonStyle {
                                 : Color.clear
                     )
             }
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(AppTheme.springSnappy, value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(AppTheme.fadeQuick, value: configuration.isPressed)
             .animation(AppTheme.springSoft, value: hovered)
             .onHover { hovered = $0 }
     }
@@ -156,8 +156,8 @@ struct AccentIconButtonStyle: ButtonStyle {
                             : Color.primary.opacity(0.06)
                     )
             }
-            .scaleEffect(configuration.isPressed ? 0.92 : hovered ? 1.06 : 1)
-            .animation(AppTheme.springSnappy, value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(AppTheme.fadeQuick, value: configuration.isPressed)
             .animation(AppTheme.springSoft, value: hovered)
             .onHover { hovered = $0 }
     }

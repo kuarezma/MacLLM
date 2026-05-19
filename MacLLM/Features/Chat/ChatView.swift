@@ -27,7 +27,7 @@ struct ChatView: View {
             } else if model.isLoadingModel {
                 emptyState(
                     title: "Model hazırlanıyor",
-                    description: "Çıkarım motoru yükleniyor…",
+                    description: inferenceService.modelLoadingStage ?? "Çıkarım motoru yükleniyor…",
                     actionTitle: nil,
                     action: nil
                 )
@@ -237,14 +237,13 @@ struct ChatView: View {
         }
         .frame(maxWidth: .infinity)
         .background {
-            LinearGradient(
-                colors: [
-                    AppTheme.chatBackground.opacity(0),
-                    AppTheme.chatBackground.opacity(0.92)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            Rectangle()
+                .fill(.regularMaterial)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(AppTheme.border)
+                        .frame(height: 0.5)
+                }
             .ignoresSafeArea()
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
@@ -291,13 +290,12 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        .appGlassCard(cornerRadius: AppTheme.composerRadius, material: .regularMaterial)
+        .appGlassCard(cornerRadius: AppTheme.composerRadius, material: .thinMaterial)
         .overlay {
             RoundedRectangle(cornerRadius: AppTheme.composerRadius, style: .continuous)
                 .strokeBorder(inputFocused ? AppTheme.accent.opacity(0.45) : Color.clear, lineWidth: 1.2)
                 .animation(AppTheme.fadeQuick, value: inputFocused)
         }
-        .appFloatingShadow(radius: 18, y: 6)
     }
 
     private func composerIconButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
@@ -318,38 +316,22 @@ struct ChatView: View {
             Button {
                 Task { await model.stopGenerationAndWait() }
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.red.opacity(0.15))
-                        .frame(width: 36, height: 36)
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.red)
-                }
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 13, weight: .semibold))
             }
-            .buttonStyle(ModernScaleButtonStyle())
+            .buttonStyle(.bordered)
+            .tint(.red)
+            .controlSize(.regular)
             .appHitTarget(minWidth: 40, minHeight: 40)
             .help("Durdur")
             .keyboardShortcut(.escape, modifiers: [])
         } else {
             Button(action: send) {
-                ZStack {
-                    if canSend {
-                        Circle()
-                            .fill(AppTheme.accentGradient)
-                            .frame(width: 36, height: 36)
-                            .shadow(color: AppTheme.glowAccent, radius: 8, y: 2)
-                    } else {
-                        Circle()
-                            .fill(Color.primary.opacity(0.08))
-                            .frame(width: 36, height: 36)
-                    }
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(canSend ? .white : AppTheme.secondaryText.opacity(0.4))
-                }
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 13, weight: .semibold))
             }
-            .buttonStyle(ModernScaleButtonStyle())
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
             .appHitTarget(minWidth: 40, minHeight: 40)
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: [.command])
