@@ -35,47 +35,6 @@ APP_SIGN_IDENTITY="${APP_SIGN_IDENTITY:--}" "$ROOT/Scripts/sign-app.sh" "$APP_PA
 mkdir -p "$DIST"
 rm -f "$DIST/$ZIP_NAME" "$DIST/$DMG_NAME" "$DIST/$PKG_NAME" "$DIST/SHA256SUMS.txt"
 
-echo "ZIP oluşturuluyor..."
-ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$DIST/$ZIP_NAME"
-
-echo "DMG oluşturuluyor..."
-DMG_STAGING="$DIST/.dmg-staging-$$"
-rm -rf "$DMG_STAGING"
-mkdir -p "$DMG_STAGING"
-cp -R "$APP_PATH" "$DMG_STAGING/"
-ln -sf /Applications "$DMG_STAGING/Applications"
-if [[ -f "$ROOT/packaging/dmg/KURULUM.txt" ]]; then
-  cp "$ROOT/packaging/dmg/KURULUM.txt" "$DMG_STAGING/KURULUM.txt"
-fi
-if [[ -f "$ROOT/packaging/dmg/MacLLM-Kur.command" ]]; then
-  cp "$ROOT/packaging/dmg/MacLLM-Kur.command" "$DMG_STAGING/MacLLM-Kur.command"
-  chmod +x "$DMG_STAGING/MacLLM-Kur.command"
-fi
-hdiutil create \
-  -volname "MacLLM" \
-  -srcfolder "$DMG_STAGING" \
-  -ov \
-  -format UDZO \
-  -fs HFS+ \
-  "$DIST/$DMG_NAME" >/dev/null
-rm -rf "$DMG_STAGING"
-
-echo "DMG doğrulanıyor..."
-hdiutil verify "$DIST/$DMG_NAME" >/dev/null
-DMG_MOUNT="$DIST/.dmg-mount-$$"
-rm -rf "$DMG_MOUNT"
-mkdir -p "$DMG_MOUNT"
-hdiutil attach "$DIST/$DMG_NAME" -nobrowse -readonly -mountpoint "$DMG_MOUNT" >/dev/null
-if [[ ! -d "$DMG_MOUNT/MacLLM.app" ]]; then
-  hdiutil detach "$DMG_MOUNT" -force >/dev/null || true
-  rm -rf "$DMG_MOUNT"
-  echo "Hata: DMG mount edildi ama MacLLM.app bulunamadı."
-  exit 1
-fi
-codesign --verify --deep --strict --verbose=2 "$DMG_MOUNT/MacLLM.app"
-hdiutil detach "$DMG_MOUNT" >/dev/null
-rm -rf "$DMG_MOUNT"
-
 echo "PKG oluşturuluyor..."
 PKG_STAGING="$DIST/.pkg-staging-$$"
 rm -rf "$PKG_STAGING"
@@ -111,6 +70,44 @@ if [[ -n "$NOTARYTOOL_PROFILE" ]]; then
 else
   echo "Uyarı: NOTARYTOOL_PROFILE yok; notarization atlandı."
 fi
+
+echo "ZIP oluşturuluyor..."
+ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$DIST/$ZIP_NAME"
+
+echo "DMG oluşturuluyor (PKG kurulum sihirbazı dahil)..."
+DMG_STAGING="$DIST/.dmg-staging-$$"
+rm -rf "$DMG_STAGING"
+mkdir -p "$DMG_STAGING"
+cp -R "$APP_PATH" "$DMG_STAGING/"
+ln -sf /Applications "$DMG_STAGING/Applications"
+cp "$DIST/$PKG_NAME" "$DMG_STAGING/$PKG_NAME"
+if [[ -f "$ROOT/packaging/dmg/KURULUM.txt" ]]; then
+  cp "$ROOT/packaging/dmg/KURULUM.txt" "$DMG_STAGING/KURULUM.txt"
+fi
+hdiutil create \
+  -volname "MacLLM" \
+  -srcfolder "$DMG_STAGING" \
+  -ov \
+  -format UDZO \
+  -fs HFS+ \
+  "$DIST/$DMG_NAME" >/dev/null
+rm -rf "$DMG_STAGING"
+
+echo "DMG doğrulanıyor..."
+hdiutil verify "$DIST/$DMG_NAME" >/dev/null
+DMG_MOUNT="$DIST/.dmg-mount-$$"
+rm -rf "$DMG_MOUNT"
+mkdir -p "$DMG_MOUNT"
+hdiutil attach "$DIST/$DMG_NAME" -nobrowse -readonly -mountpoint "$DMG_MOUNT" >/dev/null
+if [[ ! -d "$DMG_MOUNT/MacLLM.app" || ! -f "$DMG_MOUNT/$PKG_NAME" ]]; then
+  hdiutil detach "$DMG_MOUNT" -force >/dev/null || true
+  rm -rf "$DMG_MOUNT"
+  echo "Hata: DMG içinde MacLLM.app veya PKG eksik."
+  exit 1
+fi
+codesign --verify --deep --strict --verbose=2 "$DMG_MOUNT/MacLLM.app"
+hdiutil detach "$DMG_MOUNT" >/dev/null
+rm -rf "$DMG_MOUNT"
 
 DMG_SHA="$(shasum -a 256 "$DIST/$DMG_NAME" | awk '{print $1}')"
 ZIP_SHA="$(shasum -a 256 "$DIST/$ZIP_NAME" | awk '{print $1}')"

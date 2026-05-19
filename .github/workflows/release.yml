@@ -102,10 +102,9 @@ jobs:
 
             | Method | File |
             |--------|------|
-            | **Recommended** | Open DMG → double-click **MacLLM-Kur.command** (installs + opens) |
-            | Installer wizard | **MacLLM-*-macOS-arm64.pkg** (quarantine cleared on install) |
+            | **Recommended** | Open DMG → double-click **MacLLM-*-macOS-arm64.pkg** inside |
+            | Direct | Download **MacLLM-*-macOS-arm64.pkg** from Assets |
             | Manual | Drag **MacLLM.app** to Applications (first launch may need right-click → Open) |
-            | ZIP | **MacLLM-*-macOS-arm64.zip** |
 
             ### Homebrew
 

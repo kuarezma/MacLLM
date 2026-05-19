@@ -44,10 +44,10 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.21)
+### Bu sürümde (1.14.22)
 
-- Kurulum: PKG ve DMG içindeki **MacLLM-Kur.command** kurulumdan sonra karantinayı kaldırır; MacLLM çift tıkla açılır
-- Önerilen: DMG’de **MacLLM-Kur.command**’a çift tık (veya `.pkg` kurulum sihirbazı)
+- Kurulum: DMG içinde **PKG kurulum sihirbazı**; kurulum sonrası karantina temizlenir, MacLLM çift tıkla açılır
+- `.command` kaldırıldı (Safari karantinasında aynı uyarıyı veriyordu)
 
 ### Önceki (1.14.20)
 

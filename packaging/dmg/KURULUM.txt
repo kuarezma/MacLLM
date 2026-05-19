@@ -1,11 +1,12 @@
-MacLLM 1.14.21 — Kurulum (çift tık)
+MacLLM — Kurulum (1.14.22)
 
-ÖNERİLEN (en kolay):
-→ «MacLLM-Kur.command» dosyasına ÇİFT TIK
-  (şifre isteyebilir, sonra MacLLM otomatik açılır)
+ÖNERİLEN (çift tık):
+→ Bu klasördeki «MacLLM-…-macOS-arm64.pkg» dosyasına çift tık
+→ Kurulum sihirbazını tamamla
+→ MacLLM otomatik açılır; sonra Uygulamalar’dan çift tık yeterli
 
-Alternatif:
-→ «MacLLM-…-macOS-arm64.pkg» dosyasını çift tıkla (kurulum sihirbazı)
+PKG ilk açılışta «tanınmayan geliştirici» derse:
+→ Sistem Ayarları → Gizlilik ve Güvenlik → «Yine de Aç»
 
-Manuel sürükle-bırak:
-MacLLM → Uygulamalar, sonra ilk açılışta sağ tık → Aç gerekir.
+Manuel (önerilmez):
+MacLLM.app → Uygulamalar, ilk açılışta sağ tık → Aç gerekir.
