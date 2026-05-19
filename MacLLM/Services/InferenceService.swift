@@ -7,12 +7,14 @@ final class InferenceService: ObservableObject {
     @Published private(set) var isModelLoaded = false
     @Published private(set) var loadedModelId: String?
     @Published private(set) var isGenerating = false
+    @Published private(set) var isStoppingGeneration = false
     @Published private(set) var lastGenerationStats: GenerationStats?
     @Published private(set) var modelLoadingStage: String?
     @Published var settings: InferenceSettings = .default
 
     private var llamaContext: LlamaContext?
     private var generationTask: Task<Void, Never>?
+    private var generationRunID: UInt64 = 0
     private var lastLoadedModel: InstalledModel?
     private var promptCacheSessionId: UUID?
     private var promptCacheFingerprint: String = ""
@@ -114,13 +116,18 @@ final class InferenceService: ObservableObject {
     }
 
     func stopGeneration() async {
-        generationTask?.cancel()
-        await llamaContext?.cancel()
-        if let generationTask {
-            await generationTask.value
-        }
+        let task = generationTask
+        guard task != nil || isGenerating || isStoppingGeneration else { return }
+        isStoppingGeneration = true
+        generationRunID &+= 1
         generationTask = nil
+        task?.cancel()
+        await llamaContext?.cancel()
+        if let task {
+            await task.value
+        }
         isGenerating = false
+        isStoppingGeneration = false
     }
 
     private static func messagesWithSystem(_ messages: [ChatMessage], systemPrompt: String) -> [ChatMessage] {
@@ -171,16 +178,20 @@ final class InferenceService: ObservableObject {
         return AsyncThrowingStream { continuation in
             Task { @MainActor in
                 await self.stopGeneration()
+                self.generationRunID &+= 1
+                let runID = self.generationRunID
+                self.isStoppingGeneration = false
+                self.isGenerating = true
+                self.lastGenerationStats = nil
                 self.generationTask = Task.detached(priority: .userInitiated) {
                     let started = Date()
                     do {
-                        await MainActor.run {
-                            self.isGenerating = true
-                            self.lastGenerationStats = nil
-                        }
                         defer {
                             Task { @MainActor in
+                                guard self.generationRunID == runID else { return }
                                 self.isGenerating = false
+                                self.isStoppingGeneration = false
+                                self.generationTask = nil
                             }
                         }
 
