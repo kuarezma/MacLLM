@@ -113,6 +113,7 @@ struct JanSidebarView: View {
     @State private var modelsExpanded = false
     @State private var sessionPendingDelete: ChatSession?
     @State private var modelPendingDelete: InstalledModel?
+    @State private var selectedSessionId: UUID?
     @FocusState private var sessionSearchFocused: Bool
 
     private var sessionsToShow: [ChatSession] {
@@ -124,7 +125,7 @@ struct JanSidebarView: View {
     var body: some View {
         @Bindable var model = appModel
 
-        List {
+        List(selection: $selectedSessionId) {
             Section {
                 sidebarNavRow("square.and.pencil", title: "Yeni Sohbet", shortcut: "⌘N") {
                     Task { await model.newChat() }
@@ -288,6 +289,23 @@ struct JanSidebarView: View {
             if !sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 performSessionSearch(query: sessionSearchText)
             }
+            if !model.sessions.contains(where: { $0.id == selectedSessionId }) {
+                selectedSessionId = model.currentSession.id
+            }
+        }
+        .onAppear {
+            selectedSessionId = model.currentSession.id
+        }
+        .onChange(of: model.currentSession.id) { _, newId in
+            if selectedSessionId != newId {
+                selectedSessionId = newId
+            }
+        }
+        .onChange(of: selectedSessionId) { _, newId in
+            guard let newId, newId != model.currentSession.id else { return }
+            guard let session = model.sessions.first(where: { $0.id == newId })
+                ?? searchedSessions.first(where: { $0.id == newId }) else { return }
+            Task { await model.loadSession(session) }
         }
         .onChange(of: model.selectedModelId) { _, newId in
             guard !model.suppressAutoModelLoad else { return }
@@ -304,6 +322,13 @@ struct JanSidebarView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .focusSidebarSearch)) { _ in
             sessionSearchFocused = true
+        }
+        .onDeleteCommand {
+            guard let selectedSessionId else { return }
+            if let session = model.sessions.first(where: { $0.id == selectedSessionId })
+                ?? searchedSessions.first(where: { $0.id == selectedSessionId }) {
+                sessionPendingDelete = session
+            }
         }
         .alert(
             "Bu sohbet silinsin mi?",
@@ -349,22 +374,18 @@ struct JanSidebarView: View {
 
     @ViewBuilder
     private func sessionRow(_ session: ChatSession) -> some View {
-        Button {
-            Task { await appModel.loadSession(session) }
-        } label: {
-            HStack(spacing: 8) {
-                Text(session.title)
-                    .lineLimit(1)
-                    .fontWeight(session.id == appModel.currentSession.id ? .semibold : .regular)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if session.id == appModel.currentSession.id {
-                    Capsule(style: .continuous)
-                        .fill(AppTheme.accentGradient)
-                        .frame(width: 3, height: 16)
-                }
+        HStack(spacing: 8) {
+            Text(session.title)
+                .lineLimit(1)
+                .fontWeight(session.id == appModel.currentSession.id ? .semibold : .regular)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if session.id == appModel.currentSession.id {
+                Capsule(style: .continuous)
+                    .fill(AppTheme.accentGradient)
+                    .frame(width: 3, height: 16)
             }
         }
-        .buttonStyle(.plain)
+        .tag(session.id)
         .contextMenu {
             Menu("Projeye taşı") {
                 Button("Proje yok") {
