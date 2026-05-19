@@ -15,7 +15,7 @@ struct DownloadManagerPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("İndiriliyor")
+            Text("İndirmeler")
                 .font(.headline)
 
             if activeDownloads.isEmpty {
@@ -58,7 +58,7 @@ struct DownloadManagerPopover: View {
             }
 
             ProgressView(value: download.progress)
-                .tint(.red)
+                .tint(AppTheme.accent)
 
             HStack {
                 Text(String(format: "%.0f%%", download.progress * 100))
@@ -108,7 +108,7 @@ struct DownloadToolbarButton: View {
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(3)
-                            .background(Circle().fill(.red))
+                            .background(Circle().fill(AppTheme.accent))
                             .offset(x: 6, y: -6)
                             .allowsHitTesting(false)
                     }

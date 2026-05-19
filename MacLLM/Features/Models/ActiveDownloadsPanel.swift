@@ -135,6 +135,7 @@ private struct ActiveDownloadRow: View {
                 Button("Tekrar indir") {
                     onRetry(download.catalogEntry)
                 }
+                .buttonStyle(.bordered)
                 .controlSize(.small)
             case .cancelled:
                 Label("İptal edildi", systemImage: "xmark.circle")
@@ -153,7 +154,7 @@ private struct ActiveDownloadRow: View {
                 .font(.caption2)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(.blue.opacity(0.15))
+                .background(AppTheme.accent.opacity(0.15))
                 .clipShape(Capsule())
         case .paused:
             Text("Duraklatıldı")
