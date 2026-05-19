@@ -28,6 +28,7 @@ struct MacLLMApp: App {
                 .background(SettingsOpenerRegistrar())
         }
         .commands {
+            SidebarCommands()
             CommandGroup(replacing: .newItem) {
                 Button("Yeni Sohbet") {
                     Task { await appModel.newChat() }

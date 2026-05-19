@@ -40,6 +40,28 @@ enum UserErrorFormatter {
             }
         }
 
+        if nsError.domain == "MacLLM" {
+            let raw = nsError.localizedDescription
+            if nsError.code == 101 {
+                return UserFacingError(
+                    message: raw,
+                    recovery: "İndirme panelinden ilerlemeyi takip edebilirsiniz."
+                )
+            }
+            if raw.contains("HTTP 401") || raw.contains("HTTP 403") {
+                return UserFacingError(
+                    message: "Model indirme yetkisi reddedildi.",
+                    recovery: "Gated model için Hugging Face token ayarını kontrol edin."
+                )
+            }
+            if raw.contains("HTTP 404") {
+                return UserFacingError(
+                    message: "Model dosyası bulunamadı.",
+                    recovery: "Model bağlantısını veya dosya adını doğrulayın."
+                )
+            }
+        }
+
         if nsError.domain == NSCocoaErrorDomain {
             switch nsError.code {
             case CocoaError.fileNoSuchFile.rawValue:

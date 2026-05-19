@@ -25,7 +25,7 @@ enum AppTheme {
 
     // MARK: - Brand
 
-    static let accent = Color(red: 0.98, green: 0.44, blue: 0.36)
+    static let accent = Color.accentColor
     static let accentSecondary = Color(red: 0.62, green: 0.52, blue: 0.98)
     static let accentTertiary = Color(red: 0.35, green: 0.78, blue: 0.95)
 
@@ -50,31 +50,17 @@ enum AppTheme {
 
     // MARK: - Surfaces
 
-    static var chatBackground: Color {
-        Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
-            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                ? NSColor(calibratedRed: 0.08, green: 0.08, blue: 0.10, alpha: 1)
-                : NSColor.windowBackgroundColor
-        }))
-    }
-
-    static var sidebarBackground: Color {
-        Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
-            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                ? NSColor(calibratedRed: 0.06, green: 0.06, blue: 0.08, alpha: 1)
-                : NSColor.underPageBackgroundColor
-        }))
-    }
-
-    static var elevatedSurface: Color { Color.primary.opacity(0.07) }
-    static var composerBackground: Color { Color.primary.opacity(0.06) }
-    static var border: Color { Color.primary.opacity(0.12) }
-    static var borderStrong: Color { Color.primary.opacity(0.18) }
+    static var chatBackground: Color { Color(nsColor: .windowBackgroundColor) }
+    static var sidebarBackground: Color { Color(nsColor: .underPageBackgroundColor) }
+    static var elevatedSurface: Color { Color(nsColor: .controlBackgroundColor).opacity(0.7) }
+    static var composerBackground: Color { Color(nsColor: .textBackgroundColor).opacity(0.65) }
+    static var border: Color { Color(nsColor: .separatorColor).opacity(0.65) }
+    static var borderStrong: Color { Color(nsColor: .separatorColor) }
     static var primaryText: Color { .primary }
     static var secondaryText: Color { .secondary }
     static var glowAccent: Color { accent.opacity(0.35) }
-    static var subtleInteractiveFill: Color { Color.primary.opacity(0.06) }
-    static var subtleInteractiveHoverFill: Color { Color.primary.opacity(0.10) }
+    static var subtleInteractiveFill: Color { Color(nsColor: .quaternaryLabelColor).opacity(0.12) }
+    static var subtleInteractiveHoverFill: Color { Color(nsColor: .quaternaryLabelColor).opacity(0.2) }
 
     static func userBubbleBackground() -> some ShapeStyle {
         LinearGradient(
