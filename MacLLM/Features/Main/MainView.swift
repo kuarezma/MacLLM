@@ -17,6 +17,7 @@ struct MainView: View {
         } detail: {
             VStack(spacing: 0) {
                 AppUpdateBannerView()
+                ImportedModelFlashBannerView()
                 if downloadService.hasActiveTransfers {
                     ActiveDownloadsPanel(downloadService: downloadService, style: .compact)
                 }

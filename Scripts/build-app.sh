@@ -91,6 +91,7 @@ SOURCES=(
   MacLLM/Services/DownloadMetrics.swift
   MacLLM/Services/DownloadPreferences.swift
   MacLLM/Services/LaunchPreferences.swift
+  MacLLM/Services/ImportedModelPreferences.swift
   MacLLM/Services/RangeDownloadEngine.swift
   MacLLM/Services/HuggingFaceDownloadService.swift
   MacLLM/Services/GGUFFileValidator.swift
@@ -112,6 +113,7 @@ SOURCES=(
   MacLLM/Features/Main/MainView.swift
   MacLLM/Features/Main/NewProjectSheet.swift
   MacLLM/Features/Main/AppUpdateBannerView.swift
+  MacLLM/Features/Main/ImportedModelFlashBannerView.swift
   MacLLM/Features/Chat/ChatView.swift
   MacLLM/Features/Chat/ChatHeaderView.swift
   MacLLM/Features/Chat/ContextUsageView.swift

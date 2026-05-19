@@ -257,6 +257,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.14.15** | Stream scroll during generation; session load respects launch model preference; one-time flash-off migration for imported GGUF; `bench-inference.sh`; unit tests for sanitizer, output filter, launch prefs |
 | **1.14.3** | LM Studio–style Hub (split search + detail, metadata chips, quant picker); download progress fix; PDF attachment support with scanned-page vision fallback; CI build fixes |
 | **1.14.2** | Stable chat layout: pinned composer, centered messages, reduced scroll jump during streaming |
 | **1.14.1** | Jan-style Settings redesign; Hub search shows parameter size (e.g. 7B, “7 billion params”) in info bar |

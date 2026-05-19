@@ -255,6 +255,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.14.15** | Akışta otomatik kaydırma; sohbet açılışında model yükleme tercihi; içe aktarılmış modeller için flash migration + banner; `bench-inference.sh`; sanitizer/filter/launch birim testleri |
 | **1.14.3** | LM Studio tarzı Hub (split arama + detay, metadata, quant seçici); indirme ilerleme düzeltmesi; PDF ekleri ve taranmış sayfa desteği; CI derleme düzeltmeleri |
 | **1.14.2** | Kararlı sohbet düzeni: sabit composer, ortalanmış mesajlar, akışta kaydırma zıplaması azaltıldı |
 | **1.14.1** | Jan tarzı Ayarlar yenilemesi; Hub aramada parametre boyutu (7B, “7 milyar param.”) bilgi barında |

@@ -165,6 +165,11 @@ struct ChatView: View {
                 guard !inferenceService.isGenerating else { return }
                 model.scheduleContextTokenRefresh()
             }
+            .onChange(of: model.streamingBuffer.text) { _, _ in
+                guard inferenceService.isGenerating else { return }
+                guard messageSearchNeedle.isEmpty else { return }
+                scrollToBottom(proxy: proxy, animated: false)
+            }
             .onChange(of: messageSearchText) { _, _ in
                 searchMatchIndex = 0
                 scrollToSearchMatch(proxy: proxy)

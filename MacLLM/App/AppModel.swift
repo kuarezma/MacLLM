@@ -27,6 +27,7 @@ final class AppModel {
     var suppressAutoModelLoad = false
     var showLaunchLoadPrompt = false
     var launchLoadCandidate: InstalledModel?
+    var showImportedFlashBanner = false
 
     private let modelStore = ModelStore.shared
     private var statusClearTask: Task<Void, Never>?
@@ -103,9 +104,40 @@ final class AppModel {
                 inferenceService.settings = settings
             }
             mergeDefaultStopSequences()
+            migrateImportedModelFlashAttentionIfNeeded()
             await configureLaunchModelSelection()
         } catch {
             setStatusMessage(error.localizedDescription)
+        }
+    }
+
+    func dismissImportedFlashBanner() {
+        showImportedFlashBanner = false
+        ImportedModelPreferences.flashBannerDismissed = true
+    }
+
+    /// Daha önce içe aktarılmış modellerde Flash Attention açık kalmışsa tek seferlik kapatır.
+    private func migrateImportedModelFlashAttentionIfNeeded() {
+        let hasImported = installedModels.contains { $0.repoId == "imported" }
+        guard hasImported else {
+            ImportedModelPreferences.flashMigrationCompleted = true
+            return
+        }
+        guard !ImportedModelPreferences.flashMigrationCompleted else { return }
+
+        ImportedModelPreferences.flashMigrationCompleted = true
+
+        guard settings.flashAttention else { return }
+
+        settings.flashAttention = false
+        let shouldReload = inferenceService.isModelLoaded
+            && installedModels.contains {
+                $0.id == inferenceService.loadedModelId && $0.repoId == "imported"
+            }
+        saveSettings(reloadModel: shouldReload, silent: true)
+
+        if !ImportedModelPreferences.flashBannerDismissed {
+            showImportedFlashBanner = true
         }
     }
 
@@ -598,8 +630,27 @@ final class AppModel {
         }
         if let modelId = currentSession.modelId,
            let model = installedModels.first(where: { $0.id == modelId }) {
-            selectedModelId = modelId
-            if inferenceService.loadedModelId != modelId || !inferenceService.isModelLoaded {
+            await applySessionModelSelection(model)
+        }
+    }
+
+    /// Eski sohbet açılırken `LaunchPreferences` ile uyumlu model seçimi / yükleme.
+    private func applySessionModelSelection(_ model: InstalledModel) async {
+        selectedModelId = model.id
+
+        switch LaunchPreferences.loadModelOnLaunch {
+        case .never:
+            if inferenceService.loadedModelId != model.id {
+                setStatusMessage("Model ilk mesajda yüklenecek")
+            }
+        case .ask:
+            if inferenceService.loadedModelId == model.id, inferenceService.isModelLoaded {
+                return
+            }
+            launchLoadCandidate = model
+            showLaunchLoadPrompt = true
+        case .always:
+            if inferenceService.loadedModelId != model.id || !inferenceService.isModelLoaded {
                 _ = await selectModel(model)
             }
         }
@@ -925,7 +976,7 @@ final class AppModel {
         return kept
     }
 
-    func saveSettings(reloadModel: Bool = false) {
+    func saveSettings(reloadModel: Bool = false, silent: Bool = false) {
         inferenceService.settings = settings
         if let data = try? JSONEncoder().encode(settings) {
             UserDefaults.standard.set(data, forKey: "inferenceSettings")
@@ -933,7 +984,7 @@ final class AppModel {
         mergeDefaultStopSequences()
         if reloadModel, let model = selectedModel {
             invalidateInferenceCache()
-            setStatusMessage("Ayarlar kaydedildi")
+            if !silent { setStatusMessage("Ayarlar kaydedildi") }
             Task { await selectModel(model) }
             return
         }
@@ -947,7 +998,7 @@ final class AppModel {
                 applyRuntimeProfile(profile)
             }
         }
-        setStatusMessage("Ayarlar kaydedildi")
+        if !silent { setStatusMessage("Ayarlar kaydedildi") }
     }
 
     private func applyRuntimeProfile(_ profile: LoadedModelProfile) {
