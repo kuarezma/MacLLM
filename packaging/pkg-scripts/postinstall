@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+APP="/Applications/MacLLM.app"
+if [[ -d "$APP" ]]; then
+  /usr/bin/xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+  /usr/bin/open "$APP" 2>/dev/null || true
+fi
+exit 0

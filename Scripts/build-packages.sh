@@ -44,6 +44,13 @@ rm -rf "$DMG_STAGING"
 mkdir -p "$DMG_STAGING"
 cp -R "$APP_PATH" "$DMG_STAGING/"
 ln -sf /Applications "$DMG_STAGING/Applications"
+if [[ -f "$ROOT/packaging/dmg/KURULUM.txt" ]]; then
+  cp "$ROOT/packaging/dmg/KURULUM.txt" "$DMG_STAGING/KURULUM.txt"
+fi
+if [[ -f "$ROOT/packaging/dmg/MacLLM-Kur.command" ]]; then
+  cp "$ROOT/packaging/dmg/MacLLM-Kur.command" "$DMG_STAGING/MacLLM-Kur.command"
+  chmod +x "$DMG_STAGING/MacLLM-Kur.command"
+fi
 hdiutil create \
   -volname "MacLLM" \
   -srcfolder "$DMG_STAGING" \
@@ -74,11 +81,14 @@ PKG_STAGING="$DIST/.pkg-staging-$$"
 rm -rf "$PKG_STAGING"
 mkdir -p "$PKG_STAGING/Applications"
 cp -R "$APP_PATH" "$PKG_STAGING/Applications/"
+PKG_SCRIPTS="$ROOT/packaging/pkg-scripts"
+chmod +x "$PKG_SCRIPTS/postinstall" 2>/dev/null || true
 pkgbuild \
   --root "$PKG_STAGING" \
   --install-location / \
   --identifier com.macllm.pkg \
   --version "$VERSION" \
+  --scripts "$PKG_SCRIPTS" \
   "$DIST/$PKG_NAME"
 rm -rf "$PKG_STAGING"
 

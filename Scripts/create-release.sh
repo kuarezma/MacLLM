@@ -44,11 +44,15 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.20)
+### Bu sürümde (1.14.21)
 
-- DMG düzeltmesi: paketleme öncesi zorunlu geçerli codesign (bozuk linker imzası giderildi; “hasar görmüş” hatası)
-- DMG doğrulama: verify + mount + imza kontrolü release öncesi zorunlu
-- İlk açılış: Safari indirmesinden sonra gerekirse sağ tık → Aç (imzasız dağıtım için)
+- Kurulum: PKG ve DMG içindeki **MacLLM-Kur.command** kurulumdan sonra karantinayı kaldırır; MacLLM çift tıkla açılır
+- Önerilen: DMG’de **MacLLM-Kur.command**’a çift tık (veya `.pkg` kurulum sihirbazı)
+
+### Önceki (1.14.20)
+
+- DMG düzeltmesi: geçerli codesign ile “hasar görmüş” hatası giderildi
+- DMG verify + mount + imza kontrolü release öncesi zorunlu
 
 ### Önceki (1.14.19)
 
