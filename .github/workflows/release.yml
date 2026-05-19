@@ -29,18 +29,18 @@ jobs:
       - name: Install build tools
         run: brew install cmake ninja
 
-      - name: Validate signing secrets
+      - name: Configure release signing
+        id: signing
         run: |
-          [[ -n "$APP_SIGN_IDENTITY" ]]
-          [[ -n "$PKG_SIGN_IDENTITY" ]]
-          [[ -n "$APPLE_ID" ]]
-          [[ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]]
-          [[ -n "$APPLE_TEAM_ID" ]]
-          [[ -n "$MACOS_CERTIFICATE_P12_BASE64" ]]
-          [[ -n "$MACOS_CERTIFICATE_PASSWORD" ]]
-          [[ -n "$MACOS_KEYCHAIN_PASSWORD" ]]
+          if [[ -n "$APP_SIGN_IDENTITY" && -n "$PKG_SIGN_IDENTITY" && -n "$APPLE_ID" && -n "$APPLE_APP_SPECIFIC_PASSWORD" && -n "$APPLE_TEAM_ID" && -n "$MACOS_CERTIFICATE_P12_BASE64" && -n "$MACOS_CERTIFICATE_PASSWORD" && -n "$MACOS_KEYCHAIN_PASSWORD" ]]; then
+            echo "mode=developer" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=adhoc" >> "$GITHUB_OUTPUT"
+            echo "Developer ID secrets eksik; ad-hoc imza ile devam ediliyor."
+          fi
 
       - name: Install Developer ID certificate
+        if: steps.signing.outputs.mode == 'developer'
         run: |
           KEYCHAIN_PATH="$RUNNER_TEMP/macos-signing.keychain-db"
           CERT_PATH="$RUNNER_TEMP/macos-signing.p12"
@@ -54,6 +54,7 @@ jobs:
           security find-identity -v "$KEYCHAIN_PATH"
 
       - name: Configure notarytool profile
+        if: steps.signing.outputs.mode == 'developer'
         run: |
           xcrun notarytool store-credentials "macllm-notary" \
             --apple-id "$APPLE_ID" \
@@ -61,12 +62,12 @@ jobs:
             --password "$APPLE_APP_SPECIFIC_PASSWORD"
 
       - name: Build release packages
+        env:
+          APP_SIGN_IDENTITY: ${{ steps.signing.outputs.mode == 'developer' && secrets.APP_SIGN_IDENTITY || '-' }}
+          PKG_SIGN_IDENTITY: ${{ steps.signing.outputs.mode == 'developer' && secrets.PKG_SIGN_IDENTITY || '' }}
+          NOTARYTOOL_PROFILE: ${{ steps.signing.outputs.mode == 'developer' && 'macllm-notary' || '' }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          REQUIRE_SIGNING=1 \
-          APP_SIGN_IDENTITY="$APP_SIGN_IDENTITY" \
-          PKG_SIGN_IDENTITY="$PKG_SIGN_IDENTITY" \
-          NOTARYTOOL_PROFILE="macllm-notary" \
           SKIP_GITHUB=1 ./Scripts/create-release.sh "$VERSION"
 
       - name: Validate release artifacts
@@ -80,6 +81,7 @@ jobs:
           MOUNTPOINT="$(mktemp -d)"
           hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNTPOINT"
           test -d "$MOUNTPOINT/MacLLM.app"
+          codesign --verify --deep --strict --verbose=2 "$MOUNTPOINT/MacLLM.app"
           hdiutil detach "$MOUNTPOINT"
           rmdir "$MOUNTPOINT"
           (cd dist && shasum -a 256 -c SHA256SUMS.txt)

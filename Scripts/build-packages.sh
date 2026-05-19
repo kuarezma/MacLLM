@@ -29,19 +29,8 @@ if [[ "$REQUIRE_SIGNING" == "1" ]]; then
   fi
 fi
 
-if [[ -n "$APP_SIGN_IDENTITY" ]]; then
-  echo "Uygulama imzalanıyor..."
-  codesign --force --sign "$APP_SIGN_IDENTITY" --options runtime --timestamp \
-    "$APP_PATH/Contents/Frameworks/llama.framework/Versions/A/llama"
-  codesign --force --sign "$APP_SIGN_IDENTITY" --options runtime --timestamp \
-    "$APP_PATH/Contents/Frameworks/llama.framework"
-  codesign --force --sign "$APP_SIGN_IDENTITY" --options runtime --timestamp \
-    "$APP_PATH/Contents/MacOS/MacLLM"
-  codesign --force --sign "$APP_SIGN_IDENTITY" --options runtime --timestamp "$APP_PATH"
-  codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-else
-  echo "Uyarı: APP_SIGN_IDENTITY yok; uygulama ad-hoc/unsigned kalacak."
-fi
+echo "Uygulama imzalanıyor..."
+APP_SIGN_IDENTITY="${APP_SIGN_IDENTITY:--}" "$ROOT/Scripts/sign-app.sh" "$APP_PATH"
 
 mkdir -p "$DIST"
 rm -f "$DIST/$ZIP_NAME" "$DIST/$DMG_NAME" "$DIST/$PKG_NAME" "$DIST/SHA256SUMS.txt"
@@ -76,6 +65,7 @@ if [[ ! -d "$DMG_MOUNT/MacLLM.app" ]]; then
   echo "Hata: DMG mount edildi ama MacLLM.app bulunamadı."
   exit 1
 fi
+codesign --verify --deep --strict --verbose=2 "$DMG_MOUNT/MacLLM.app"
 hdiutil detach "$DMG_MOUNT" >/dev/null
 rm -rf "$DMG_MOUNT"
 
