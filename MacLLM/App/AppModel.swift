@@ -489,7 +489,7 @@ final class AppModel {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
 
-            setStatusMessage("Model dosyası kopyalanıyor…")
+        setStatusMessage("Model dosyası kopyalanıyor…")
         do {
             let filename = url.lastPathComponent
             let id = filename.replacingOccurrences(of: ".gguf", with: "")
@@ -769,8 +769,11 @@ final class AppModel {
         if appendUserMessage {
             guard !trimmed.isEmpty || !pendingAttachments.isEmpty else { return }
         }
-        guard !inferenceService.isGenerating else {
-            setStatusMessage("Önce mevcut yanıtın bitmesini bekleyin veya «Yanıtı Durdur» kullanın.")
+        guard !inferenceService.isGenerating, !inferenceService.isStoppingGeneration else {
+            let message = inferenceService.isStoppingGeneration
+                ? "Önce durdurma işlemi tamamlansın."
+                : "Önce mevcut yanıtın bitmesini bekleyin veya «Yanıtı Durdur» kullanın."
+            setStatusMessage(message)
             return
         }
         guard let model = selectedModel else {
@@ -952,6 +955,23 @@ final class AppModel {
             }
             setStatusMessage("Üretim durduruldu")
             try? await saveCurrentSession()
+        } catch let llamaError as LlamaError {
+            guard currentSession.id == activeSessionId,
+                  assistantIndex < currentSession.messages.count else { return }
+            if currentSession.messages[assistantIndex].content.isEmpty {
+                currentSession.messages[assistantIndex].content =
+                    "Hata: \(UserErrorFormatter.message(for: llamaError))"
+            }
+            switch llamaError {
+            case .generationStalled:
+                setStatusMessage("Üretim zaman aşımına uğradı. Yeniden deneyin.", persistent: true)
+            case .generationEmpty:
+                setStatusMessage("Model anlamlı yanıt üretemedi. Yeniden deneyin.", persistent: true)
+            default:
+                reportError(llamaError, context: "Uretim hatasi")
+            }
+            await inferenceService.clearKVCache()
+            try? await saveCurrentSession()
         } catch {
             guard currentSession.id == activeSessionId,
                   assistantIndex < currentSession.messages.count else { return }
@@ -970,7 +990,7 @@ final class AppModel {
     }
 
     func stopGenerationAndWait() async {
-        if inferenceService.isGenerating {
+        if inferenceService.isGenerating || inferenceService.isStoppingGeneration {
             setStatusMessage("Üretim durduruluyor…")
         }
         await inferenceService.stopGeneration()

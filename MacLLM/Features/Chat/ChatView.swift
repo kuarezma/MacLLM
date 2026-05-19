@@ -265,15 +265,15 @@ struct ChatView: View {
                 composerIconButton("plus", help: "Dosya ekle") {
                     showFileImporter = true
                 }
-                .disabled(inferenceService.isGenerating)
+                .disabled(inferenceBusy)
 
                 TextField("Bir şey sorun…", text: $inputText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .lineLimit(1...12)
                     .focused($inputFocused)
-                    .disabled(inferenceService.isGenerating)
+                    .disabled(inferenceBusy)
                     .onSubmit {
-                        guard !inferenceService.isGenerating else { return }
+                        guard !inferenceBusy else { return }
                         send()
                     }
             }
@@ -281,7 +281,7 @@ struct ChatView: View {
             .padding(.top, 10)
 
             HStack {
-                ComposerToolsView(isDisabled: inferenceService.isGenerating)
+                ComposerToolsView(isDisabled: inferenceBusy)
                 Spacer()
             }
             .padding(.horizontal, 8)
@@ -312,18 +312,24 @@ struct ChatView: View {
 
     @ViewBuilder
     private func sendButton(model: AppModel) -> some View {
-        if inferenceService.isGenerating {
+        if inferenceBusy {
             Button {
                 Task { await model.stopGenerationAndWait() }
             } label: {
-                Image(systemName: "stop.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                if inferenceService.isStoppingGeneration {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                }
             }
             .buttonStyle(.bordered)
             .tint(.red)
             .controlSize(.regular)
             .appHitTarget(minWidth: 40, minHeight: 40)
-            .help("Durdur")
+            .help(inferenceService.isStoppingGeneration ? "Durduruluyor…" : "Durdur")
+            .disabled(inferenceService.isStoppingGeneration)
             .keyboardShortcut(.escape, modifiers: [])
         } else {
             Button(action: send) {
@@ -348,6 +354,11 @@ struct ChatView: View {
             && !visionBlocked
             && !appModel.isLoadingModel
             && inferenceService.isModelLoaded
+            && !inferenceService.isStoppingGeneration
+    }
+
+    private var inferenceBusy: Bool {
+        inferenceService.isGenerating || inferenceService.isStoppingGeneration
     }
 
     @ViewBuilder
@@ -540,7 +551,7 @@ struct ChatView: View {
     }
 
     private func send() {
-        guard !inferenceService.isGenerating else { return }
+        guard !inferenceBusy else { return }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
         let attachments = pendingAttachments
