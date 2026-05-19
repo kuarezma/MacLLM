@@ -295,9 +295,15 @@ final class InferenceService: ObservableObject {
                                 case .generationStalled, .generationEmpty:
                                     await MainActor.run { self.invalidatePromptCache() }
                                     if attempt < 2 {
+                                        self.logger.notice(
+                                            "Generation retry run=\(runID) reason=\(String(describing: error)) nextAttempt=\(attempt + 2)"
+                                        )
                                         await llamaContext.clear()
                                         continue generationAttempt
                                     }
+                                    self.logger.error(
+                                        "Generation terminal failure run=\(runID) reason=\(String(describing: error))"
+                                    )
                                     throw error
                                 default:
                                     throw error

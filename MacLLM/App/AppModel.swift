@@ -7,6 +7,9 @@ import UniformTypeIdentifiers
 @Observable
 final class AppModel {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "MacLLM", category: "AppModel")
+    private static func makeDiagnosticID() -> String {
+        String(UUID().uuidString.prefix(8)).uppercased()
+    }
     var installedModels: [InstalledModel] = []
     var catalogEntries: [CatalogEntry] = []
     var modelRecommendations: [ScoredCatalogEntry] = []
@@ -247,6 +250,7 @@ final class AppModel {
         context: String? = nil,
         persistent: Bool = true
     ) {
+        let diagnosticID = Self.makeDiagnosticID()
         let details = UserErrorFormatter.details(for: error)
         let text: String
         if let context, !context.isEmpty {
@@ -254,7 +258,11 @@ final class AppModel {
         } else {
             text = details.displayText
         }
-        setStatusMessage(text, persistent: persistent)
+        logger.error(
+            "ErrorID=\(diagnosticID) context=\(context ?? "-", privacy: .public) details=\(details.displayText, privacy: .public) raw=\(String(describing: error), privacy: .public)"
+        )
+        let userText = persistent ? "\(text) (Hata Kodu: \(diagnosticID))" : text
+        setStatusMessage(userText, persistent: persistent)
     }
 
     /// Kayıtlı ayarlara şablon stop dizilerini ekler (eski kurulumlar için).
