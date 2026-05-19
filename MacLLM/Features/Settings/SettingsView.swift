@@ -237,6 +237,35 @@ struct SettingsView: View {
     private func modelSection(model: AppModel) -> some View {
         let bindable = Bindable(model)
 
+        if let profile = model.activeProfile {
+            SettingsCard("Yüklü model", subtitle: profile.displayName) {
+                SettingsInfoRow(
+                    label: "Şablon",
+                    value: profile.resolvedChatTemplate
+                )
+                SettingsInfoRow(label: "Mod", value: profile.modality.label)
+                if let nCtx = profile.nCtxTrain {
+                    SettingsInfoRow(label: "Eğitim bağlamı", value: "\(nCtx) token")
+                }
+                if let params = profile.parameterLabel {
+                    SettingsInfoRow(label: "Parametre", value: params)
+                }
+                SettingsInfoRow(
+                    label: "Vision",
+                    value: profile.supportsVision
+                        ? (profile.runtimeMultimodal ? "Hazır" : "mmproj gerekli")
+                        : "Desteklenmiyor"
+                )
+                SettingsInfoRow(
+                    label: "Etkin bağlam",
+                    value: "\(model.effectiveContextLength) token"
+                )
+                SettingsCaption(
+                    text: "Global num_ctx ayarınız \(model.settings.contextLength) olarak kalır; etkin üst sınır modele göre \(model.effectiveContextLength) token."
+                )
+            }
+        }
+
         SettingsCard("Bağlam", subtitle: "num_ctx — maksimum token penceresi") {
             Picker("Bağlam uzunluğu", selection: bindable.intBinding(\.contextLength)) {
                 Text("2048").tag(2048)

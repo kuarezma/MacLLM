@@ -191,6 +191,10 @@ struct JanSidebarView: View {
                                 isLoadedInMemory: model.selectedModelId == installed.id
                                     && inferenceService.isModelLoaded
                                     && inferenceService.loadedModelId == installed.id,
+                                modalityLabel: model.selectedModelId == installed.id
+                                    && inferenceService.isModelLoaded
+                                    ? model.activeProfile?.modality.label
+                                    : nil,
                                 onUnload: { Task { await model.unloadCurrentModel() } }
                             )
                             .contentShape(Rectangle())
@@ -385,6 +389,7 @@ struct ModelRowView: View {
     let model: InstalledModel
     let isSelected: Bool
     var isLoadedInMemory: Bool = false
+    var modalityLabel: String? = nil
     var onUnload: (() -> Void)?
 
     private var subtitle: String {
@@ -411,6 +416,14 @@ struct ModelRowView: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
+            if let modalityLabel, isLoadedInMemory {
+                Text(modalityLabel)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(AppTheme.accent)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.accent.opacity(0.12), in: Capsule())
+            }
             if isLoadedInMemory {
                 AnimatedStatusDot(color: .green, pulse: true)
             }

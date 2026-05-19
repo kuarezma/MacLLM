@@ -3,6 +3,8 @@ import SwiftUI
 struct ContextUsageView: View {
     let usedTokens: Int
     let maxTokens: Int
+    var trainingContextTokens: Int? = nil
+    var exceedsTrainingContext: Bool = false
     var isEstimate: Bool = false
     @State private var showDetail = false
 
@@ -16,9 +18,16 @@ struct ContextUsageView: View {
     }
 
     private var ringColor: Color {
-        if fraction > 0.85 { return .orange }
+        if exceedsTrainingContext || fraction > 0.85 { return .orange }
         if fraction > 0.6 { return AppTheme.accent }
         return AppTheme.accentTertiary
+    }
+
+    private var helpText: String {
+        if exceedsTrainingContext, let trainingContextTokens {
+            return "Bağlam kullanımı — model \(formatTokens(trainingContextTokens)) token ile eğitildi"
+        }
+        return isEstimate ? "Bağlam kullanımı (tahmini)" : "Bağlam kullanımı"
     }
 
     var body: some View {
@@ -49,7 +58,7 @@ struct ContextUsageView: View {
         }
         .buttonStyle(ModernScaleButtonStyle())
         .appHitTarget(minWidth: 36, minHeight: 36)
-        .help(isEstimate ? "Bağlam kullanımı (tahmini)" : "Bağlam kullanımı")
+        .help(helpText)
         .popover(isPresented: $showDetail, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -65,6 +74,14 @@ struct ContextUsageView: View {
                     .foregroundStyle(AppTheme.secondaryText)
                 LabeledContent("Metin", value: formatTokens(usedTokens))
                 LabeledContent("Kalan", value: formatTokens(max(0, maxTokens - usedTokens)))
+                if let trainingContextTokens {
+                    LabeledContent("Eğitim bağlamı", value: formatTokens(trainingContextTokens))
+                }
+                if exceedsTrainingContext, let trainingContextTokens {
+                    Text("Model \(formatTokens(trainingContextTokens)) token ile eğitildi; daha uzun bağlam kaliteyi düşürebilir.")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
                 if isEstimate {
                     Text("Model yüklendiğinde gerçek token sayımı kullanılır.")
                         .font(.caption2)
@@ -72,7 +89,7 @@ struct ContextUsageView: View {
                 }
             }
             .padding(14)
-            .frame(width: 220)
+            .frame(width: 240)
         }
     }
 

@@ -22,6 +22,7 @@ final class AppModel {
     var selectedProjectId: UUID?
     var contextTokenCount: Int = 0
     var contextTokenCountIsEstimate = true
+    var activeProfile: LoadedModelProfile?
 
     private let modelStore = ModelStore.shared
     private var statusClearTask: Task<Void, Never>?
@@ -36,6 +37,11 @@ final class AppModel {
 
     var selectedModel: InstalledModel? {
         installedModels.first { $0.id == selectedModelId }
+    }
+
+    var effectiveContextLength: Int {
+        guard let profile = activeProfile else { return Int(settings.contextLength) }
+        return min(Int(settings.contextLength), Int(profile.recommendedMaxContext))
     }
 
     var isModelLoadedInMemory: Bool {
@@ -109,11 +115,17 @@ final class AppModel {
     }
 
     func visionAttachmentWarning(for attachments: [MessageAttachment]) -> String? {
-        ModelCapabilities.attachmentWarning(model: selectedModel, attachments: attachments)
+        activeProfile?.attachmentWarning(for: attachments)
     }
 
     func chatCompatibilityWarning() -> String? {
-        ModelCapabilities.chatCompatibilityWarning(model: selectedModel)
+        activeProfile?.composerHints.first {
+            $0.kind == .warning && $0.icon == "exclamationmark.triangle"
+        }?.message
+    }
+
+    func composerHint(for attachments: [MessageAttachment]) -> ComposerHint? {
+        activeProfile?.primaryComposerHint(pendingAttachments: attachments)
     }
 
     func deleteSession(_ session: ChatSession) async {
@@ -214,6 +226,12 @@ final class AppModel {
 
             selectedModelId = model.id
             currentSession.modelId = model.id
+            if let profile = await inferenceService.buildLoadedProfile(
+                for: model,
+                systemProfile: systemProfile
+            ) {
+                applyRuntimeProfile(profile)
+            }
             setStatusMessage("\(model.name) hazır")
             refreshModels()
             return true
@@ -230,6 +248,7 @@ final class AppModel {
         modelLoadGeneration &+= 1
         await stopGenerationAndWait()
         await inferenceService.unloadModel()
+        activeProfile = nil
         if let name = selectedModel?.name {
             setStatusMessage("\(name) bellekten çıkarıldı")
         } else {
@@ -503,6 +522,7 @@ final class AppModel {
         }
 
         let caps = ModelCapabilities.detect(model: model)
+        let profile = activeProfile
         var attachments = pendingAttachments
 
         for index in attachments.indices {
@@ -550,50 +570,48 @@ final class AppModel {
 
         let pdfPageImages = attachments.filter { Self.isPdfDerivedPage($0) }
         if !pdfPageImages.isEmpty {
-            if !caps.supportsVision {
+            let supportsVision = profile?.supportsVision ?? caps.supportsVision
+            let hasMmproj = profile?.hasMmproj ?? (model.mmprojLocalPath != nil)
+            let runtimeReady = profile?.runtimeMultimodal ?? false
+            if !supportsVision {
                 setStatusMessage(
                     "Bu PDF taranmış veya şekilli içerik barındırıyor. Görmek için vision model gerekir (Hub → Qwen-VL, LLaVA vb.).",
                     persistent: true
                 )
                 return
             }
-            if caps.requiresMmproj, model.mmprojLocalPath == nil {
+            if !hasMmproj || !runtimeReady {
                 setStatusMessage(
-                    "Vision model için mmproj GGUF gerekli. PDF ile aynı klasöre *mmproj*.gguf ekleyip modeli yeniden yükleyin.",
+                    profile?.attachmentWarning(for: pdfPageImages)
+                        ?? "Vision model için mmproj GGUF gerekli. PDF ile aynı klasöre *mmproj*.gguf ekleyip modeli yeniden yükleyin.",
                     persistent: true
                 )
                 return
             }
         }
 
-        let mediaAttachments = attachments.filter { $0.kind == .image || $0.kind == .audio }
+        let mediaAttachments = attachments.filter { $0.kind == .image || $0.kind == .audio || $0.kind == .video }
         if !mediaAttachments.isEmpty {
-            let hasImage = mediaAttachments.contains { $0.kind == .image }
-            let hasAudio = mediaAttachments.contains { $0.kind == .audio }
-
-            if hasImage, !caps.supportsVision {
-                let warning = ModelCapabilities.attachmentWarning(model: model, attachments: attachments)
-                    ?? "Görüntü için vision modeli gerekir. Yalnızca metin/belge gönderebilirsiniz."
+            if let warning = profile?.attachmentWarning(for: attachments) {
                 setStatusMessage(warning, persistent: true)
-                if trimmed.isEmpty { return }
-                attachments.removeAll { $0.kind == .image }
+                return
             }
-            if hasAudio, !caps.supportsAudio {
-                setStatusMessage("Ses için ses destekli vision modeli gerekir.", persistent: true)
-                if trimmed.isEmpty, !attachments.contains(where: { $0.kind == .document }) { return }
-                attachments.removeAll { $0.kind == .audio }
-            }
-            if caps.requiresMmproj, model.mmprojLocalPath == nil,
-               attachments.contains(where: { $0.kind == .image || $0.kind == .audio }) {
-                setStatusMessage(
-                    "Çok modlu model için aynı klasöre mmproj GGUF ekleyip modeli yeniden yükleyin.",
-                    persistent: true
-                )
-                attachments.removeAll { $0.kind == .image || $0.kind == .audio }
-                if trimmed.isEmpty,
-                   !attachments.contains(where: { $0.kind == .document && !($0.extractedText ?? "").isEmpty }) {
+            if let profile {
+                for attachment in mediaAttachments where !profile.allowsAttachment(attachment.kind) {
+                    setStatusMessage(
+                        profile.attachmentWarning(for: [attachment])
+                            ?? "Bu model bu ek türünü desteklemiyor.",
+                        persistent: true
+                    )
                     return
                 }
+            } else if !caps.supportsVision, mediaAttachments.contains(where: { $0.kind == .image || $0.kind == .video }) {
+                setStatusMessage(
+                    ModelCapabilities.attachmentWarning(model: model, attachments: attachments)
+                        ?? "Görüntü için vision modeli gerekir.",
+                    persistent: true
+                )
+                return
             }
         }
 
@@ -610,15 +628,16 @@ final class AppModel {
         )
         let activeSessionId = currentSession.id
 
-        let template = model.chatTemplate
+        let template = activeProfile?.resolvedChatTemplate ?? model.chatTemplate
         let messagesForInference = Self.trimMessagesForContext(
             currentSession.messages.dropLast().map { $0 },
-            maxContextTokens: Int(settings.contextLength)
+            maxContextTokens: effectiveContextLength
         )
         let stream = inferenceService.streamResponse(
             messages: messagesForInference,
             chatTemplate: template,
-            sessionId: currentSession.id
+            sessionId: currentSession.id,
+            stopSequences: activeProfile?.recommendedStopSequences
         )
 
         do {
@@ -709,12 +728,12 @@ final class AppModel {
         }
         let trimmed = Self.trimMessagesForContext(
             currentSession.messages,
-            maxContextTokens: Int(settings.contextLength)
+            maxContextTokens: effectiveContextLength
         )
         do {
             contextTokenCount = try await inferenceService.countPromptTokens(
                 messages: trimmed,
-                chatTemplate: model.chatTemplate,
+                chatTemplate: activeProfile?.resolvedChatTemplate ?? model.chatTemplate,
                 sessionId: currentSession.id
             )
             contextTokenCountIsEstimate = false
@@ -795,9 +814,28 @@ final class AppModel {
             UserDefaults.standard.set(data, forKey: "inferenceSettings")
         }
         mergeDefaultStopSequences()
+        if !reloadModel, inferenceService.isModelLoaded, let model = selectedModel {
+            Task {
+                if let profile = await inferenceService.buildLoadedProfile(
+                    for: model,
+                    systemProfile: systemProfile
+                ) {
+                    applyRuntimeProfile(profile)
+                }
+            }
+        }
         setStatusMessage("Ayarlar kaydedildi")
         if reloadModel, let model = selectedModel {
             Task { await selectModel(model) }
+        }
+    }
+
+    private func applyRuntimeProfile(_ profile: LoadedModelProfile) {
+        activeProfile = profile
+        guard let index = installedModels.firstIndex(where: { $0.id == profile.modelId }) else { return }
+        if installedModels[index].chatTemplate != profile.resolvedChatTemplate {
+            installedModels[index].chatTemplate = profile.resolvedChatTemplate
+            try? modelStore.saveInstalledModels(installedModels)
         }
     }
 

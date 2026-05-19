@@ -184,6 +184,16 @@ actor LlamaContext {
         mtmdShim.supportsVision || mtmdShim.supportsAudio
     }
 
+    func modelMetadata() -> (nCtxTrain: Int, nParams: UInt64, description: String) {
+        let nCtxTrain = Int(llama_model_n_ctx_train(model))
+        let nParams = llama_model_n_params(model)
+        return (nCtxTrain, nParams, modelDescription())
+    }
+
+    func runtimeCapabilities() -> (vision: Bool, audio: Bool) {
+        (mtmdShim.supportsVision, mtmdShim.supportsAudio)
+    }
+
     static func createContext(
         path: String,
         settings: InferenceSettings,

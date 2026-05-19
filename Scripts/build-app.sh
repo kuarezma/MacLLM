@@ -105,6 +105,7 @@ SOURCES=(
   MacLLM/Services/AttachmentStore.swift
   MacLLM/Services/MediaContentProcessor.swift
   MacLLM/Services/ModelCapabilities.swift
+  MacLLM/Services/LoadedModelProfile.swift
   MacLLM/Bridge/LibLlama.swift
   MacLLM/Bridge/LibMtmd.swift
   MacLLM/Features/Main/MainView.swift

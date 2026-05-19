@@ -27,6 +27,28 @@ final class InferenceService: ObservableObject {
         try ModelStore.shared.touchLastUsed(id: model.id)
     }
 
+    func buildLoadedProfile(
+        for model: InstalledModel,
+        systemProfile: MacSystemProfile
+    ) async -> LoadedModelProfile? {
+        guard let llamaContext, loadedModelId == model.id else { return nil }
+        let resolvedTemplate = await llamaContext.resolvedChatTemplate()
+        let meta = await llamaContext.modelMetadata()
+        let runtime = await llamaContext.runtimeCapabilities()
+        return ModelProfileBuilder.build(
+            model: model,
+            resolvedTemplate: resolvedTemplate,
+            runtimeVision: runtime.vision,
+            runtimeAudio: runtime.audio,
+            nCtxTrain: meta.nCtxTrain,
+            parameterCount: meta.nParams,
+            description: meta.description,
+            userContextLength: settings.contextLength,
+            systemProfile: systemProfile,
+            settings: settings
+        )
+    }
+
     func unloadModel() async {
         await stopGeneration()
 
@@ -60,7 +82,8 @@ final class InferenceService: ObservableObject {
     func streamResponse(
         messages: [ChatMessage],
         chatTemplate: String,
-        sessionId: UUID
+        sessionId: UUID,
+        stopSequences: [String]? = nil
     ) -> AsyncThrowingStream<String, Error> {
         let payload = InferenceMessageBuilder.build(messages: messages, sessionId: sessionId)
         let promptMessages = Self.messagesWithSystem(payload.messages, systemPrompt: settings.systemPrompt)
@@ -87,7 +110,7 @@ final class InferenceService: ObservableObject {
 
                     let resolvedTemplate = await llamaContext.resolvedChatTemplate()
                     let inferenceSettings = await MainActor.run { self.settings }
-                    let stops = ChatTemplateResolver.mergedStopSequences(
+                    let stops = stopSequences ?? ChatTemplateResolver.mergedStopSequences(
                         settings: inferenceSettings,
                         template: resolvedTemplate
                     )

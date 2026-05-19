@@ -44,7 +44,14 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.9)
+### Bu sürümde (1.14.10)
+
+- Model-adaptive runtime profile: model yüklendiğinde GGUF + mtmd + heuristics birleşir
+- UI ve inference tek kaynaktan: şablon, stop dizileri, vision, bağlam üst sınırı
+- Composer/header/bağlam halkası/ayarlar modele göre şekillenir (global num_ctx değişmez)
+- Vision ekleri profil tutarsızsa engellenir; mmproj/base model uyarıları profile taşındı
+
+### Önceki (1.14.9)
 
 - phi-2 Instruct prompt formatı; echo sorunu ve yanlış chatml/phi3 şablonu düzeltildi
 - Base model uyarı bandı (phi-2 base için composer rehberi)

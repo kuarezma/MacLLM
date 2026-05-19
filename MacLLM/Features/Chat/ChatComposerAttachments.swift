@@ -31,6 +31,20 @@ struct ChatAttachmentImporter {
         UTType(filenameExtension: "csv") ?? .plainText,
     ].compactMap { $0 }
 
+    static let documentContentTypes: [UTType] = [
+        .pdf, .plainText, .json, .rtf,
+        UTType(filenameExtension: "md") ?? .plainText,
+        UTType(filenameExtension: "csv") ?? .plainText,
+    ].compactMap { $0 }
+
+    static func contentTypes(for profile: LoadedModelProfile?) -> [UTType] {
+        guard let profile else { return contentTypes }
+        if profile.supportsVision && profile.hasMmproj && profile.runtimeMultimodal {
+            return contentTypes
+        }
+        return documentContentTypes
+    }
+
     static func kind(for url: URL) -> AttachmentKind? {
         if let type = UTType(filenameExtension: url.pathExtension),
            let kind = AttachmentStore.kind(for: type) {

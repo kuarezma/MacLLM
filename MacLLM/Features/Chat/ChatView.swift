@@ -195,27 +195,19 @@ struct ChatView: View {
                 .frame(height: AppTheme.composerAccessoryHeight)
             }
 
-            if let warning = model.visionAttachmentWarning(for: pendingAttachments) {
-                composerWarningRibbon(
-                    icon: "eye.slash",
-                    message: warning,
-                    actionTitle: "Hub",
-                    action: { model.showCatalog = true }
-                )
-            } else if let chatWarning = model.chatCompatibilityWarning() {
-                composerWarningRibbon(
-                    icon: "exclamationmark.triangle",
-                    message: chatWarning,
-                    actionTitle: "Hub",
-                    action: { model.showCatalog = true }
-                )
+            if let hint = model.composerHint(for: pendingAttachments) {
+                composerHintRibbon(hint: hint) {
+                    model.showCatalog = true
+                }
             }
 
             HStack(alignment: .bottom, spacing: 12) {
                 composerField(model: model)
                 ContextUsageView(
                     usedTokens: model.contextTokenCount,
-                    maxTokens: Int(model.settings.contextLength),
+                    maxTokens: model.effectiveContextLength,
+                    trainingContextTokens: model.activeProfile?.nCtxTrain,
+                    exceedsTrainingContext: model.activeProfile?.contextExceedsTraining ?? false,
                     isEstimate: model.contextTokenCountIsEstimate
                 )
                 sendButton(model: model)
@@ -242,7 +234,7 @@ struct ChatView: View {
         }
         .fileImporter(
             isPresented: $showFileImporter,
-            allowedContentTypes: ChatAttachmentImporter.contentTypes,
+            allowedContentTypes: ChatAttachmentImporter.contentTypes(for: model.activeProfile),
             allowsMultipleSelection: true
         ) { result in
             importFiles(result, model: model)
@@ -344,13 +336,46 @@ struct ChatView: View {
     private var canSend: Bool {
         let hasContent = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !pendingAttachments.isEmpty
-        let visionBlocked = appModel.visionAttachmentWarning(for: pendingAttachments) != nil
-            && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let visionBlocked = appModel.composerHint(for: pendingAttachments)?.kind == .warning
             && pendingAttachments.contains { $0.kind == .image || $0.kind == .video || $0.kind == .audio }
+            && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return hasContent
             && !visionBlocked
             && !appModel.isLoadingModel
             && inferenceService.isModelLoaded
+    }
+
+    @ViewBuilder
+    private func composerHintRibbon(hint: ComposerHint, action: @escaping () -> Void) -> some View {
+        let isInfo = hint.kind == .info
+        HStack(spacing: 8) {
+            Image(systemName: hint.icon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isInfo ? .green : .orange)
+            Text(hint.message)
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
+                .lineLimit(2)
+            Spacer(minLength: 0)
+            if let actionTitle = hint.actionTitle {
+                Button(actionTitle, action: action)
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .appHitTarget(minWidth: 44, minHeight: 28)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            (isInfo ? Color.green : Color.orange).opacity(0.10),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder((isInfo ? Color.green : Color.orange).opacity(0.25), lineWidth: 1)
+        }
+        .padding(.horizontal, AppTheme.contentPadding)
+        .padding(.bottom, 6)
     }
 
     @ViewBuilder
@@ -456,6 +481,18 @@ struct ChatView: View {
             Task { @MainActor in
                 for url in urls {
                     guard let kind = ChatAttachmentImporter.kind(for: url) else { continue }
+                    if let profile = model.activeProfile, !profile.allowsAttachment(kind) {
+                        if let warning = profile.attachmentWarning(for: [
+                            MessageAttachment(
+                                kind: kind,
+                                fileName: url.lastPathComponent,
+                                storageName: url.lastPathComponent
+                            )
+                        ]) {
+                            model.setStatusMessage(warning, persistent: true)
+                        }
+                        continue
+                    }
                     do {
                         var attachment = try AttachmentStore.shared.importFile(
                             from: url,
