@@ -8,6 +8,7 @@ struct ChatView: View {
     @State private var showFileImporter = false
     @State private var messageSearchText = ""
     @State private var searchMatchIndex = 0
+    @State private var lastStreamingScrollAt: Date = .distantPast
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -19,7 +20,7 @@ struct ChatView: View {
             if model.selectedModel == nil {
                 emptyState(
                     title: "Model seçin",
-                    description: "Üstten model seçin veya Hub'dan indirin.",
+                    description: "Model Hub'dan bir GGUF indirip listeden secin, sonra ilk mesaji gonderin.",
                     actionTitle: "Model Hub",
                     action: { model.showCatalog = true }
                 )
@@ -58,9 +59,11 @@ struct ChatView: View {
                     Button { stepSearchMatch(delta: -1) } label: {
                         Image(systemName: "chevron.up")
                     }
+                    .buttonStyle(SecondaryButtonStyle())
                     Button { stepSearchMatch(delta: 1) } label: {
                         Image(systemName: "chevron.down")
                     }
+                    .buttonStyle(SecondaryButtonStyle())
                 }
             }
         }
@@ -168,6 +171,9 @@ struct ChatView: View {
             .onChange(of: model.streamingBuffer.text) { _, _ in
                 guard inferenceService.isGenerating else { return }
                 guard messageSearchNeedle.isEmpty else { return }
+                let now = Date()
+                guard now.timeIntervalSince(lastStreamingScrollAt) >= 0.12 else { return }
+                lastStreamingScrollAt = now
                 scrollToBottom(proxy: proxy, animated: false)
             }
             .onChange(of: messageSearchText) { _, _ in
@@ -180,6 +186,8 @@ struct ChatView: View {
             .onChange(of: inferenceService.isGenerating) { _, isGenerating in
                 if !isGenerating {
                     model.scheduleContextTokenRefresh()
+                } else {
+                    lastStreamingScrollAt = .distantPast
                 }
             }
             .task {
@@ -284,6 +292,11 @@ struct ChatView: View {
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
         .appGlassCard(cornerRadius: AppTheme.composerRadius, material: .regularMaterial)
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.composerRadius, style: .continuous)
+                .strokeBorder(inputFocused ? AppTheme.accent.opacity(0.45) : Color.clear, lineWidth: 1.2)
+                .animation(AppTheme.fadeQuick, value: inputFocused)
+        }
         .appFloatingShadow(radius: 18, y: 6)
     }
 
@@ -440,8 +453,7 @@ struct ChatView: View {
             } actions: {
                 if let actionTitle, let action {
                     Button(actionTitle, action: action)
-                        .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.accent)
+                        .buttonStyle(AccentPrimaryButtonStyle())
                 }
             }
             Spacer()

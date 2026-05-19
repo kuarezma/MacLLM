@@ -17,7 +17,7 @@ enum ModelStoreError: LocalizedError {
     }
 }
 
-final class ModelStore: Sendable {
+final class ModelStore: @unchecked Sendable {
     static let shared = ModelStore()
 
     private let fileManager = FileManager.default

@@ -39,7 +39,7 @@ private struct ChatProjectIndex: Codable {
     var projects: [ChatProject]
 }
 
-final class ChatProjectStore: Sendable {
+final class ChatProjectStore: @unchecked Sendable {
     static let shared = ChatProjectStore()
 
     private let fileManager = FileManager.default

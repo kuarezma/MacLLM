@@ -64,6 +64,14 @@ extension View {
         frame(minWidth: minWidth, minHeight: minHeight)
             .contentShape(Rectangle())
     }
+
+    func appPanel(cornerRadius: CGFloat = AppTheme.panelRadius) -> some View {
+        background(AppTheme.elevatedSurface, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(AppTheme.border, lineWidth: 1)
+            }
+    }
 }
 
 // MARK: - Button styles
@@ -151,6 +159,58 @@ struct AccentIconButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.92 : hovered ? 1.06 : 1)
             .animation(AppTheme.springSnappy, value: configuration.isPressed)
             .animation(AppTheme.springSoft, value: hovered)
+            .onHover { hovered = $0 }
+    }
+}
+
+struct AccentPrimaryButtonStyle: ButtonStyle {
+    var disabled: Bool = false
+    @State private var hovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(disabled ? AppTheme.secondaryText.opacity(0.7) : Color.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(disabled ? AppTheme.subtleInteractiveFill : AppTheme.accentGradient)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(
+                                disabled ? AppTheme.border : Color.white.opacity(0.12),
+                                lineWidth: 1
+                            )
+                    }
+            }
+            .shadow(color: disabled ? .clear : AppTheme.glowAccent.opacity(hovered ? 0.45 : 0.25), radius: hovered ? 12 : 8, y: 2)
+            .scaleEffect(configuration.isPressed ? 0.98 : hovered ? 1.01 : 1)
+            .animation(AppTheme.springSnappy, value: configuration.isPressed)
+            .animation(AppTheme.springSoft, value: hovered)
+            .onHover { hovered = $0 }
+    }
+}
+
+struct SecondaryButtonStyle: ButtonStyle {
+    @State private var hovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(hovered ? AppTheme.subtleInteractiveHoverFill : AppTheme.subtleInteractiveFill)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .strokeBorder(AppTheme.border, lineWidth: 1)
+                    }
+            }
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(AppTheme.springSnappy, value: configuration.isPressed)
+            .animation(AppTheme.fadeQuick, value: hovered)
             .onHover { hovered = $0 }
     }
 }

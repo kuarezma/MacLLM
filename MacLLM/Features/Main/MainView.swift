@@ -238,6 +238,10 @@ struct JanSidebarView: View {
                             )
                             .contentShape(Rectangle())
                             .onTapGesture {
+                                if model.isLoadingModel {
+                                    model.setStatusMessage("Model zaten yukleniyor, lutfen bekleyin.")
+                                    return
+                                }
                                 model.selectedModelId = installed.id
                             }
                             .contextMenu {

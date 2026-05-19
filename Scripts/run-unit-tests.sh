@@ -118,4 +118,15 @@ swiftc \
   Tests/HuggingFaceCredentialsTests.swift
 "$KEYCHAIN_BIN"
 
+FORMATTER_BIN="$ROOT/build/unit-test-user-error-formatter"
+echo "==> UserErrorFormatterTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -O \
+  -o "$FORMATTER_BIN" \
+  MacLLM/Core/UserErrorFormatter.swift \
+  Tests/UserErrorFormatterTests.swift
+"$FORMATTER_BIN"
+
 echo "==> unit tests başarılı"

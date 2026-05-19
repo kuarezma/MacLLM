@@ -3,6 +3,7 @@ import SwiftUI
 /// Paylaşılan arayüz sabitleri — modern koyu cam tema.
 enum AppTheme {
     static let contentPadding: CGFloat = 20
+    static let sectionSpacing: CGFloat = 16
     static let rowSpacing: CGFloat = 12
     static let messageSpacing: CGFloat = 20
     static let bubbleRadius: CGFloat = 18
@@ -20,6 +21,7 @@ enum AppTheme {
 
     static let springSnappy = Animation.spring(response: 0.32, dampingFraction: 0.78)
     static let springSoft = Animation.spring(response: 0.45, dampingFraction: 0.82)
+    static let fadeQuick = Animation.easeInOut(duration: 0.16)
 
     // MARK: - Brand
 
@@ -71,6 +73,8 @@ enum AppTheme {
     static var primaryText: Color { .primary }
     static var secondaryText: Color { .secondary }
     static var glowAccent: Color { accent.opacity(0.35) }
+    static var subtleInteractiveFill: Color { Color.primary.opacity(0.06) }
+    static var subtleInteractiveHoverFill: Color { Color.primary.opacity(0.10) }
 
     static func userBubbleBackground() -> some ShapeStyle {
         LinearGradient(

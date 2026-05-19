@@ -43,7 +43,8 @@ struct ModelCatalogView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .padding()
+                .padding(.horizontal, AppTheme.contentPadding)
+                .padding(.vertical, 12)
 
                 switch tab {
                 case .hub:
@@ -94,7 +95,7 @@ struct ModelCatalogView: View {
                                 .font(.headline)
                         }
                         .padding(24)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppTheme.panelRadius))
                     }
                 }
             }
@@ -112,7 +113,7 @@ struct ModelCatalogView: View {
                 Text("«\(pendingImportName)» klasörde zaten var. Üzerine yazılsın mı?")
             }
         }
-        .frame(minWidth: 980, minHeight: 680)
+        .frame(minWidth: 980, minHeight: 700)
     }
 
     private func handleImportSelection(url: URL, model: AppModel) {
@@ -208,6 +209,7 @@ struct ModelCatalogView: View {
                 } label: {
                     Label("Dosyadan içe aktar…", systemImage: "doc.badge.plus")
                 }
+                .buttonStyle(SecondaryButtonStyle())
             }
 
             Section("Hugging Face bağlantısı") {
@@ -230,6 +232,7 @@ struct ModelCatalogView: View {
                     )
                     Task { await model.downloadModel(entry) }
                 }
+                .buttonStyle(AccentPrimaryButtonStyle(disabled: manualRepoId.isEmpty || manualFilename.isEmpty))
                 .disabled(manualRepoId.isEmpty || manualFilename.isEmpty)
             }
         }
@@ -296,13 +299,12 @@ struct CatalogEntryRow: View {
                     Button("Tekrar dene") {
                         Task { await appModel.downloadModel(entry) }
                     }
-                    .controlSize(.small)
+                    .buttonStyle(SecondaryButtonStyle())
                 } else {
                     Button("Çevrimiçi indir") {
                         Task { await appModel.downloadModel(entry) }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(AccentPrimaryButtonStyle())
                 }
             } else {
                 Button("Kullan") {
@@ -313,8 +315,7 @@ struct CatalogEntryRow: View {
                         }
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(AccentPrimaryButtonStyle())
             }
         }
         .padding(.vertical, 4)

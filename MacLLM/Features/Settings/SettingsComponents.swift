@@ -31,12 +31,7 @@ struct SettingsCard<Content: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.elevatedSurface)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous)
-                .strokeBorder(AppTheme.border, lineWidth: 1)
-        )
+        .appPanel()
     }
 }
 
@@ -45,6 +40,7 @@ struct SettingsNavRow: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
+    @State private var hovered = false
 
     var body: some View {
         Button(action: action) {
@@ -57,13 +53,20 @@ struct SettingsNavRow: View {
                     .font(.subheadline.weight(isSelected ? .semibold : .regular))
                     .foregroundStyle(AppTheme.primaryText)
                 Spacer()
+                if isSelected {
+                    Circle()
+                        .fill(AppTheme.accent)
+                        .frame(width: 6, height: 6)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(isSelected ? AppTheme.accent.opacity(0.12) : Color.clear)
+            .background(isSelected ? AppTheme.accent.opacity(0.12) : (hovered ? AppTheme.subtleInteractiveFill : Color.clear))
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous))
         }
         .buttonStyle(.plain)
+        .animation(AppTheme.fadeQuick, value: hovered)
+        .onHover { hovered = $0 }
     }
 }
 
@@ -104,11 +107,10 @@ struct SettingsTextEditor: View {
             .scrollContentBackground(.hidden)
             .padding(8)
             .frame(minHeight: minHeight)
-            .background(AppTheme.composerBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous))
-            .overlay(
+            .background(AppTheme.composerBackground, in: RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous))
+            .overlay {
                 RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous)
                     .strokeBorder(AppTheme.border, lineWidth: 1)
-            )
+            }
     }
 }

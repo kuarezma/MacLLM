@@ -110,7 +110,7 @@ final class AppModel {
             repairQwopusProfilesIfNeeded()
             await configureLaunchModelSelection()
         } catch {
-            setStatusMessage(error.localizedDescription)
+            reportError(error, context: "Baslatma hatasi")
         }
     }
 
@@ -190,7 +190,7 @@ final class AppModel {
             repairInstalledModelTemplates()
             repairMmprojLinks()
         } catch {
-            setStatusMessage(error.localizedDescription)
+            reportError(error, context: "Model listesi yenilenemedi")
         }
     }
 
@@ -225,7 +225,7 @@ final class AppModel {
             }
             setStatusMessage("Sohbet silindi")
         } catch {
-            setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
+            reportError(error, context: "Sohbet silinemedi")
         }
     }
 
@@ -238,6 +238,21 @@ final class AppModel {
             guard !Task.isCancelled, statusMessage == message else { return }
             statusMessage = nil
         }
+    }
+
+    private func reportError(
+        _ error: Error,
+        context: String? = nil,
+        persistent: Bool = true
+    ) {
+        let details = UserErrorFormatter.details(for: error)
+        let text: String
+        if let context, !context.isEmpty {
+            text = "\(context): \(details.displayText)"
+        } else {
+            text = details.displayText
+        }
+        setStatusMessage(text, persistent: persistent)
     }
 
     /// Kayıtlı ayarlara şablon stop dizilerini ekler (eski kurulumlar için).
@@ -354,7 +369,7 @@ final class AppModel {
             return false
         } catch {
             guard generation == modelLoadGeneration else { return false }
-            setStatusMessage("Yükleme hatası: \(UserErrorFormatter.message(for: error))", persistent: true)
+            reportError(error, context: "Yukleme hatasi")
             return false
         }
     }
@@ -428,7 +443,7 @@ final class AppModel {
         } catch is CancellationError {
             setStatusMessage("İndirme iptal edildi")
         } catch {
-            setStatusMessage("İndirme hatası: \(error.localizedDescription)")
+            reportError(error, context: "Indirme hatasi")
         }
     }
 
@@ -458,7 +473,7 @@ final class AppModel {
             refreshModels()
             setStatusMessage("\(model.name) silindi")
         } catch {
-            setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
+            reportError(error, context: "Model silinemedi")
         }
     }
 
@@ -512,7 +527,7 @@ final class AppModel {
                 setStatusMessage("Model içe aktarıldı")
             }
         } catch {
-            setStatusMessage("İçe aktarma hatası: \(error.localizedDescription)")
+            reportError(error, context: "Ice aktarma hatasi")
         }
     }
 
@@ -557,7 +572,7 @@ final class AppModel {
             currentSession.projectId = project.id
             setStatusMessage("Proje oluşturuldu: \(trimmed)")
         } catch {
-            setStatusMessage(error.localizedDescription, persistent: true)
+            reportError(error, context: "Proje olusturulamadi")
         }
     }
 
@@ -571,7 +586,7 @@ final class AppModel {
             projects[index] = project
             setStatusMessage("Proje istemi güncellendi")
         } catch {
-            setStatusMessage(error.localizedDescription, persistent: true)
+            reportError(error, context: "Proje istemi guncellenemedi")
         }
     }
 
@@ -593,7 +608,7 @@ final class AppModel {
             await loadSession(imported)
             setStatusMessage("Sohbet içe aktarıldı")
         } catch {
-            setStatusMessage(error.localizedDescription, persistent: true)
+            reportError(error, context: "Sohbet ice aktarilamadi")
         }
     }
 
@@ -618,7 +633,7 @@ final class AppModel {
             }
             setStatusMessage("Proje silindi")
         } catch {
-            setStatusMessage(error.localizedDescription, persistent: true)
+            reportError(error, context: "Proje silinemedi")
         }
     }
 
@@ -771,7 +786,7 @@ final class AppModel {
             do {
                 webContext = try await WebSearchService.fetchContext(for: trimmed)
             } catch {
-                setStatusMessage("Web araması: \(error.localizedDescription)", persistent: true)
+                reportError(error, context: "Web aramasi")
                 return
             }
         }
@@ -784,7 +799,7 @@ final class AppModel {
             do {
                 try await MediaContentProcessor.enrich(&attachments[index], sessionId: currentSession.id)
             } catch {
-                setStatusMessage(error.localizedDescription)
+                reportError(error, context: "Ek dosya islenemedi")
                 return
             }
         }
@@ -799,7 +814,7 @@ final class AppModel {
                 attachments.remove(at: videoIndex)
                 attachments.append(contentsOf: frames)
             } catch {
-                setStatusMessage(error.localizedDescription)
+                reportError(error, context: "Video kareleri alinamadi")
                 return
             }
         }
@@ -818,7 +833,7 @@ final class AppModel {
                 attachments.remove(at: index)
                 attachments.append(contentsOf: pages)
             } catch {
-                setStatusMessage(error.localizedDescription)
+                reportError(error, context: "PDF sayfalari islenemedi")
                 return
             }
         }
@@ -940,7 +955,7 @@ final class AppModel {
                 currentSession.messages[assistantIndex].content =
                     "Hata: \(UserErrorFormatter.message(for: error))"
             }
-            setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
+            reportError(error, context: "Uretim hatasi")
             await inferenceService.clearKVCache()
             try? await saveCurrentSession()
         }

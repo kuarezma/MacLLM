@@ -17,7 +17,7 @@ enum AttachmentStoreError: LocalizedError {
     }
 }
 
-final class AttachmentStore: Sendable {
+final class AttachmentStore: @unchecked Sendable {
     static let shared = AttachmentStore()
     static let maxFileBytes: Int64 = 80 * 1024 * 1024
 

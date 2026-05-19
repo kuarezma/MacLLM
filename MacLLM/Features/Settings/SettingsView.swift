@@ -49,7 +49,7 @@ struct SettingsView: View {
                 settingsHeader
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
                         switch tab {
                         case .general:
                             generalSection(model: appModel)
@@ -63,14 +63,14 @@ struct SettingsView: View {
                             huggingFaceSection()
                         }
                     }
-                    .padding(20)
-                    .frame(maxWidth: 560, alignment: .leading)
+                    .padding(AppTheme.contentPadding)
+                    .frame(maxWidth: 620, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background(AppTheme.chatBackground)
         }
-        .frame(minWidth: 720, minHeight: 520)
+        .frame(minWidth: 760, minHeight: 560)
         .background(AppTheme.sidebarBackground)
         .onAppear {
             settingsBaseline = model.settings
@@ -110,7 +110,7 @@ struct SettingsView: View {
 
             Spacer()
         }
-        .frame(width: 200)
+        .frame(width: 220)
         .background(AppTheme.sidebarBackground)
         .overlay(alignment: .trailing) {
             Rectangle()
@@ -136,16 +136,15 @@ struct SettingsView: View {
                 )
                 syncStopText(from: appModel.settings)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(AppTheme.secondaryText)
+            .buttonStyle(SecondaryButtonStyle())
+            .foregroundStyle(AppTheme.primaryText)
             Button("Kaydet") {
                 appModel.settings.stopSequencesText = stopText
                 appModel.saveSettingsIfNeeded(comparedTo: settingsBaseline)
                 settingsBaseline = appModel.settings
             }
             .keyboardShortcut("s", modifiers: .command)
-            .buttonStyle(.borderedProminent)
-            .tint(AppTheme.accent)
+            .buttonStyle(AccentPrimaryButtonStyle())
             .help("Kapatırken de otomatik kaydedilir")
         }
         .padding(.horizontal, 20)
