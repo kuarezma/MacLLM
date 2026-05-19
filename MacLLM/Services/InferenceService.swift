@@ -12,23 +12,25 @@ final class InferenceService: ObservableObject {
 
     private var llamaContext: LlamaContext?
     private var generationTask: Task<Void, Never>?
+    private var lastLoadedModel: InstalledModel?
     private var promptCacheSessionId: UUID?
-    private var promptCacheText: String = ""
     private var promptCacheFingerprint: String = ""
     private var promptCacheTokenCount: Int = 0
 
-    func loadModel(_ model: InstalledModel) async throws {
+    func loadModel(_ model: InstalledModel, settingsOverride: InferenceSettings? = nil) async throws {
         await stopGeneration()
         await unloadModel()
         invalidatePromptCache()
+        let effectiveSettings = settingsOverride ?? settings
         llamaContext = try await LlamaContext.createContext(
             path: model.localPath,
-            settings: settings,
+            settings: effectiveSettings,
             chatTemplateHint: model.chatTemplate,
             mmprojPath: model.mmprojLocalPath
         )
         isModelLoaded = true
         loadedModelId = model.id
+        lastLoadedModel = model
         try ModelStore.shared.touchLastUsed(id: model.id)
     }
 
@@ -68,9 +70,13 @@ final class InferenceService: ObservableObject {
 
     func invalidatePromptCache() {
         promptCacheSessionId = nil
-        promptCacheText = ""
         promptCacheFingerprint = ""
         promptCacheTokenCount = 0
+    }
+
+    func clearKVCache() async {
+        await llamaContext?.clear()
+        invalidatePromptCache()
     }
 
     func applyRuntimeSettingsIfLoaded() async {
@@ -104,17 +110,15 @@ final class InferenceService: ObservableObject {
     private func canReusePromptCache(
         sessionId: UUID,
         messages: [ChatMessage],
-        prompt: String,
+        promptTokenCount: Int,
         hasMedia: Bool,
         kvPosition: Int32
     ) -> Bool {
         guard settings.usePromptCache, !hasMedia else { return false }
         guard promptCacheSessionId == sessionId,
-              !promptCacheText.isEmpty,
               promptCacheTokenCount > 0,
               Int(kvPosition) == promptCacheTokenCount,
-              prompt.hasPrefix(promptCacheText),
-              prompt.count > promptCacheText.count else { return false }
+              promptTokenCount > promptCacheTokenCount else { return false }
         let fingerprint = Self.messageFingerprint(messages: messages)
         return fingerprint.hasPrefix(promptCacheFingerprint) && !promptCacheFingerprint.isEmpty
     }
@@ -155,87 +159,138 @@ final class InferenceService: ObservableObject {
                             settings: inferenceSettings,
                             template: resolvedTemplate
                         )
-                        var outputFilter = GenerationOutputFilter(stopSequences: stops)
-                        var emittedOutput = ""
 
                         let prompt = try await llamaContext.applyChatTemplate(
                             messages: promptMessages,
                             templateName: chatTemplate
                         )
+                        let promptTokenCount = await llamaContext.countTokens(in: prompt, addBos: true)
 
-                        let kvPosition = await llamaContext.kvPosition
-                        var reuseCache = await MainActor.run {
-                            !forceFullPrefill
-                                && self.canReusePromptCache(
-                                    sessionId: sessionId,
-                                    messages: promptMessages,
-                                    prompt: prompt,
-                                    hasMedia: !mediaPaths.isEmpty,
-                                    kvPosition: kvPosition
-                                )
-                        }
+                        var emittedOutput = ""
+                        var didRetryWithoutFlash = false
 
-                        if reuseCache {
-                            let cached = await MainActor.run { self.promptCacheText }
-                            let prefixTokens = await llamaContext.countTokens(in: cached, addBos: true)
-                            if prefixTokens != Int(kvPosition) {
-                                reuseCache = false
-                            } else {
-                                try await llamaContext.completionInit(
-                                    text: prompt,
-                                    mediaPaths: mediaPaths,
-                                    cachedPrefix: cached
-                                )
+                        generationAttempt: for attempt in 0..<3 {
+                            var outputFilter = GenerationOutputFilter(stopSequences: stops)
+                            emittedOutput = ""
+
+                            let kvPosition = await llamaContext.kvPosition
+                            let cacheReuseAllowed = await MainActor.run {
+                                !forceFullPrefill
+                                    && self.canReusePromptCache(
+                                        sessionId: sessionId,
+                                        messages: promptMessages,
+                                        promptTokenCount: promptTokenCount,
+                                        hasMedia: !mediaPaths.isEmpty,
+                                        kvPosition: kvPosition
+                                    )
                             }
-                        }
+                            let reuseCache = attempt == 0 && cacheReuseAllowed
 
-                        if !reuseCache {
-                            await llamaContext.clear()
-                            try await llamaContext.completionInit(text: prompt, mediaPaths: mediaPaths)
-                        }
+                            let reuseCount = await MainActor.run { self.promptCacheTokenCount }
 
-                        while await !llamaContext.is_done {
-                            try Task.checkCancellation()
-                            let chunk = try await llamaContext.completionLoop()
-                            guard !chunk.isEmpty else { continue }
+                            do {
+                                if reuseCache {
+                                    try await llamaContext.completionInit(
+                                        text: prompt,
+                                        mediaPaths: mediaPaths,
+                                        reuseTokenCount: reuseCount
+                                    )
+                                } else {
+                                    await llamaContext.clear()
+                                    if attempt == 0 {
+                                        await MainActor.run { self.invalidatePromptCache() }
+                                    }
+                                    try await llamaContext.completionInit(
+                                        text: prompt,
+                                        mediaPaths: mediaPaths
+                                    )
+                                }
 
-                            let safe = outputFilter.push(chunk)
-                            if !safe.isEmpty {
-                                emittedOutput += safe
-                                continuation.yield(safe)
+                                emittedOutput = try await Self.runGenerationLoop(
+                                    llamaContext: llamaContext,
+                                    outputFilter: &outputFilter,
+                                    continuation: continuation
+                                )
+                                break generationAttempt
+                            } catch let error as LlamaError {
+                                switch error {
+                                case .decodeFailed:
+                                    if attempt == 0 {
+                                        continue generationAttempt
+                                    }
+                                    if attempt == 1,
+                                       inferenceSettings.flashAttention,
+                                       !didRetryWithoutFlash,
+                                       let model = await MainActor.run(body: { self.lastLoadedModel }) {
+                                        didRetryWithoutFlash = true
+                                        var relaxed = inferenceSettings
+                                        relaxed.flashAttention = false
+                                        try await self.loadModel(model, settingsOverride: relaxed)
+                                        continue generationAttempt
+                                    }
+                                    fallthrough
+                                default:
+                                    throw error
+                                }
                             }
-                        }
-
-                        let tail = outputFilter.finish()
-                        if !tail.isEmpty {
-                            emittedOutput += tail
-                            continuation.yield(tail)
                         }
 
                         let snapshot = await llamaContext.generationSnapshot()
+                        let savedOutputTokens = snapshot.outputTokens
                         let finalKVPosition = await llamaContext.kvPosition
+                        let savedEmitted = emittedOutput
                         let duration = max(Date().timeIntervalSince(started), 0.001)
-                        let tps = Double(snapshot.outputTokens) / duration
+                        let tps = Double(savedOutputTokens) / duration
+
                         await MainActor.run {
                             self.lastGenerationStats = GenerationStats(
-                                outputTokens: snapshot.outputTokens,
+                                outputTokens: savedOutputTokens,
                                 tokensPerSecond: tps,
                                 durationSeconds: duration
                             )
-                            if inferenceSettings.usePromptCache, snapshot.outputTokens > 0 || !emittedOutput.isEmpty {
+                            if inferenceSettings.usePromptCache,
+                               !savedEmitted.isEmpty,
+                               savedOutputTokens > 0,
+                               promptTokenCount + savedOutputTokens == Int(finalKVPosition) {
                                 self.promptCacheSessionId = sessionId
-                                self.promptCacheText = prompt + emittedOutput
                                 self.promptCacheFingerprint = Self.messageFingerprint(messages: promptMessages)
                                 self.promptCacheTokenCount = Int(finalKVPosition)
                             }
                         }
                         continuation.finish()
                     } catch {
+                        await self.clearKVCache()
                         continuation.finish(throwing: error)
                     }
                 }
             }
         }
+    }
+
+    private static func runGenerationLoop(
+        llamaContext: LlamaContext,
+        outputFilter: inout GenerationOutputFilter,
+        continuation: AsyncThrowingStream<String, Error>.Continuation
+    ) async throws -> String {
+        var emittedOutput = ""
+        while await !llamaContext.is_done {
+            try Task.checkCancellation()
+            let chunk = try await llamaContext.completionLoop()
+            guard !chunk.isEmpty else { continue }
+
+            let safe = outputFilter.push(chunk)
+            if !safe.isEmpty {
+                emittedOutput += safe
+                continuation.yield(safe)
+            }
+        }
+
+        let tail = outputFilter.finish()
+        if !tail.isEmpty {
+            emittedOutput += tail
+            continuation.yield(tail)
+        }
+        return emittedOutput
     }
 
     func countPromptTokens(

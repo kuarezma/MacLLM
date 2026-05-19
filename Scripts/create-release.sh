@@ -44,7 +44,15 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.13)
+### Bu sürümde (1.14.14)
+
+- Token-tabanlı KV prompt cache: Compute error ve bozuk çok turlu sohbet düzeltmesi
+- decodeFailed otomatik retry + flash attention fallback (uyumsuz modeller)
+- maxTokens limiti düzeltmesi (n_decode)
+- Açılışta model yükleme sorusu (Sor / Otomatik / Yükleme)
+- İçe aktarılan GGUF modellerde flash attention varsayılan kapalı
+
+### Önceki (1.14.13)
 
 - KV prompt cache düzeltmesi: önbellek artık gerçek prefill + üretim metni ile hizalanır; token pozisyonu doğrulanır
 - Yarım ChatML kontrol token'ları (ör. im_start) ekranda gösterilmez

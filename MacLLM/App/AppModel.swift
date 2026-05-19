@@ -24,6 +24,9 @@ final class AppModel {
     var contextTokenCountIsEstimate = true
     var activeProfile: LoadedModelProfile?
     var streamingBuffer = StreamingTextBuffer()
+    var suppressAutoModelLoad = false
+    var showLaunchLoadPrompt = false
+    var launchLoadCandidate: InstalledModel?
 
     private let modelStore = ModelStore.shared
     private var statusClearTask: Task<Void, Never>?
@@ -100,12 +103,50 @@ final class AppModel {
                 inferenceService.settings = settings
             }
             mergeDefaultStopSequences()
-            if selectedModelId == nil, let first = installedModels.first {
-                await selectModel(first)
-            }
+            await configureLaunchModelSelection()
         } catch {
             setStatusMessage(error.localizedDescription)
         }
+    }
+
+    private func preferredLaunchModel() -> InstalledModel? {
+        installedModels.max { lhs, rhs in
+            (lhs.lastUsedAt ?? .distantPast) < (rhs.lastUsedAt ?? .distantPast)
+        } ?? installedModels.first
+    }
+
+    private func configureLaunchModelSelection() async {
+        guard selectedModelId == nil, let preferred = preferredLaunchModel() else { return }
+
+        suppressAutoModelLoad = true
+        selectedModelId = preferred.id
+        suppressAutoModelLoad = false
+
+        switch LaunchPreferences.loadModelOnLaunch {
+        case .always:
+            _ = await selectModel(preferred)
+        case .never:
+            break
+        case .ask:
+            launchLoadCandidate = preferred
+            showLaunchLoadPrompt = true
+        }
+    }
+
+    func confirmLaunchLoad(load: Bool) {
+        showLaunchLoadPrompt = false
+        guard let model = launchLoadCandidate else { return }
+        launchLoadCandidate = nil
+        if load {
+            Task { _ = await selectModel(model) }
+        } else {
+            setStatusMessage("Model ilk mesajda yüklenecek")
+        }
+    }
+
+    func launchLoadPromptMessage(for model: InstalledModel) -> String {
+        let size = ByteCountFormatter.string(fromByteCount: model.fileSizeBytes, countStyle: .memory)
+        return "«\(model.name)» belleğe alınsın mı? (yaklaşık \(size) RAM)"
     }
 
     func refreshModels() {
@@ -394,6 +435,13 @@ final class AppModel {
                 mmprojURL: mmproj
             )
             refreshModels()
+            if settings.flashAttention {
+                settings.flashAttention = false
+                inferenceService.settings = settings
+                if let data = try? JSONEncoder().encode(settings) {
+                    UserDefaults.standard.set(data, forKey: "inferenceSettings")
+                }
+            }
             if let model = installedModels.first(where: { $0.id == id }) {
                 let loaded = await selectModel(model)
                 setStatusMessage(loaded ? "Model içe aktarıldı ve hazır" : "Model içe aktarıldı; soldan seçin")
@@ -535,6 +583,7 @@ final class AppModel {
     private func invalidateInferenceCache() {
         inferenceService.invalidatePromptCache()
         contextTokenFingerprint = ""
+        Task { await inferenceService.clearKVCache() }
     }
 
     func loadSession(_ session: ChatSession) async {
@@ -738,6 +787,7 @@ final class AppModel {
                     "Hata: \(UserErrorFormatter.message(for: error))"
             }
             setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
+            await inferenceService.clearKVCache()
             try? await saveCurrentSession()
         }
     }

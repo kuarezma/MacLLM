@@ -168,6 +168,19 @@ struct SettingsView: View {
             SettingsInfoRow(label: "Çıkarım motoru", value: "llama.cpp + Metal")
         }
 
+        SettingsCard("Açılış") {
+            Picker("Model yükleme", selection: Binding(
+                get: { LaunchPreferences.loadModelOnLaunch },
+                set: { LaunchPreferences.loadModelOnLaunch = $0 }
+            )) {
+                ForEach(LoadModelOnLaunch.allCases) { option in
+                    Text(option.label).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            SettingsCaption(text: "Otomatik yükle: uygulama açılışında son model belleğe alınır. Sor: her seferinde onay istenir.")
+        }
+
         SettingsCard("Güncellemeler") {
             Toggle("Açılışta güncellemeleri kontrol et", isOn: $updates.autoCheckEnabled)
             if let last = appUpdate.lastCheckDate {

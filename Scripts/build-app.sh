@@ -90,6 +90,7 @@ SOURCES=(
   MacLLM/Services/ModelRecommendationService.swift
   MacLLM/Services/DownloadMetrics.swift
   MacLLM/Services/DownloadPreferences.swift
+  MacLLM/Services/LaunchPreferences.swift
   MacLLM/Services/RangeDownloadEngine.swift
   MacLLM/Services/HuggingFaceDownloadService.swift
   MacLLM/Services/GGUFFileValidator.swift

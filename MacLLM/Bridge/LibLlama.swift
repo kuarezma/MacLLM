@@ -15,7 +15,7 @@ enum LlamaError: Error, LocalizedError {
         case .contextOverflow(let promptTokens, let contextSize):
             return "Bağlam doldu (\(promptTokens) token, limit \(contextSize)). Ayarlardan num_ctx düşürün veya yeni sohbet açın."
         case .decodeFailed:
-            return "Çıkarım hatası (Compute error). Bağlam dolmuş olabilir — yeni sohbet açın veya Ayarlar'dan num_ctx artırın. Vision/mmproj eksikse görüntülü PDF göndermeyin."
+            return "Çıkarım hatası. Yeni sohbet açmayı deneyin. Sorun sürerse Ayarlar → Performans'tan Flash Attention'ı kapatın veya farklı bir model seçin."
         case .templateFailed:
             return "Sohbet şablonu uygulanamadı."
         case .generationCancelled:
@@ -301,7 +301,7 @@ actor LlamaContext {
         throw LlamaError.templateFailed
     }
 
-    func completionInit(text: String, mediaPaths: [String] = [], cachedPrefix: String? = nil) throws {
+    func completionInit(text: String, mediaPaths: [String] = [], reuseTokenCount: Int = 0) throws {
         cancelled = false
         is_done = false
         n_decode = 0
@@ -325,36 +325,23 @@ actor LlamaContext {
             return
         }
 
-        if let cachedPrefix,
-           !cachedPrefix.isEmpty,
-           text.hasPrefix(cachedPrefix),
-           text.count > cachedPrefix.count,
-           n_cur > 0 {
-            let prefixTokens = tokenize(text: cachedPrefix, add_bos: true)
-            guard prefixTokens.count == Int(n_cur) else {
-                clear()
-                tokens_list = tokenize(text: text, add_bos: true)
-                temporary_invalid_cchars = []
-                lastPromptTokenCount = tokens_list.count
-                try validateContextBudget(adding: tokens_list.count)
-                try decodePrefillChunks(tokens_list, startPos: 0)
-                return
-            }
-            let suffix = String(text.dropFirst(cachedPrefix.count))
-            let suffixTokens = tokenize(text: suffix, add_bos: false)
+        let allTokens = tokenize(text: text, add_bos: true)
+        tokens_list = allTokens
+        temporary_invalid_cchars = []
+        lastPromptTokenCount = allTokens.count
+
+        if reuseTokenCount > 0,
+           reuseTokenCount < allTokens.count,
+           n_cur > 0,
+           Int(n_cur) == reuseTokenCount {
+            let suffixTokens = Array(allTokens[reuseTokenCount...])
             try validateContextBudget(adding: suffixTokens.count)
             try decodePrefillChunks(suffixTokens, startPos: n_cur)
-            tokens_list.append(contentsOf: suffixTokens)
-            lastPromptTokenCount = tokens_list.count
             return
         }
 
-        tokens_list = tokenize(text: text, add_bos: true)
-        temporary_invalid_cchars = []
-        lastPromptTokenCount = tokens_list.count
-
-        try validateContextBudget(adding: tokens_list.count)
-        try decodePrefillChunks(tokens_list, startPos: 0)
+        try validateContextBudget(adding: allTokens.count)
+        try decodePrefillChunks(allTokens, startPos: 0)
     }
 
     private func validateContextBudget(adding newTokens: Int) throws {
@@ -394,7 +381,7 @@ actor LlamaContext {
         let logitsIdx: Int32 = batch.n_tokens > 0 ? batch.n_tokens - 1 : -1
         let new_token_id = llama_sampler_sample(sampling, context, logitsIdx)
 
-        if llama_vocab_is_eog(vocab, new_token_id) || n_cur >= n_len {
+        if llama_vocab_is_eog(vocab, new_token_id) || n_decode >= n_len {
             is_done = true
             let tail = String(cString: temporary_invalid_cchars + [0])
             temporary_invalid_cchars.removeAll()

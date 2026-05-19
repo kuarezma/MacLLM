@@ -54,6 +54,34 @@ struct MainView: View {
             }
         }
         .tint(AppTheme.accent)
+        .launchLoadAlert(model: appModel)
+    }
+}
+
+private extension View {
+    func launchLoadAlert(model: AppModel) -> some View {
+        alert(
+            "Model yüklensin mi?",
+            isPresented: Binding(
+                get: { model.showLaunchLoadPrompt },
+                set: { isPresented in
+                    if !isPresented, model.showLaunchLoadPrompt {
+                        model.confirmLaunchLoad(load: false)
+                    }
+                }
+            )
+        ) {
+            Button("Yükle") {
+                model.confirmLaunchLoad(load: true)
+            }
+            Button("Hayır, sonra", role: .cancel) {
+                model.confirmLaunchLoad(load: false)
+            }
+        } message: {
+            if let candidate = model.launchLoadCandidate {
+                Text(model.launchLoadPromptMessage(for: candidate))
+            }
+        }
     }
 }
 
@@ -236,6 +264,7 @@ struct JanSidebarView: View {
             }
         }
         .onChange(of: model.selectedModelId) { _, newId in
+            guard !model.suppressAutoModelLoad else { return }
             guard let newId,
                   let installed = model.installedModels.first(where: { $0.id == newId }) else { return }
             if inferenceService.loadedModelId == newId, inferenceService.isModelLoaded {
