@@ -100,6 +100,9 @@ SOURCES=(
   MacLLM/Services/GenerationOutputFilter.swift
   MacLLM/Services/HuggingFaceHubService.swift
   MacLLM/Services/HuggingFaceCredentials.swift
+  MacLLM/Services/KeychainStorage.swift
+  MacLLM/Services/WebSearchService.swift
+  MacLLM/Services/ChatImporter.swift
   MacLLM/Services/ChatHistoryStore.swift
   MacLLM/Services/ChatProjectStore.swift
   MacLLM/Services/InferenceService.swift
@@ -112,6 +115,7 @@ SOURCES=(
   MacLLM/Bridge/LibMtmd.swift
   MacLLM/Features/Main/MainView.swift
   MacLLM/Features/Main/NewProjectSheet.swift
+  MacLLM/Features/Main/ProjectPromptSheet.swift
   MacLLM/Features/Main/AppUpdateBannerView.swift
   MacLLM/Features/Main/ImportedModelFlashBannerView.swift
   MacLLM/Features/Chat/ChatView.swift

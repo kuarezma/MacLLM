@@ -255,6 +255,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.14.17** | Polish: DOCX metin çıkarma; HF token Keychain; DuckDuckGo web araması; sohbet içe/dışa aktarma; proje sistemi istemi; üretim bildirimi; birim testler |
 | **1.14.16** | Qwopus düzeltmesi: `redacted_im_end` stop/sanitize; üretim zaman aşımı; boş yanıt hatası; Qwopus için güvenli KV |
 | **1.14.15** | Akışta otomatik kaydırma; sohbet açılışında model yükleme tercihi; içe aktarılmış modeller için flash migration + banner; `bench-inference.sh`; sanitizer/filter/launch birim testleri |
 | **1.14.3** | LM Studio tarzı Hub (split arama + detay, metadata, quant seçici); indirme ilerleme düzeltmesi; PDF ekleri ve taranmış sayfa desteği; CI derleme düzeltmeleri |

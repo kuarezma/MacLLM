@@ -25,17 +25,22 @@ struct PendingAttachmentChip: View {
 }
 
 struct ChatAttachmentImporter {
+    private static let wordTypes: [UTType] = [
+        UTType(filenameExtension: "docx"),
+        UTType(filenameExtension: "doc"),
+    ].compactMap { $0 }
+
     static let contentTypes: [UTType] = [
         .image, .audio, .movie, .video, .pdf, .plainText, .json, .rtf,
         UTType(filenameExtension: "md") ?? .plainText,
         UTType(filenameExtension: "csv") ?? .plainText,
-    ].compactMap { $0 }
+    ].compactMap { $0 } + wordTypes
 
     static let documentContentTypes: [UTType] = [
         .pdf, .plainText, .json, .rtf,
         UTType(filenameExtension: "md") ?? .plainText,
         UTType(filenameExtension: "csv") ?? .plainText,
-    ].compactMap { $0 }
+    ].compactMap { $0 } + wordTypes
 
     static func contentTypes(for profile: LoadedModelProfile?) -> [UTType] {
         guard let profile else { return contentTypes }
@@ -54,7 +59,7 @@ struct ChatAttachmentImporter {
         if ["jpg", "jpeg", "png", "gif", "webp", "heic", "bmp"].contains(ext) { return .image }
         if ["wav", "mp3", "m4a", "flac", "aac", "ogg"].contains(ext) { return .audio }
         if ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext) { return .video }
-        if ["pdf", "txt", "md", "csv", "json", "rtf", "log", "swift", "py", "js", "html", "xml"].contains(ext) {
+        if ["pdf", "txt", "md", "csv", "json", "rtf", "log", "swift", "py", "js", "html", "xml", "doc", "docx"].contains(ext) {
             return .document
         }
         return nil

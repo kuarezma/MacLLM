@@ -118,18 +118,44 @@ enum MediaContentProcessor {
         }
 
         if ext == "rtf" {
-            let data = try Data(contentsOf: url)
-            let attributed = try NSAttributedString(
-                data: data,
-                options: [.documentType: NSAttributedString.DocumentType.rtf],
-                documentAttributes: nil
+            return try extractAttributedDocument(
+                from: url,
+                documentType: .rtf,
+                emptyMessage: "RTF boş."
             )
-            let text = attributed.string
-            guard !text.isEmpty else { throw MediaProcessingError.extractionFailed("RTF boş.") }
-            return String(text.prefix(maxDocumentChars))
+        }
+
+        if ext == "docx" {
+            return try extractAttributedDocument(
+                from: url,
+                documentType: .officeOpenXML,
+                emptyMessage: "Word belgesi boş."
+            )
+        }
+
+        if ext == "doc" {
+            throw MediaProcessingError.extractionFailed(
+                "Eski .doc biçimi desteklenmiyor. Word’de «Farklı Kaydet» → .docx kullanın (\(fileName))."
+            )
         }
 
         throw MediaProcessingError.extractionFailed("Bu belge türü için metin çıkarma henüz desteklenmiyor (\(fileName)).")
+    }
+
+    private static func extractAttributedDocument(
+        from url: URL,
+        documentType: NSAttributedString.DocumentType,
+        emptyMessage: String
+    ) throws -> String {
+        let data = try Data(contentsOf: url)
+        let attributed = try NSAttributedString(
+            data: data,
+            options: [.documentType: documentType],
+            documentAttributes: nil
+        )
+        let text = attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw MediaProcessingError.extractionFailed(emptyMessage) }
+        return String(text.prefix(maxDocumentChars))
     }
 
     // MARK: - Video frames

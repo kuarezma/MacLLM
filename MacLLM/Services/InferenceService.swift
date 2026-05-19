@@ -142,10 +142,12 @@ final class InferenceService: ObservableObject {
         chatTemplate: String,
         sessionId: UUID,
         stopSequences: [String]? = nil,
-        forceFullPrefill: Bool = false
+        forceFullPrefill: Bool = false,
+        systemPromptOverride: String? = nil
     ) -> AsyncThrowingStream<String, Error> {
         let payload = InferenceMessageBuilder.build(messages: messages, sessionId: sessionId)
-        let promptMessages = Self.messagesWithSystem(payload.messages, systemPrompt: settings.systemPrompt)
+        let systemPrompt = systemPromptOverride ?? settings.systemPrompt
+        let promptMessages = Self.messagesWithSystem(payload.messages, systemPrompt: systemPrompt)
         let mediaPaths = payload.mediaPaths
         guard let llamaContext else {
             return AsyncThrowingStream { $0.finish(throwing: LlamaError.couldNotInitializeContext) }
@@ -338,13 +340,15 @@ final class InferenceService: ObservableObject {
     func countPromptTokens(
         messages: [ChatMessage],
         chatTemplate: String,
-        sessionId: UUID
+        sessionId: UUID,
+        systemPromptOverride: String? = nil
     ) async throws -> Int {
         guard let llamaContext else {
             throw LlamaError.couldNotInitializeContext
         }
         let payload = InferenceMessageBuilder.build(messages: messages, sessionId: sessionId)
-        let promptMessages = Self.messagesWithSystem(payload.messages, systemPrompt: settings.systemPrompt)
+        let systemPrompt = systemPromptOverride ?? settings.systemPrompt
+        let promptMessages = Self.messagesWithSystem(payload.messages, systemPrompt: systemPrompt)
         let prompt = try await llamaContext.applyChatTemplate(
             messages: promptMessages,
             templateName: chatTemplate

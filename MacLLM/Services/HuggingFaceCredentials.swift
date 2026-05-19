@@ -1,19 +1,21 @@
 import Foundation
 
 enum HuggingFaceCredentials {
-    private static let key = "huggingface_access_token"
+    private static let keychainAccount = "huggingface_access_token"
+    private static let legacyUserDefaultsKey = "huggingface_access_token"
+    private static let migrationFlagKey = "huggingface_token_keychain_migrated"
 
     static var token: String? {
         get {
-            let value = UserDefaults.standard.string(forKey: key)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return value?.isEmpty == true ? nil : value
+            migrateFromUserDefaultsIfNeeded()
+            return KeychainStorage.read(account: keychainAccount)
         }
         set {
+            migrateFromUserDefaultsIfNeeded()
             if let newValue, !newValue.isEmpty {
-                UserDefaults.standard.set(newValue, forKey: key)
+                KeychainStorage.write(account: keychainAccount, value: newValue)
             } else {
-                UserDefaults.standard.removeObject(forKey: key)
+                KeychainStorage.delete(account: keychainAccount)
             }
         }
     }
@@ -21,5 +23,18 @@ enum HuggingFaceCredentials {
     static func applyAuth(to request: inout URLRequest) {
         guard let token else { return }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+
+    private static func migrateFromUserDefaultsIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: migrationFlagKey) else { return }
+        defer { UserDefaults.standard.set(true, forKey: migrationFlagKey) }
+
+        if let legacy = UserDefaults.standard.string(forKey: legacyUserDefaultsKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !legacy.isEmpty,
+           KeychainStorage.read(account: keychainAccount) == nil {
+            KeychainStorage.write(account: keychainAccount, value: legacy)
+        }
+        UserDefaults.standard.removeObject(forKey: legacyUserDefaultsKey)
     }
 }

@@ -5,18 +5,22 @@ import UniformTypeIdentifiers
 struct ComposerToolsView: View {
     @Environment(AppModel.self) private var appModel
     var isDisabled: Bool = false
+    @State private var webSearchEnabled = WebSearchPreferences.isEnabled
 
     var body: some View {
         HStack(spacing: 2) {
-            Button {} label: {
-                Image(systemName: "globe")
+            Button {
+                webSearchEnabled.toggle()
+                WebSearchPreferences.isEnabled = webSearchEnabled
+            } label: {
+                Image(systemName: webSearchEnabled ? "globe.americas.fill" : "globe")
                     .font(.system(size: 14, weight: .medium))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(AppTheme.secondaryText.opacity(0.35))
-            .disabled(true)
-            .help("Web arama (yakında)")
+            .foregroundStyle(webSearchEnabled ? AppTheme.accent : AppTheme.secondaryText)
+            .disabled(isDisabled)
+            .help(webSearchEnabled ? "Web araması açık — sonraki mesaja bağlam eklenir" : "Web araması")
 
             Menu {
                 Button {
@@ -30,6 +34,11 @@ struct ComposerToolsView: View {
                     Label("Sohbeti dışa aktar…", systemImage: "square.and.arrow.up")
                 }
                 .disabled(appModel.currentSession.messages.isEmpty)
+                Button {
+                    importChat()
+                } label: {
+                    Label("Sohbeti içe aktar…", systemImage: "square.and.arrow.down")
+                }
                 Divider()
                 Button {
                     AppSettingsOpener.open()
@@ -51,6 +60,9 @@ struct ComposerToolsView: View {
             .disabled(isDisabled)
             .help("Araçlar")
         }
+        .onAppear {
+            webSearchEnabled = WebSearchPreferences.isEnabled
+        }
     }
 
     @MainActor
@@ -62,6 +74,18 @@ struct ComposerToolsView: View {
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             try? markdown.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    @MainActor
+    private func importChat() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { await appModel.importChat(from: url) }
         }
     }
 }

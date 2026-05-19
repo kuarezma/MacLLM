@@ -1,55 +1,55 @@
 import SwiftUI
 
-struct NewProjectSheet: View {
+struct ProjectPromptSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var systemPrompt = ""
-    @FocusState private var nameFocused: Bool
+    let projectId: UUID
+
+    @State private var draft = ""
+    @FocusState private var focused: Bool
+
+    private var projectName: String {
+        appModel.projects.first(where: { $0.id == projectId })?.name ?? "Proje"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Yeni proje")
+            Text("Proje sistemi istemi")
                 .font(.headline)
-
-            Text("Sohbetleri konuya göre gruplayın. İsteğe bağlı proje sistemi istemi tüm sohbetlere eklenir.")
+            Text("«\(projectName)» projesindeki sohbetlere eklenir; genel ayarlarla birleştirilir.")
                 .font(.caption)
                 .foregroundStyle(AppTheme.secondaryText)
 
-            TextField("Proje adı", text: $name)
-                .textFieldStyle(.roundedBorder)
-                .focused($nameFocused)
-
-            Text("Proje sistemi istemi (isteğe bağlı)")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(AppTheme.secondaryText)
-            TextEditor(text: $systemPrompt)
+            TextEditor(text: $draft)
                 .font(.body)
-                .frame(height: 72)
-                .padding(6)
+                .frame(minHeight: 120)
+                .padding(8)
                 .background(AppTheme.composerBackground)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius))
                 .overlay {
                     RoundedRectangle(cornerRadius: AppTheme.panelRadius)
                         .strokeBorder(AppTheme.border, lineWidth: 1)
                 }
+                .focused($focused)
 
             HStack {
                 Spacer()
                 Button("İptal") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("Oluştur") {
-                    appModel.createProject(named: name, systemPrompt: systemPrompt)
+                Button("Kaydet") {
+                    appModel.updateProjectSystemPrompt(projectId: projectId, prompt: draft)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.accent)
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(20)
-        .frame(width: 400)
-        .onAppear { nameFocused = true }
+        .frame(width: 440, height: 280)
+        .onAppear {
+            draft = appModel.projects.first(where: { $0.id == projectId })?.systemPrompt ?? ""
+            focused = true
+        }
     }
 }

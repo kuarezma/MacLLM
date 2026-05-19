@@ -56,4 +56,66 @@ swiftc \
   Tests/LaunchPreferencesTests.swift
 
 "$LAUNCH_BIN"
+
+MEDIA_BIN="$ROOT/build/unit-test-media"
+echo "==> MediaContentProcessorTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -O \
+  -framework PDFKit \
+  -framework AVFoundation \
+  -framework AppKit \
+  -o "$MEDIA_BIN" \
+  MacLLM/Services/MediaContentProcessor.swift \
+  MacLLM/Services/AttachmentStore.swift \
+  MacLLM/Services/ModelStore.swift \
+  MacLLM/Core/MessageAttachment.swift \
+  MacLLM/Core/Models.swift \
+  MacLLM/Services/MacSystemProfile.swift \
+  Tests/MediaContentProcessorTests.swift
+"$MEDIA_BIN"
+
+ATTACH_BIN="$ROOT/build/unit-test-attach-kind"
+echo "==> AttachmentStoreKindTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -O \
+  -o "$ATTACH_BIN" \
+  MacLLM/Services/AttachmentStore.swift \
+  MacLLM/Services/ModelStore.swift \
+  MacLLM/Core/MessageAttachment.swift \
+  MacLLM/Core/Models.swift \
+  MacLLM/Services/MacSystemProfile.swift \
+  Tests/AttachmentStoreKindTests.swift
+"$ATTACH_BIN"
+
+EXPORT_BIN="$ROOT/build/unit-test-export"
+echo "==> ChatExporterTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -O \
+  -o "$EXPORT_BIN" \
+  MacLLM/Core/Models.swift \
+  MacLLM/Core/MessageAttachment.swift \
+  MacLLM/Services/ModelStore.swift \
+  MacLLM/Services/MacSystemProfile.swift \
+  MacLLM/Services/ChatProjectStore.swift \
+  MacLLM/Services/ChatImporter.swift \
+  Tests/ChatExporterTests.swift
+"$EXPORT_BIN"
+
+KEYCHAIN_BIN="$ROOT/build/unit-test-keychain"
+echo "==> HuggingFaceCredentialsTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -O \
+  -o "$KEYCHAIN_BIN" \
+  MacLLM/Services/KeychainStorage.swift \
+  Tests/HuggingFaceCredentialsTests.swift
+"$KEYCHAIN_BIN"
+
 echo "==> unit tests başarılı"

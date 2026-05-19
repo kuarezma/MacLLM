@@ -48,6 +48,12 @@ struct MainView: View {
             SystemPromptSheet()
                 .environment(appModel)
         }
+        .sheet(isPresented: $model.showProjectPromptSheet) {
+            if let projectId = model.projectPromptEditId {
+                ProjectPromptSheet(projectId: projectId)
+                    .environment(appModel)
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let status = model.statusMessage, !status.isEmpty {
                 AppStatusBar(message: status)
@@ -169,6 +175,10 @@ struct JanSidebarView: View {
                             model.selectedProjectId = project.id
                         }
                         .contextMenu {
+                            Button("Proje sistemi istemi…") {
+                                model.projectPromptEditId = project.id
+                                model.showProjectPromptSheet = true
+                            }
                             Button("Sil", role: .destructive) {
                                 model.deleteProject(project)
                             }

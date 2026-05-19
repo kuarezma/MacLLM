@@ -18,6 +18,8 @@ final class AppModel {
     var showCatalog = false
     var showNewProjectSheet = false
     var showSystemPromptSheet = false
+    var showProjectPromptSheet = false
+    var projectPromptEditId: UUID?
     var projects: [ChatProject] = []
     var selectedProjectId: UUID?
     var contextTokenCount: Int = 0
@@ -527,16 +529,69 @@ final class AppModel {
         setStatusMessage(nil)
     }
 
-    func createProject(named name: String) {
+    func effectiveSystemPrompt() -> String {
+        var parts: [String] = []
+        let projectId = currentSession.projectId ?? selectedProjectId
+        if let projectId,
+           let project = projects.first(where: { $0.id == projectId }) {
+            let projectPrompt = project.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !projectPrompt.isEmpty {
+                parts.append(projectPrompt)
+            }
+        }
+        let global = settings.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !global.isEmpty {
+            parts.append(global)
+        }
+        return parts.joined(separator: "\n\n")
+    }
+
+    func createProject(named name: String, systemPrompt: String = "") {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let project = ChatProject(name: trimmed)
+        let project = ChatProject(name: trimmed, systemPrompt: systemPrompt)
         do {
             try projectStore.save(project)
             projects.insert(project, at: 0)
             selectedProjectId = project.id
             currentSession.projectId = project.id
             setStatusMessage("Proje oluşturuldu: \(trimmed)")
+        } catch {
+            setStatusMessage(error.localizedDescription, persistent: true)
+        }
+    }
+
+    func updateProjectSystemPrompt(projectId: UUID, prompt: String) {
+        guard let index = projects.firstIndex(where: { $0.id == projectId }) else { return }
+        var project = projects[index]
+        project.systemPrompt = prompt
+        project.updatedAt = .now
+        do {
+            try projectStore.save(project)
+            projects[index] = project
+            setStatusMessage("Proje istemi güncellendi")
+        } catch {
+            setStatusMessage(error.localizedDescription, persistent: true)
+        }
+    }
+
+    func importChat(from url: URL) async {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let content = try String(contentsOf: url, encoding: .utf8)
+            guard let session = ChatImporter.session(fromMarkdown: content) else {
+                setStatusMessage("Sohbet dosyası okunamadı veya mesaj bulunamadı.", persistent: true)
+                return
+            }
+            var imported = session
+            imported.modelId = selectedModelId
+            imported.projectId = selectedProjectId
+            try chatStore.saveSession(imported)
+            let summary = try chatStore.upsertSummary(for: imported)
+            sessions.insert(summary.asEmptySession(), at: 0)
+            await loadSession(imported)
+            setStatusMessage("Sohbet içe aktarıldı")
         } catch {
             setStatusMessage(error.localizedDescription, persistent: true)
         }
@@ -711,6 +766,16 @@ final class AppModel {
             return
         }
 
+        var webContext: String?
+        if WebSearchPreferences.isEnabled, !trimmed.isEmpty {
+            do {
+                webContext = try await WebSearchService.fetchContext(for: trimmed)
+            } catch {
+                setStatusMessage("Web araması: \(error.localizedDescription)", persistent: true)
+                return
+            }
+        }
+
         let caps = ModelCapabilities.detect(model: model)
         let profile = activeProfile
         var attachments = pendingAttachments
@@ -819,17 +884,25 @@ final class AppModel {
         let activeSessionId = currentSession.id
 
         let template = activeProfile?.resolvedChatTemplate ?? model.chatTemplate
-        let messagesForInference = Self.trimMessagesForContext(
+        var messagesForInference = Self.trimMessagesForContext(
             currentSession.messages.dropLast().map { $0 },
             maxContextTokens: effectiveContextLength
         )
+        if let webContext,
+           let userIndex = messagesForInference.lastIndex(where: { $0.role == .user }) {
+            var userMessage = messagesForInference[userIndex]
+            userMessage.content += "\n\n" + webContext
+            messagesForInference[userIndex] = userMessage
+        }
+        let systemPrompt = effectiveSystemPrompt()
         streamingBuffer.begin(sessionId: activeSessionId, messageId: assistantMessageId)
         let stream = inferenceService.streamResponse(
             messages: messagesForInference,
             chatTemplate: template,
             sessionId: currentSession.id,
             stopSequences: activeProfile?.recommendedStopSequences,
-            forceFullPrefill: forceFullPrefill
+            forceFullPrefill: forceFullPrefill,
+            systemPromptOverride: systemPrompt
         )
 
         do {
@@ -849,6 +922,7 @@ final class AppModel {
                 streamingBuffer.reset()
                 contextTokenFingerprint = ""
                 scheduleSaveCurrentSession()
+                GenerationNotificationService.notifyGenerationComplete(sessionTitle: currentSession.title)
             }
         } catch is CancellationError {
             streamingBuffer.reset()
@@ -926,7 +1000,8 @@ final class AppModel {
             contextTokenCount = try await inferenceService.countPromptTokens(
                 messages: trimmed,
                 chatTemplate: activeProfile?.resolvedChatTemplate ?? model.chatTemplate,
-                sessionId: currentSession.id
+                sessionId: currentSession.id,
+                systemPromptOverride: effectiveSystemPrompt()
             )
             contextTokenCountIsEstimate = false
             contextTokenFingerprint = fingerprint

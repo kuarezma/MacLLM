@@ -181,6 +181,14 @@ struct SettingsView: View {
             SettingsCaption(text: "Otomatik yükle: uygulama açılışında son model belleğe alınır. Sor: her seferinde onay istenir.")
         }
 
+        SettingsCard("Bildirimler") {
+            Toggle("Yanıt hazır olunca bildir", isOn: Binding(
+                get: { GenerationNotificationPreferences.notifyOnComplete },
+                set: { GenerationNotificationPreferences.notifyOnComplete = $0 }
+            ))
+            SettingsCaption(text: "Uzun üretimlerde uygulama arka plandayken macOS bildirimi gösterilir.")
+        }
+
         SettingsCard("Güncellemeler") {
             Toggle("Açılışta güncellemeleri kontrol et", isOn: $updates.autoCheckEnabled)
             if let last = appUpdate.lastCheckDate {

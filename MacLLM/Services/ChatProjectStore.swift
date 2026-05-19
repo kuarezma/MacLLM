@@ -3,19 +3,35 @@ import Foundation
 struct ChatProject: Codable, Identifiable, Hashable {
     var id: UUID
     var name: String
+    var systemPrompt: String
     var createdAt: Date
     var updatedAt: Date
 
     init(
         id: UUID = UUID(),
         name: String,
+        systemPrompt: String = "",
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
         self.id = id
         self.name = name
+        self.systemPrompt = systemPrompt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, systemPrompt, createdAt, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        systemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt) ?? ""
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
     }
 }
 

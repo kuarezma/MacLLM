@@ -44,7 +44,19 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.14)
+### Bu sürümde (1.14.17)
+
+- DOCX belge metin çıkarma; eski .doc için net yönlendirme
+- Hugging Face token Keychain’de (UserDefaults migrasyonu)
+- Web araması: DuckDuckGo Instant Answer ile composer globe düğmesi
+- Sohbet Markdown içe aktarma; proje bazlı sistem istemi
+- Ayarlarda «Yanıt hazır olunca bildir»; genişletilmiş birim testler
+
+### Önceki (1.14.16)
+
+- Qwopus: redacted_im_end stop/sanitize; üretim zaman aşımı; boş yanıt hatası
+
+### Önceki (1.14.14)
 
 - Token-tabanlı KV prompt cache: Compute error ve bozuk çok turlu sohbet düzeltmesi
 - decodeFailed otomatik retry + flash attention fallback (uyumsuz modeller)

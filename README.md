@@ -257,6 +257,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.14.17** | Polish: DOCX text extraction; HF token in Keychain; DuckDuckGo web search context; chat import/export; per-project system prompt; generation notification; unit tests |
 | **1.14.16** | Qwopus fix: `redacted_im_end` stop/sanitize alignment with llama.cpp chatml; generation stall timeout; empty-output error; conservative KV for Qwopus |
 | **1.14.15** | Stream scroll during generation; session load respects launch model preference; one-time flash-off migration for imported GGUF; `bench-inference.sh`; unit tests for sanitizer, output filter, launch prefs |
 | **1.14.3** | LM Studio–style Hub (split search + detail, metadata chips, quant picker); download progress fix; PDF attachment support with scanned-page vision fallback; CI build fixes |
