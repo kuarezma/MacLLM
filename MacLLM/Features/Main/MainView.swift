@@ -6,6 +6,7 @@ struct MainView: View {
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showDownloadsPopover = false
+    @State private var showAllDownloadsSheet = false
     @State private var sidebarSearchFocused = false
 
     var body: some View {
@@ -18,10 +19,7 @@ struct MainView: View {
             VStack(spacing: 0) {
                 AppUpdateBannerView()
                 ImportedModelFlashBannerView()
-                if downloadService.hasActiveTransfers {
-                    ActiveDownloadsPanel(downloadService: downloadService, style: .compact)
-                }
-                ChatView()
+                ChatView(showDownloadsPopover: $showDownloadsPopover)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -42,8 +40,19 @@ struct MainView: View {
                 }
                 DownloadToolbarButton(
                     downloadService: downloadService,
-                    isPresented: $showDownloadsPopover
+                    isPresented: $showDownloadsPopover,
+                    showAllDownloadsSheet: $showAllDownloadsSheet
                 )
+            }
+        }
+        .sheet(isPresented: $showAllDownloadsSheet) {
+            NavigationStack {
+                ScrollView {
+                    ActiveDownloadsPanel(downloadService: downloadService, style: .full)
+                        .padding()
+                }
+                .navigationTitle("İndirmeler")
+                .frame(minWidth: 480, minHeight: 360)
             }
         }
         .sheet(isPresented: $model.showCatalog) {
@@ -112,7 +121,9 @@ struct JanSidebarView: View {
     @State private var searchedSessions: [ChatSession] = []
     @State private var modelsExpanded = false
     @State private var sessionPendingDelete: ChatSession?
+    @State private var sessionsPendingDeleteAll = false
     @State private var modelPendingDelete: InstalledModel?
+    @State private var hoveredSessionId: UUID?
     @State private var selectedSessionId: UUID?
     @FocusState private var sessionSearchFocused: Bool
 
@@ -122,9 +133,123 @@ struct JanSidebarView: View {
             : searchedSessions
     }
 
+    private var sessionDeleteAlertPresented: Binding<Bool> {
+        Binding(
+            get: { sessionPendingDelete != nil },
+            set: { isPresented in
+                if !isPresented { sessionPendingDelete = nil }
+            }
+        )
+    }
+
     var body: some View {
         @Bindable var model = appModel
+        sidebarList(model: model)
+            .listStyle(.sidebar)
+            .navigationTitle("")
+            .toolbar { sidebarToolbar }
+            .background(AppTheme.sidebarBackground)
+            .onChange(of: model.sessions.count) { _, _ in
+                if !sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    performSessionSearch(query: sessionSearchText)
+                }
+                if !model.sessions.contains(where: { $0.id == selectedSessionId }) {
+                    selectedSessionId = model.currentSession.id
+                }
+            }
+            .onAppear { selectedSessionId = model.currentSession.id }
+            .onChange(of: model.currentSession.id) { _, newId in
+                if selectedSessionId != newId { selectedSessionId = newId }
+            }
+            .onChange(of: selectedSessionId) { _, newId in
+                guard let newId, newId != model.currentSession.id else { return }
+                guard let session = model.sessions.first(where: { $0.id == newId })
+                    ?? searchedSessions.first(where: { $0.id == newId }) else { return }
+                Task { await model.loadSession(session) }
+            }
+            .onChange(of: model.selectedModelId) { _, newId in
+                guard !model.suppressAutoModelLoad else { return }
+                guard let newId,
+                      let installed = model.installedModels.first(where: { $0.id == newId }) else { return }
+                if inferenceService.loadedModelId == newId, inferenceService.isModelLoaded {
+                    Task { await model.refreshContextTokenCount() }
+                    return
+                }
+                Task {
+                    await model.selectModel(installed)
+                    await model.refreshContextTokenCount()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .focusSidebarSearch)) { _ in
+                sessionSearchFocused = true
+            }
+            .onDeleteCommand {
+                guard let selectedSessionId else { return }
+                if let session = model.sessions.first(where: { $0.id == selectedSessionId })
+                    ?? searchedSessions.first(where: { $0.id == selectedSessionId }) {
+                    sessionPendingDelete = session
+                }
+            }
+            .alert("Bu sohbet silinsin mi?", isPresented: sessionDeleteAlertPresented, presenting: sessionPendingDelete) { session in
+                Button("Sil", role: .destructive) {
+                    Task {
+                        await model.deleteSession(session)
+                        sessionPendingDelete = nil
+                    }
+                }
+                Button("İptal", role: .cancel) { sessionPendingDelete = nil }
+            } message: { session in
+                Text("“\(session.title)” kalıcı olarak silinecek.")
+            }
+            .alert("Listedeki sohbetler silinsin mi?", isPresented: $sessionsPendingDeleteAll) {
+                Button("Hepsini sil", role: .destructive) {
+                    let targets = sessionsToShow
+                    Task { await model.deleteSessions(targets) }
+                }
+                Button("İptal", role: .cancel) {}
+            } message: {
+                Text("\(sessionsToShow.count) sohbet kalıcı olarak silinecek. Bu işlem geri alınamaz.")
+            }
+            .alert("Model diskten silinsin mi?", isPresented: modelDeleteAlertPresented, presenting: modelPendingDelete) { installed in
+                Button("Sil", role: .destructive) {
+                    Task {
+                        await model.deleteModel(installed)
+                        modelPendingDelete = nil
+                    }
+                }
+                Button("İptal", role: .cancel) { modelPendingDelete = nil }
+            } message: { installed in
+                Text("\(installed.name) dosyası silinecek. Bu işlem geri alınamaz.")
+            }
+    }
 
+    private var modelDeleteAlertPresented: Binding<Bool> {
+        Binding(
+            get: { modelPendingDelete != nil },
+            set: { isPresented in
+                if !isPresented { modelPendingDelete = nil }
+            }
+        )
+    }
+
+    @ToolbarContentBuilder
+    private var sidebarToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            HStack(spacing: 10) {
+                BrandMark(size: 26)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("MacLLM")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Yerel AI")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sidebarList(model: AppModel) -> some View {
         List(selection: $selectedSessionId) {
             Section {
                 sidebarNavRow("square.and.pencil", title: "Yeni Sohbet", shortcut: "⌘N") {
@@ -198,7 +323,7 @@ struct JanSidebarView: View {
                 }
             }
 
-            Section("Sohbetler") {
+            Section {
                 TextField("Sohbetlerde ara…", text: $sessionSearchText)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 10)
@@ -226,6 +351,18 @@ struct JanSidebarView: View {
                         sessionRow(session)
                     }
                 }
+            } header: {
+                HStack {
+                    Text("Sohbetler")
+                    Spacer()
+                    Button("Hepsini sil") {
+                        sessionsPendingDeleteAll = true
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(sessionsToShow.isEmpty ? AppTheme.secondaryText.opacity(0.4) : Color.red.opacity(0.85))
+                    .disabled(sessionsToShow.isEmpty)
+                }
             }
 
             Section {
@@ -242,18 +379,7 @@ struct JanSidebarView: View {
                                 }
                                 model.selectedModelId = installed.id
                             } label: {
-                                ModelRowView(
-                                    model: installed,
-                                    isSelected: model.selectedModelId == installed.id,
-                                    isLoadedInMemory: model.selectedModelId == installed.id
-                                        && inferenceService.isModelLoaded
-                                        && inferenceService.loadedModelId == installed.id,
-                                    modalityLabel: model.selectedModelId == installed.id
-                                        && inferenceService.isModelLoaded
-                                        ? model.activeProfile?.modality.label
-                                        : nil,
-                                    onUnload: { Task { await model.unloadCurrentModel() } }
-                                )
+                                installedModelRow(installed, model: model)
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
@@ -268,122 +394,70 @@ struct JanSidebarView: View {
                 }
             }
         }
-        .listStyle(.sidebar)
-        .navigationTitle("")
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                HStack(spacing: 10) {
-                    BrandMark(size: 26)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("MacLLM")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("Yerel AI")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-                }
-            }
-        }
-        .background(AppTheme.sidebarBackground)
-        .onChange(of: model.sessions.count) { _, _ in
-            if !sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                performSessionSearch(query: sessionSearchText)
-            }
-            if !model.sessions.contains(where: { $0.id == selectedSessionId }) {
-                selectedSessionId = model.currentSession.id
-            }
-        }
-        .onAppear {
-            selectedSessionId = model.currentSession.id
-        }
-        .onChange(of: model.currentSession.id) { _, newId in
-            if selectedSessionId != newId {
-                selectedSessionId = newId
-            }
-        }
-        .onChange(of: selectedSessionId) { _, newId in
-            guard let newId, newId != model.currentSession.id else { return }
-            guard let session = model.sessions.first(where: { $0.id == newId })
-                ?? searchedSessions.first(where: { $0.id == newId }) else { return }
-            Task { await model.loadSession(session) }
-        }
-        .onChange(of: model.selectedModelId) { _, newId in
-            guard !model.suppressAutoModelLoad else { return }
-            guard let newId,
-                  let installed = model.installedModels.first(where: { $0.id == newId }) else { return }
-            if inferenceService.loadedModelId == newId, inferenceService.isModelLoaded {
-                Task { await model.refreshContextTokenCount() }
-                return
-            }
-            Task {
-                await model.selectModel(installed)
-                await model.refreshContextTokenCount()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .focusSidebarSearch)) { _ in
-            sessionSearchFocused = true
-        }
-        .onDeleteCommand {
-            guard let selectedSessionId else { return }
-            if let session = model.sessions.first(where: { $0.id == selectedSessionId })
-                ?? searchedSessions.first(where: { $0.id == selectedSessionId }) {
-                sessionPendingDelete = session
-            }
-        }
-        .alert(
-            "Bu sohbet silinsin mi?",
-            isPresented: Binding(
-                get: { sessionPendingDelete != nil },
-                set: { if !$0 { sessionPendingDelete = nil } }
-            ),
-            presenting: sessionPendingDelete
-        ) { session in
-            Button("Sil", role: .destructive) {
-                Task {
-                    await model.deleteSession(session)
-                    sessionPendingDelete = nil
-                }
-            }
-            Button("İptal", role: .cancel) {
-                sessionPendingDelete = nil
-            }
-        } message: { session in
-            Text("“\(session.title)” kalıcı olarak silinecek.")
-        }
-        .alert(
-            "Model diskten silinsin mi?",
-            isPresented: Binding(
-                get: { modelPendingDelete != nil },
-                set: { if !$0 { modelPendingDelete = nil } }
-            ),
-            presenting: modelPendingDelete
-        ) { installed in
-            Button("Sil", role: .destructive) {
-                Task {
-                    await model.deleteModel(installed)
-                    modelPendingDelete = nil
-                }
-            }
-            Button("İptal", role: .cancel) {
-                modelPendingDelete = nil
-            }
-        } message: { installed in
-            Text("\(installed.name) dosyası silinecek. Bu işlem geri alınamaz.")
-        }
     }
 
-    @ViewBuilder
+    private func installedModelRow(_ installed: InstalledModel, model: AppModel) -> some View {
+        let isSelected = model.selectedModelId == installed.id
+        let isLoaded = isSelected
+            && inferenceService.isModelLoaded
+            && inferenceService.loadedModelId == installed.id
+        let modality = isLoaded ? model.activeProfile?.modality.label : nil
+        return ModelRowView(
+            model: installed,
+            isSelected: isSelected,
+            isLoadedInMemory: isLoaded,
+            modalityLabel: modality,
+            onUnload: { Task { await model.unloadCurrentModel() } }
+        )
+    }
+
     private func sessionRow(_ session: ChatSession) -> some View {
-        HStack(spacing: 8) {
+        let isCurrent = session.id == appModel.currentSession.id
+        let isHovered = hoveredSessionId == session.id
+
+        return HStack(spacing: 8) {
             Text(session.title)
                 .lineLimit(1)
-                .fontWeight(session.id == appModel.currentSession.id ? .semibold : .regular)
+                .fontWeight(isCurrent ? .semibold : .regular)
+                .foregroundStyle(AppTheme.primaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if session.id == appModel.currentSession.id {
-                Capsule(style: .continuous)
-                    .fill(AppTheme.accentGradient)
-                    .frame(width: 3, height: 16)
+
+            Button {
+                sessionPendingDelete = session
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isHovered ? Color.red : AppTheme.secondaryText.opacity(0.55))
             }
+            .buttonStyle(.plain)
+            .opacity(isHovered || isCurrent ? 1 : 0.35)
+            .appHitTarget(minWidth: 28, minHeight: 28)
+            .help("Sohbeti sil")
+
+            if isCurrent {
+                Capsule(style: .continuous)
+                    .fill(AppTheme.navActiveGradient)
+                    .frame(width: 3, height: 18)
+                    .shadow(color: AppTheme.glowSecondary.opacity(0.5), radius: 4)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background {
+            if isCurrent {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(AppTheme.navActiveGradient.opacity(0.22))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(AppTheme.accentSecondary.opacity(0.35), lineWidth: 1)
+                    }
+            } else if isHovered {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
+            }
+        }
+        .onHover { hovering in
+            hoveredSessionId = hovering ? session.id : nil
         }
         .tag(session.id)
         .contextMenu {

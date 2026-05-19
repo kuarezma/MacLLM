@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import OSLog
 import SwiftUI
 import UniformTypeIdentifiers
@@ -30,7 +31,7 @@ final class AppModel {
     var contextTokenCount: Int = 0
     var contextTokenCountIsEstimate = true
     var activeProfile: LoadedModelProfile?
-    var streamingBuffer = StreamingTextBuffer()
+    @ObservationIgnored let streamingBuffer: StreamingTextBuffer
     var suppressAutoModelLoad = false
     var showLaunchLoadPrompt = false
     var launchLoadCandidate: InstalledModel?
@@ -83,7 +84,8 @@ final class AppModel {
         return projects.first(where: { $0.id == id })?.name
     }
 
-    init() {
+    init(streamingBuffer: StreamingTextBuffer) {
+        self.streamingBuffer = streamingBuffer
         currentSession = ChatSession()
         Task { await bootstrap() }
     }
@@ -215,24 +217,40 @@ final class AppModel {
     }
 
     func deleteSession(_ session: ChatSession) async {
+        await deleteSessions([session])
+    }
+
+    /// Listedeki sohbetleri siler (arama / proje filtresine göre çağıran taraf belirler).
+    func deleteSessions(_ sessionsToDelete: [ChatSession]) async {
+        guard !sessionsToDelete.isEmpty else { return }
         await stopGenerationAndWait()
         pendingSaveTask?.cancel()
         pendingSaveTask = nil
-        deletedSessionIDs.insert(session.id)
-        invalidateInferenceCache()
-        do {
-            try chatStore.deleteSession(id: session.id)
-            AttachmentStore.shared.deleteSessionAttachments(sessionId: session.id)
-            sessions.removeAll { $0.id == session.id }
-            if currentSession.id == session.id {
-                await newChat(saveCurrent: false)
-            } else {
-                sessions = try chatStore.loadSessionIndex()
+
+        var deletedCurrent = false
+        for session in sessionsToDelete {
+            deletedSessionIDs.insert(session.id)
+            do {
+                try chatStore.deleteSession(id: session.id)
+                AttachmentStore.shared.deleteSessionAttachments(sessionId: session.id)
+                sessions.removeAll { $0.id == session.id }
+                if currentSession.id == session.id {
+                    deletedCurrent = true
+                }
+            } catch {
+                reportError(error, context: "Sohbet silinemedi")
+                return
             }
-            setStatusMessage("Sohbet silindi")
-        } catch {
-            reportError(error, context: "Sohbet silinemedi")
         }
+
+        invalidateInferenceCache()
+        if deletedCurrent {
+            await newChat(saveCurrent: false)
+        } else {
+            sessions = (try? chatStore.loadSessionIndex()) ?? sessions
+        }
+        let count = sessionsToDelete.count
+        setStatusMessage(count == 1 ? "Sohbet silindi" : "\(count) sohbet silindi")
     }
 
     func setStatusMessage(_ message: String?, persistent: Bool = false) {
@@ -995,6 +1013,7 @@ final class AppModel {
                currentSession.messages[assistantIndex].id == assistantMessageId {
                 let finalText = ControlTokenSanitizer.sanitizeForDisplay(streamingBuffer.finish())
                 currentSession.messages[assistantIndex].content = finalText
+                currentSession.messages[assistantIndex].generationStats = inferenceService.lastGenerationStats
                 streamingBuffer.reset()
                 contextTokenFingerprint = ""
                 scheduleSaveCurrentSession()

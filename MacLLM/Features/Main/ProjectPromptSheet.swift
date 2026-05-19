@@ -41,7 +41,7 @@ struct ProjectPromptSheet: View {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(AccentPrimaryButtonStyle())
                 .tint(AppTheme.accent)
             }
         }

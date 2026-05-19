@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Paylaşılan arayüz sabitleri — modern koyu cam tema.
+/// Paylaşılan arayüz sabitleri — cam / neon koyu tema.
 enum AppTheme {
     static let contentPadding: CGFloat = 20
     static let sectionSpacing: CGFloat = 16
@@ -18,6 +18,7 @@ enum AppTheme {
     static let composerMinHeight: CGFloat = 80
     static let composerAccessoryHeight: CGFloat = 44
     static let messageStatsHeight: CGFloat = 18
+    static let downloadSlimBarHeight: CGFloat = 30
 
     static let springSnappy = Animation.spring(response: 0.32, dampingFraction: 0.78)
     static let springSoft = Animation.spring(response: 0.45, dampingFraction: 0.82)
@@ -28,6 +29,7 @@ enum AppTheme {
     static let accent = Color(red: 0.98, green: 0.44, blue: 0.36)
     static let accentSecondary = Color(red: 0.62, green: 0.52, blue: 0.98)
     static let accentTertiary = Color(red: 0.35, green: 0.78, blue: 0.95)
+    static let successNeon = Color(red: 0.35, green: 0.92, blue: 0.55)
 
     static var accentGradient: LinearGradient {
         LinearGradient(
@@ -37,14 +39,30 @@ enum AppTheme {
         )
     }
 
-    static var subtleGradient: LinearGradient {
+    static var navActiveGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color.primary.opacity(0.07),
-                Color.primary.opacity(0.03)
+                Color(red: 0.55, green: 0.38, blue: 0.95),
+                Color(red: 0.85, green: 0.35, blue: 0.72)
             ],
-            startPoint: .top,
-            endPoint: .bottom
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static var downloadProgressGradient: LinearGradient {
+        LinearGradient(
+            colors: [accentTertiary, accentSecondary.opacity(0.85)],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    static var destructiveGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(red: 0.95, green: 0.32, blue: 0.38), Color(red: 0.75, green: 0.18, blue: 0.28)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
     }
 
@@ -53,7 +71,7 @@ enum AppTheme {
     static var chatBackground: Color {
         Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
             appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                ? NSColor(calibratedRed: 0.08, green: 0.08, blue: 0.10, alpha: 1)
+                ? NSColor(calibratedRed: 0.07, green: 0.05, blue: 0.12, alpha: 1)
                 : NSColor.windowBackgroundColor
         }))
     }
@@ -61,26 +79,27 @@ enum AppTheme {
     static var sidebarBackground: Color {
         Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
             appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                ? NSColor(calibratedRed: 0.06, green: 0.06, blue: 0.08, alpha: 1)
+                ? NSColor(calibratedRed: 0.05, green: 0.04, blue: 0.09, alpha: 1)
                 : NSColor.underPageBackgroundColor
         }))
     }
 
-    static var elevatedSurface: Color { Color.primary.opacity(0.07) }
-    static var composerBackground: Color { Color.primary.opacity(0.06) }
-    static var border: Color { Color.primary.opacity(0.12) }
-    static var borderStrong: Color { Color.primary.opacity(0.18) }
+    static var elevatedSurface: Color { Color.primary.opacity(0.08) }
+    static var composerBackground: Color { Color.primary.opacity(0.07) }
+    static var border: Color { Color.primary.opacity(0.14) }
+    static var borderStrong: Color { Color.primary.opacity(0.22) }
     static var primaryText: Color { .primary }
     static var secondaryText: Color { .secondary }
-    static var glowAccent: Color { accent.opacity(0.35) }
-    static var subtleInteractiveFill: Color { Color.primary.opacity(0.06) }
-    static var subtleInteractiveHoverFill: Color { Color.primary.opacity(0.10) }
+    static var glowAccent: Color { accent.opacity(0.4) }
+    static var glowSecondary: Color { accentSecondary.opacity(0.35) }
+    static var subtleInteractiveFill: Color { Color.primary.opacity(0.07) }
+    static var subtleInteractiveHoverFill: Color { Color.primary.opacity(0.11) }
 
     static func userBubbleBackground() -> some ShapeStyle {
         LinearGradient(
             colors: [
-                accent.opacity(0.22),
-                accentSecondary.opacity(0.14)
+                accent.opacity(0.24),
+                accentSecondary.opacity(0.16)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing

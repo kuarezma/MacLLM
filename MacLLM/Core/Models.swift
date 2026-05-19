@@ -119,23 +119,26 @@ struct ChatMessage: Codable, Identifiable, Hashable {
     var content: String
     var createdAt: Date
     var attachments: [MessageAttachment]
+    var generationStats: GenerationStats?
 
     init(
         id: UUID = UUID(),
         role: ChatRole,
         content: String,
         createdAt: Date = .now,
-        attachments: [MessageAttachment] = []
+        attachments: [MessageAttachment] = [],
+        generationStats: GenerationStats? = nil
     ) {
         self.id = id
         self.role = role
         self.content = content
         self.createdAt = createdAt
         self.attachments = attachments
+        self.generationStats = generationStats
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, role, content, createdAt, attachments
+        case id, role, content, createdAt, attachments, generationStats
     }
 
     init(from decoder: Decoder) throws {
@@ -145,6 +148,7 @@ struct ChatMessage: Codable, Identifiable, Hashable {
         content = try c.decode(String.self, forKey: .content)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         attachments = try c.decodeIfPresent([MessageAttachment].self, forKey: .attachments) ?? []
+        generationStats = try c.decodeIfPresent(GenerationStats.self, forKey: .generationStats)
     }
 }
 

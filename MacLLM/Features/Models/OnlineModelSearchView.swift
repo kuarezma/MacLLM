@@ -65,7 +65,7 @@ struct OnlineModelSearchView: View {
                 ProgressView().controlSize(.small)
             } else {
                 Button("Ara") { scheduleSearch() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(AccentPrimaryButtonStyle())
                     .controlSize(.small)
             }
         }

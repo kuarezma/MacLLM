@@ -120,7 +120,7 @@ struct HubQuantRowView: View {
                 Button("Kullan") {
                     onUse?()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(AccentPrimaryButtonStyle())
                 .controlSize(.small)
             } else if let download, download.state == .downloading || download.state == .paused {
                 HStack(spacing: 8) {
@@ -141,7 +141,7 @@ struct HubQuantRowView: View {
                     .controlSize(.small)
             } else {
                 Button(tokenMissing ? "Token" : "İndir", action: onDownload)
-                    .buttonStyle(.bordered)
+                    .buttonStyle(SecondaryButtonStyle())
                     .controlSize(.small)
                     .disabled(tokenMissing)
             }

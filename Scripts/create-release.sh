@@ -44,7 +44,13 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.24)
+### Bu sürümde (1.14.25)
+
+- Arayüz: indigo cam tema, 3D buton stilleri, sohbet kenar çubuğunda çöp kutusu ve «Hepsini sil» (görünen liste)
+- Sohbet: asistan mesajlarında token/hız istatistiği kalıcı; akış tamponu ~33 ms birleştirme
+- İndirmeler: ince üst şerit + gelişmiş popover; tam liste sayfası
+
+### Önceki (1.14.24)
 
 - Qwopus / Qwen3.5: «Yanıt üretilemedi» düzeltmesi — `im_start` stop kaldırıldı, Flash Attention otomatik kapalı, boş yanıtta yeniden deneme
 

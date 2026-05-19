@@ -699,7 +699,7 @@ struct HubDetailPane: View {
                             onUseModel?()
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(AccentPrimaryButtonStyle())
                     .tint(AppTheme.accent)
                 } else if let activeDownload, activeDownload.state == .downloading || activeDownload.state == .paused {
                     DownloadProgressView(
@@ -714,7 +714,7 @@ struct HubDetailPane: View {
                     Button("İndir") {
                         Task { await download(file) }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(AccentPrimaryButtonStyle())
                     .tint(AppTheme.accent)
                 }
             }

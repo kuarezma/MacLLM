@@ -255,6 +255,7 @@ flowchart LR
 
 | Sürüm | Öne çıkanlar |
 |-------|----------------|
+| **1.14.25** | İndigo cam arayüz ve 3D butonlar; sohbet listesinde tek tek ve listedekilerin tamamını silme; asistan mesajlarında kalıcı token/hız istatistiği; ~33 ms birleştirilmiş akış tamponu; ince indirme şeridi ve gelişmiş popover |
 | **1.14.19** | Tam tanı sürümü: model yükleme/üretim/durdurma/indirme yaşam döngülerine yapılandırılmış telemetri, stalled-empty retry ile terminal hata ayrımı, loglarla eşleşen kullanıcıya görünen kısa hata kodları ve 1.14.19 paket metadata güncellemesi (DMG/PKG/ZIP + Homebrew checksum) |
 | **1.14.18** | Stabilite + premium UX geçişi: kullanıcı hatalarında tek tip ve yönlendirici mesajlar, Sohbet/Ayarlar/Hub etkileşim stillerinde tutarlılık, streaming sırasında daha akıcı otomatik kaydırma, release için smoke/perf/runbook checklistleri |
 | **1.14.17** | Polish: DOCX metin çıkarma; HF token Keychain; DuckDuckGo web araması; sohbet içe/dışa aktarma; proje sistemi istemi; üretim bildirimi; birim testler |

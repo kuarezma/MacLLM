@@ -1,6 +1,6 @@
 import Foundation
 
-struct GenerationStats: Equatable {
+struct GenerationStats: Equatable, Hashable, Codable {
     let outputTokens: Int
     let tokensPerSecond: Double
     let durationSeconds: Double

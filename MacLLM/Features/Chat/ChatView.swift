@@ -1,8 +1,11 @@
 import SwiftUI
 
 struct ChatView: View {
+    @Binding var showDownloadsPopover: Bool
     @Environment(AppModel.self) private var appModel
+    @Environment(StreamingTextBuffer.self) private var streamingBuffer
     @EnvironmentObject private var inferenceService: InferenceService
+    @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
     @State private var inputText = ""
     @State private var pendingAttachments: [MessageAttachment] = []
     @State private var showFileImporter = false
@@ -15,6 +18,10 @@ struct ChatView: View {
         @Bindable var model = appModel
 
         VStack(spacing: 0) {
+            DownloadSlimBar(
+                downloadService: downloadService,
+                showDownloadsPopover: $showDownloadsPopover
+            )
             ChatHeaderView()
 
             if model.selectedModel == nil {
@@ -135,8 +142,8 @@ struct ChatView: View {
                         let isLastAssistant = message.role == .assistant
                             && message.id == model.currentSession.messages.last?.id
                         let isGeneratingReply = inferenceService.isGenerating && isLastAssistant
-                        let streamText = isGeneratingReply && model.streamingBuffer.messageId == message.id
-                            ? model.streamingBuffer.text
+                        let streamText = isGeneratingReply && streamingBuffer.messageId == message.id
+                            ? streamingBuffer.text
                             : nil
                         MessageRow(
                             message: message,
@@ -145,7 +152,7 @@ struct ChatView: View {
                             isStreaming: isGeneratingReply && !(streamText ?? message.content).isEmpty,
                             streamingText: streamText,
                             generationStats: stats(for: message, isLastAssistant: isLastAssistant),
-                            reserveStatsSpace: isLastAssistant && message.role == .assistant
+                            reserveStatsSpace: isLastAssistant && message.role == .assistant && inferenceService.isGenerating
                         )
                         .id(message.id)
                     }
@@ -168,7 +175,7 @@ struct ChatView: View {
                 guard !inferenceService.isGenerating else { return }
                 model.scheduleContextTokenRefresh()
             }
-            .onChange(of: model.streamingBuffer.text) { _, _ in
+            .onChange(of: streamingBuffer.text) { _, _ in
                 guard inferenceService.isGenerating else { return }
                 guard messageSearchNeedle.isEmpty else { return }
                 let now = Date()
@@ -318,44 +325,32 @@ struct ChatView: View {
             Button {
                 Task { await model.stopGenerationAndWait() }
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.red.opacity(0.15))
-                        .frame(width: 36, height: 36)
+                Group {
                     if inferenceService.isStoppingGeneration {
                         ProgressView()
                             .controlSize(.small)
+                            .frame(width: 36, height: 36)
                     } else {
                         Image(systemName: "stop.fill")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.red)
+                            .frame(width: 36, height: 36)
                     }
                 }
             }
-            .buttonStyle(ModernScaleButtonStyle())
+            .buttonStyle(StopCircleButtonStyle())
             .appHitTarget(minWidth: 40, minHeight: 40)
             .help(inferenceService.isStoppingGeneration ? "Durduruluyor…" : "Durdur")
             .disabled(inferenceService.isStoppingGeneration)
             .keyboardShortcut(.escape, modifiers: [])
         } else {
             Button(action: send) {
-                ZStack {
-                    if canSend {
-                        Circle()
-                            .fill(AppTheme.accentGradient)
-                            .frame(width: 36, height: 36)
-                            .shadow(color: AppTheme.glowAccent, radius: 8, y: 2)
-                    } else {
-                        Circle()
-                            .fill(Color.primary.opacity(0.08))
-                            .frame(width: 36, height: 36)
-                    }
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(canSend ? .white : AppTheme.secondaryText.opacity(0.4))
-                }
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(canSend ? .white : AppTheme.secondaryText.opacity(0.4))
+                    .frame(width: 36, height: 36)
             }
-            .buttonStyle(ModernScaleButtonStyle())
+            .buttonStyle(SendCircleButtonStyle(enabled: canSend))
             .appHitTarget(minWidth: 40, minHeight: 40)
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: [.command])
@@ -445,8 +440,12 @@ struct ChatView: View {
     }
 
     private func stats(for message: ChatMessage, isLastAssistant: Bool) -> GenerationStats? {
-        guard message.role == .assistant, isLastAssistant, !inferenceService.isGenerating else { return nil }
-        return inferenceService.lastGenerationStats
+        guard message.role == .assistant else { return nil }
+        if let persisted = message.generationStats { return persisted }
+        if isLastAssistant, !inferenceService.isGenerating {
+            return inferenceService.lastGenerationStats
+        }
+        return nil
     }
 
     private func emptyState(

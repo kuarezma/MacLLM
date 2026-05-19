@@ -43,7 +43,7 @@ struct NewProjectSheet: View {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(AccentPrimaryButtonStyle())
                 .tint(AppTheme.accent)
                 .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }

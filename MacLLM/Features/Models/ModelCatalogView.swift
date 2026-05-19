@@ -16,6 +16,7 @@ struct ModelCatalogView: View {
 
     @State private var tab: ModelCatalogTab = .hub
     @State private var showDownloadsPopover = false
+    @State private var showAllDownloadsSheet = false
     @State private var showImporter = false
     @State private var pendingImportURL: URL?
     @State private var pendingImportName = ""
@@ -66,7 +67,8 @@ struct ModelCatalogView: View {
                 ToolbarItem(placement: .primaryAction) {
                     DownloadToolbarButton(
                         downloadService: downloadService,
-                        isPresented: $showDownloadsPopover
+                        isPresented: $showDownloadsPopover,
+                        showAllDownloadsSheet: $showAllDownloadsSheet
                     )
                 }
             }
@@ -111,6 +113,16 @@ struct ModelCatalogView: View {
                 }
             } message: {
                 Text("«\(pendingImportName)» klasörde zaten var. Üzerine yazılsın mı?")
+            }
+            .sheet(isPresented: $showAllDownloadsSheet) {
+                NavigationStack {
+                    ScrollView {
+                        ActiveDownloadsPanel(downloadService: downloadService, style: .full)
+                            .padding()
+                    }
+                    .navigationTitle("İndirmeler")
+                    .frame(minWidth: 480, minHeight: 360)
+                }
             }
         }
         .frame(minWidth: 980, minHeight: 700)

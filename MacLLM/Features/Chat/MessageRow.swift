@@ -132,7 +132,7 @@ struct MessageRow: View {
                         isEditing = false
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(AccentPrimaryButtonStyle())
                 .tint(AppTheme.accent)
                 .disabled(editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }

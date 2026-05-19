@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Hub tarzı indirme yöneticisi — araç çubuğu popover.
+/// Toolbar indirme mini menüsü.
 struct DownloadManagerPopover: View {
     @ObservedObject var downloadService: HuggingFaceDownloadService
+    @Environment(AppModel.self) private var appModel
+    @Binding var showAllDownloadsSheet: Bool
 
     private var activeDownloads: [DownloadTaskInfo] {
         downloadService.activeDownloads.filter {
@@ -21,59 +23,27 @@ struct DownloadManagerPopover: View {
             if activeDownloads.isEmpty {
                 Text("Aktif indirme yok")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
             } else {
                 ForEach(activeDownloads) { download in
-                    downloadCard(download)
+                    DownloadTaskRowView(download: download) { entry in
+                        Task { await appModel.downloadModel(entry) }
+                    }
                     if download.id != activeDownloads.last?.id {
-                        Divider()
+                        Divider().opacity(0.35)
                     }
                 }
             }
+
+            Button("Tüm indirmeler…") {
+                showAllDownloadsSheet = true
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .frame(maxWidth: .infinity)
         }
         .padding(16)
-        .frame(width: 340)
-    }
-
-    @ViewBuilder
-    private func downloadCard(_ download: DownloadTaskInfo) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                Text(download.catalogEntry.filename)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    downloadService.cancelDownload(id: download.id)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .appHitTarget(minWidth: 28, minHeight: 28)
-                .help("İndirmeyi iptal et")
-            }
-
-            ProgressView(value: download.progress)
-                .tint(AppTheme.accent)
-
-            HStack {
-                Text(String(format: "%.0f%%", download.progress * 100))
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
-                Spacer()
-                Text(
-                    "\(DownloadMetrics.formatBytes(download.bytesReceived)) / \(DownloadMetrics.formatBytes(download.totalBytes))"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-            }
-        }
+        .frame(width: 360)
+        .appGlassCard(cornerRadius: AppTheme.panelRadius, material: .thinMaterial)
     }
 }
 
@@ -81,6 +51,7 @@ struct DownloadManagerPopover: View {
 struct DownloadToolbarButton: View {
     @ObservedObject var downloadService: HuggingFaceDownloadService
     @Binding var isPresented: Bool
+    @Binding var showAllDownloadsSheet: Bool
 
     private var inProgressCount: Int {
         downloadService.activeDownloads.filter {
@@ -115,11 +86,14 @@ struct DownloadToolbarButton: View {
                 }
                 .padding(4)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(AccentIconButtonStyle())
             .appHitTarget(minWidth: 32, minHeight: 32)
             .help("İndirmeler")
             .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-                DownloadManagerPopover(downloadService: downloadService)
+                DownloadManagerPopover(
+                    downloadService: downloadService,
+                    showAllDownloadsSheet: $showAllDownloadsSheet
+                )
             }
         }
     }

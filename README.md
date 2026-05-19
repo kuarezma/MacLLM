@@ -35,7 +35,7 @@ Built for **Apple Silicon** (M1/M2/M3/M4). The app reads your **chip and physica
 | **Hardware-aware catalog** | Curated GGUF list sorted into *Best fit* / *Workable* / *Not recommended* for your Mac |
 | **Hugging Face online** | Search models, rich repo details (tags, likes, Mac fit), download with progress |
 | **Parallel downloads** | Up to **8 HTTP connections** on large GGUF files (Settings → Hugging Face); CDN direct |
-| **Active download panel** | See all in-progress models, speed, ETA, pause/cancel — even with catalog closed |
+| **Active download panel** | Slim in-chat progress bar + toolbar popover; full list sheet with speed, ETA, pause/cancel |
 | **Rich download UI** | Progress %, downloaded/total size, speed (MB/s), ETA, **pause**, **resume**, **cancel** |
 | **In-app updates** | GitHub release check, download DMG/PKG/ZIP from the app |
 | **GGUF validation** | Post-download integrity check; clear errors for gated/broken files |
@@ -257,6 +257,7 @@ flowchart LR
 
 | Version | Highlights |
 |---------|------------|
+| **1.14.25** | Indigo glass UI with 3D buttons; sidebar per-chat delete + delete-all visible chats; token/speed stats persisted per assistant message; coalesced streaming buffer (~33 ms); download slim bar + enhanced popover |
 | **1.14.19** | Full diagnostics release: structured telemetry for model load/generation/stop/download lifecycles, explicit stalled-or-empty retry vs terminal failure signals, user-facing short error IDs mapped to app logs, and refreshed 1.14.19 release package metadata (DMG/PKG/ZIP + Homebrew cask checksum) |
 | **1.14.18** | Stability + premium UX pass: unified user-facing error handling, refined shared interaction styles across Chat/Settings/Hub, smoother streaming auto-scroll, and release-ready smoke/perf/runbook checklists |
 | **1.14.17** | Polish: DOCX text extraction; HF token in Keychain; DuckDuckGo web search context; chat import/export; per-project system prompt; generation notification; unit tests |

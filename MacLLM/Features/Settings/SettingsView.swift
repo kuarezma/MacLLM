@@ -210,7 +210,7 @@ struct SettingsView: View {
                     Button("İndir ve kur") {
                         Task { await appUpdate.downloadAndOpenUpdate() }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(AccentPrimaryButtonStyle())
                     .tint(AppTheme.accent)
                     .disabled(appUpdate.isDownloading)
                 }

@@ -74,6 +74,7 @@ clang -c "$ROOT/MacLLM/Bridge/mtmd_shim.c" -o "$MTMD_SHIM_O" -O2 \
 
 SOURCES=(
   MacLLM/App/MacLLMApp.swift
+  MacLLM/App/AppShell.swift
   MacLLM/App/AppDelegate.swift
   MacLLM/App/AppShutdown.swift
   MacLLM/App/AppModel.swift
@@ -151,6 +152,8 @@ SOURCES=(
   MacLLM/Features/Models/ModelHubDetailView.swift
   MacLLM/Features/Models/HubQuantRowView.swift
   MacLLM/Features/Models/DownloadManagerPopover.swift
+  MacLLM/Features/Models/DownloadTaskRowView.swift
+  MacLLM/Features/Models/DownloadSlimBar.swift
   MacLLM/Features/Models/ReadmeMarkdownView.swift
   MacLLM/Features/Settings/SettingsView.swift
   MacLLM/Features/Settings/SettingsComponents.swift

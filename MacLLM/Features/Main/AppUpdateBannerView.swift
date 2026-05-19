@@ -42,12 +42,12 @@ struct AppUpdateBannerView: View {
                         } label: {
                             Label("İndir ve kur", systemImage: "square.and.arrow.down")
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(AccentPrimaryButtonStyle())
 
                         Button("Sürüm notları") {
                             appUpdate.openReleasePage()
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(SecondaryButtonStyle())
                     }
                 }
 

@@ -55,7 +55,7 @@ struct DownloadProgressView: View {
                             } label: {
                                 Label("Devam", systemImage: "play.fill")
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(SecondaryButtonStyle())
                             .controlSize(.small)
                         } else {
                             Button {
@@ -63,7 +63,7 @@ struct DownloadProgressView: View {
                             } label: {
                                 Label("Duraklat", systemImage: "pause.fill")
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(SecondaryButtonStyle())
                             .controlSize(.small)
                         }
                     }
@@ -73,7 +73,7 @@ struct DownloadProgressView: View {
                     } label: {
                         Label("İptal", systemImage: "xmark.circle")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(SecondaryButtonStyle())
                     .controlSize(.small)
                 }
             }

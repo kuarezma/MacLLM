@@ -4,20 +4,21 @@ import UserNotifications
 @main
 struct MacLLMApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var appModel = AppModel()
+    @State private var shell = AppShell()
     @State private var appUpdate = AppUpdateController.shared
     @StateObject private var inferenceService = InferenceService.shared
 
     var body: some Scene {
         WindowGroup {
             MainView()
-                .environment(appModel)
+                .environment(shell.appModel)
+                .environment(shell.streamingBuffer)
                 .environment(appUpdate)
                 .environmentObject(inferenceService)
                 .frame(minWidth: 960, minHeight: 640)
                 .tint(AppTheme.accent)
                 .onAppear {
-                    AppDelegate.appModel = appModel
+                    AppDelegate.appModel = shell.appModel
                 }
                 .task {
                     await requestNotificationPermissionIfNeeded()
@@ -31,7 +32,7 @@ struct MacLLMApp: App {
             SidebarCommands()
             CommandGroup(replacing: .newItem) {
                 Button("Yeni Sohbet") {
-                    Task { await appModel.newChat() }
+                    Task { await shell.appModel.newChat() }
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
@@ -41,13 +42,13 @@ struct MacLLMApp: App {
                 }
                 .keyboardShortcut("k", modifiers: [.command])
                 Button("Yeni Proje") {
-                    appModel.showNewProjectSheet = true
+                    shell.appModel.showNewProjectSheet = true
                 }
                 .keyboardShortcut("p", modifiers: [.command])
             }
             CommandGroup(after: .appSettings) {
                 Button("Model Ekle…") {
-                    appModel.showCatalog = true
+                    shell.appModel.showCatalog = true
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
             }
@@ -55,7 +56,7 @@ struct MacLLMApp: App {
 
         Settings {
             SettingsView()
-                .environment(appModel)
+                .environment(shell.appModel)
                 .environment(appUpdate)
                 .environmentObject(inferenceService)
         }
