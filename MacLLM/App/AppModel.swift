@@ -105,6 +105,7 @@ final class AppModel {
             }
             mergeDefaultStopSequences()
             migrateImportedModelFlashAttentionIfNeeded()
+            repairQwopusProfilesIfNeeded()
             await configureLaunchModelSelection()
         } catch {
             setStatusMessage(error.localizedDescription)
@@ -268,6 +269,34 @@ final class AppModel {
         if changed {
             try? modelStore.saveInstalledModels(installedModels)
         }
+    }
+
+    /// Qwopus / Qwen3.5: redacted_im_end stop listesi ve chatml şablonu (v1.14.16).
+    private func repairQwopusProfilesIfNeeded() {
+        let hasQwopus = installedModels.contains { model in
+            let haystack = "\(model.name) \(model.filename) \(model.repoId)".lowercased()
+            return haystack.contains("qwopus") || haystack.contains("qwen3.5")
+        }
+        guard hasQwopus else {
+            ImportedModelPreferences.qwopusStopMigrationCompleted = true
+            return
+        }
+        guard !ImportedModelPreferences.qwopusStopMigrationCompleted else { return }
+
+        ImportedModelPreferences.qwopusStopMigrationCompleted = true
+        var modelsChanged = false
+        for index in installedModels.indices {
+            let haystack = "\(installedModels[index].name) \(installedModels[index].filename)".lowercased()
+            guard haystack.contains("qwopus") || haystack.contains("qwen3.5") else { continue }
+            if installedModels[index].chatTemplate != "chatml" {
+                installedModels[index].chatTemplate = "chatml"
+                modelsChanged = true
+            }
+        }
+        if modelsChanged {
+            try? modelStore.saveInstalledModels(installedModels)
+        }
+        mergeDefaultStopSequences()
     }
 
     private func repairMmprojLinks() {

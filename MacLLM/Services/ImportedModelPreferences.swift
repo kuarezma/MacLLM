@@ -14,4 +14,11 @@ enum ImportedModelPreferences {
         get { UserDefaults.standard.bool(forKey: bannerDismissedKey) }
         set { UserDefaults.standard.set(newValue, forKey: bannerDismissedKey) }
     }
+
+    private static let qwopusStopMigrationKey = "qwopusRedactedStopSequencesMigrated_v11416"
+
+    static var qwopusStopMigrationCompleted: Bool {
+        get { UserDefaults.standard.bool(forKey: qwopusStopMigrationKey) }
+        set { UserDefaults.standard.set(newValue, forKey: qwopusStopMigrationKey) }
+    }
 }

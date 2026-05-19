@@ -7,6 +7,7 @@ enum GenerationOutputFilterTests {
     static func main() {
         testStopPrefixHoldback()
         testStopTruncatesOutput()
+        testRedactedImEndStop()
         testFinishDrainsRemainder()
         finish()
     }
@@ -26,6 +27,15 @@ enum GenerationOutputFilterTests {
         let last = filter.push(" ###END###")
         expect(last == "", "no text after stop")
         expect(filter.finish() == "", "finished filter empty")
+    }
+
+    private static func testRedactedImEndStop() {
+        let stop = "<|" + "redacted_im_end" + "|>"
+        var filter = GenerationOutputFilter(stopSequences: [stop])
+        _ = filter.push("Tamam")
+        let last = filter.push(stop)
+        expect(last == "", "redacted_im_end stops output")
+        expect(filter.finish() == "", "no tail after redacted stop")
     }
 
     private static func testFinishDrainsRemainder() {

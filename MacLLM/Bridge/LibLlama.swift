@@ -7,6 +7,8 @@ enum LlamaError: Error, LocalizedError {
     case decodeFailed
     case templateFailed
     case generationCancelled
+    case generationStalled
+    case generationEmpty
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +22,10 @@ enum LlamaError: Error, LocalizedError {
             return "Sohbet şablonu uygulanamadı."
         case .generationCancelled:
             return "Üretim iptal edildi."
+        case .generationStalled:
+            return "Yanıt üretimi zaman aşımına uğradı. Yeni sohbet açın veya «Yanıtı Durdur» kullanın."
+        case .generationEmpty:
+            return "Model anlamlı yanıt üretmedi. Yeni sohbet açın; Qwopus için Flash Attention kapalı olduğundan emin olun."
         }
     }
 }

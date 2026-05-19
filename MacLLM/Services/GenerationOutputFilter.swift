@@ -50,7 +50,7 @@ struct GenerationOutputFilter {
         guard displayable.count > emittedCharacterCount else { return "" }
 
         let start = displayable.index(displayable.startIndex, offsetBy: emittedCharacterCount)
-        let delta = String(displayable[start...])
+        let delta = ControlTokenSanitizer.streamingSafeDelta(String(displayable[start...]))
         emittedCharacterCount = displayable.count
         return delta
     }
@@ -90,13 +90,19 @@ enum ControlTokenSanitizer {
     private static let literalMarkers: [String] = {
         let imEnd = "<|" + "im_end" + "|>"
         let imStart = "<|" + "im_start" + "|>"
+        let redactedEnd = "<|" + "redacted_im_end" + "|>"
         return [
-            imEnd, imStart,
+            redactedEnd, imEnd, imStart,
             "<|eot_id|>", "<|endoftext|>", "<|end|>",
             "<|start_header_id|>", "<|end_header_id|>",
             "[INST]", "[/INST]", "</s>",
         ]
     }()
+
+    /// Kullanıcıya gösterilecek anlamlı metin var mı (yalnızca `<` vb. değil).
+    static func hasMeaningfulText(_ text: String) -> Bool {
+        !clean(text).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     static func clean(_ text: String) -> String {
         var result = text
@@ -119,12 +125,21 @@ enum ControlTokenSanitizer {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Yarım kalmış `<|im_start|` gibi kontrol token parçalarını kaldırır.
+    /// Yarım kalmış `<|im_start|` veya tek `<` gibi kontrol token parçalarını kaldırır.
     private static func stripTrailingPartialControlToken(_ text: String) -> String {
         guard let lastOpen = text.lastIndex(of: "<") else { return text }
         let suffix = text[lastOpen...]
+        if suffix == "<" { return String(text[..<lastOpen]) }
         guard suffix.hasPrefix("<|"), !suffix.hasSuffix("|>") else { return text }
         return String(text[..<lastOpen])
+    }
+
+    /// Akış sırasında yalnızca kontrol token parçası olan deltayı yayınlama.
+    static func streamingSafeDelta(_ delta: String) -> String {
+        let trimmed = delta.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "" }
+        if trimmed == "<" || trimmed == "<|" { return "" }
+        return delta
     }
 
     static func sanitizeForDisplay(_ text: String) -> String {

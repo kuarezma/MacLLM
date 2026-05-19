@@ -144,6 +144,15 @@ enum ModelProfileBuilder {
         )
 
         var hints: [ComposerHint] = []
+        let modelHaystack = "\(model.name) \(model.filename) \(model.repoId)".lowercased()
+        if modelHaystack.contains("qwopus") || modelHaystack.contains("qwen3.5") {
+            hints.append(ComposerHint(
+                kind: .info,
+                message: "Qwopus: sorun yaşarsanız yeni sohbet açın ve Flash Attention kapalı tutun.",
+                icon: "bolt.slash",
+                actionTitle: nil
+            ))
+        }
         if !isChatInstruct, let message = ModelCapabilities.chatCompatibilityWarning(model: model) {
             hints.append(ComposerHint(
                 kind: .warning,

@@ -5,6 +5,12 @@ import llama
 enum ChatTemplateResolver {
     private static let chatmlEnd = "<|" + "im_end" + "|>"
     private static let chatmlStart = "<|" + "im_start" + "|>"
+    /// llama.cpp builtin chatml (Qwopus / Qwen3.5) mesaj kapanışı
+    private static let chatmlRedactedEnd = "<|" + "redacted_im_end" + "|>"
+
+    static var defaultChatMLStopSequences: [String] {
+        ["</s>", chatmlRedactedEnd, chatmlEnd, chatmlStart]
+    }
 
     /// Bilinen kısa adları llama.cpp built-in şablon adlarına çevirir.
     static func resolveBuiltin(_ name: String) -> String {
@@ -88,8 +94,8 @@ enum ChatTemplateResolver {
         if lower.contains("phi") {
             return ["</s>", "<|end|>"]
         }
-        if lower == "chatml" || lower.contains("qwen") {
-            return ["</s>", chatmlEnd, chatmlStart]
+        if lower == "chatml" || lower.contains("qwen") || lower.contains("qwopus") {
+            return defaultChatMLStopSequences
         }
         return ["</s>"]
     }
@@ -139,7 +145,7 @@ enum ChatTemplateResolver {
 
         let contains: (String) -> Bool = { jinja.contains($0) }
 
-        if contains("<|im_start|>") {
+        if contains("<|im_start|>") || contains(chatmlRedactedEnd) {
             if contains("<|im_sep|>") { return "phi4" }
             if contains("<end_of_utterance>") { return "smolvlm" }
             return "chatml"

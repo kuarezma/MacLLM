@@ -303,7 +303,12 @@ struct InferenceSettings: Codable, Equatable {
         usePromptCache: Bool = true,
         performancePreset: PerformancePreset = .balanced,
         systemPrompt: String = "",
-        stopSequences: [String] = ["</s>", "<|eot_id|>", "<|" + "im_end" + "|>", "<|" + "im_start" + "|>"]
+        stopSequences: [String] = [
+            "</s>", "<|eot_id|>",
+            "<|" + "redacted_im_end" + "|>",
+            "<|" + "im_end" + "|>",
+            "<|" + "im_start" + "|>",
+        ]
     ) {
         self.temperature = temperature
         self.topP = topP
@@ -350,7 +355,12 @@ struct InferenceSettings: Codable, Equatable {
         performancePreset = try c.decodeIfPresent(PerformancePreset.self, forKey: .performancePreset) ?? .balanced
         systemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt) ?? ""
         stopSequences = try c.decodeIfPresent([String].self, forKey: .stopSequences)
-            ?? ["</s>", "<|eot_id|>", "<|" + "im_end" + "|>", "<|" + "im_start" + "|>"]
+            ?? [
+                "</s>", "<|eot_id|>",
+                "<|" + "redacted_im_end" + "|>",
+                "<|" + "im_end" + "|>",
+                "<|" + "im_start" + "|>",
+            ]
     }
 
     /// Ollama varsayılanlarına yakın profil.

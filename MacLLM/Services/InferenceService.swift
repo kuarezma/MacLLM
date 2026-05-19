@@ -17,6 +17,20 @@ final class InferenceService: ObservableObject {
     private var promptCacheFingerprint: String = ""
     private var promptCacheTokenCount: Int = 0
 
+    private static let generationStallSeconds: TimeInterval = 60
+    private static let maxEmptyDecodeLoops = 8_192
+
+    private static func modelHaystack(_ model: InstalledModel?) -> String {
+        guard let model else { return "" }
+        return "\(model.name) \(model.filename) \(model.repoId)".lowercased()
+    }
+
+    private static func prefersConservativeKVCache(for model: InstalledModel?) -> Bool {
+        let haystack = modelHaystack(model)
+        return haystack.contains("qwopus") || haystack.contains("qwen3.5")
+            || (model?.repoId == "imported" && haystack.contains("qwopus"))
+    }
+
     func loadModel(_ model: InstalledModel, settingsOverride: InferenceSettings? = nil) async throws {
         await stopGeneration()
         await unloadModel()
@@ -174,8 +188,10 @@ final class InferenceService: ObservableObject {
                             emittedOutput = ""
 
                             let kvPosition = await llamaContext.kvPosition
+                            let loadedModel = await MainActor.run { self.lastLoadedModel }
                             let cacheReuseAllowed = await MainActor.run {
                                 !forceFullPrefill
+                                    && !Self.prefersConservativeKVCache(for: loadedModel)
                                     && self.canReusePromptCache(
                                         sessionId: sessionId,
                                         messages: promptMessages,
@@ -215,7 +231,9 @@ final class InferenceService: ObservableObject {
                             } catch let error as LlamaError {
                                 switch error {
                                 case .decodeFailed:
+                                    await MainActor.run { self.invalidatePromptCache() }
                                     if attempt == 0 {
+                                        await llamaContext.clear()
                                         continue generationAttempt
                                     }
                                     if attempt == 1,
@@ -228,7 +246,14 @@ final class InferenceService: ObservableObject {
                                         try await self.loadModel(model, settingsOverride: relaxed)
                                         continue generationAttempt
                                     }
-                                    fallthrough
+                                    throw error
+                                case .generationStalled, .generationEmpty:
+                                    await MainActor.run { self.invalidatePromptCache() }
+                                    if attempt < 2 {
+                                        await llamaContext.clear()
+                                        continue generationAttempt
+                                    }
+                                    throw error
                                 default:
                                     throw error
                                 }
@@ -239,6 +264,9 @@ final class InferenceService: ObservableObject {
                         let savedOutputTokens = snapshot.outputTokens
                         let finalKVPosition = await llamaContext.kvPosition
                         let savedEmitted = emittedOutput
+                        guard ControlTokenSanitizer.hasMeaningfulText(savedEmitted) else {
+                            throw LlamaError.generationEmpty
+                        }
                         let duration = max(Date().timeIntervalSince(started), 0.001)
                         let tps = Double(savedOutputTokens) / duration
 
@@ -249,7 +277,6 @@ final class InferenceService: ObservableObject {
                                 durationSeconds: duration
                             )
                             if inferenceSettings.usePromptCache,
-                               !savedEmitted.isEmpty,
                                savedOutputTokens > 0,
                                promptTokenCount + savedOutputTokens == Int(finalKVPosition) {
                                 self.promptCacheSessionId = sessionId
@@ -273,15 +300,30 @@ final class InferenceService: ObservableObject {
         continuation: AsyncThrowingStream<String, Error>.Continuation
     ) async throws -> String {
         var emittedOutput = ""
+        var lastProgress = Date()
+        var emptyLoops = 0
+        let started = Date()
+
         while await !llamaContext.is_done {
             try Task.checkCancellation()
             let chunk = try await llamaContext.completionLoop()
-            guard !chunk.isEmpty else { continue }
+
+            if chunk.isEmpty {
+                emptyLoops += 1
+                if emptyLoops >= maxEmptyDecodeLoops
+                    || Date().timeIntervalSince(lastProgress) >= generationStallSeconds
+                    || Date().timeIntervalSince(started) >= generationStallSeconds * 2 {
+                    throw LlamaError.generationStalled
+                }
+                continue
+            }
+            emptyLoops = 0
 
             let safe = outputFilter.push(chunk)
             if !safe.isEmpty {
                 emittedOutput += safe
                 continuation.yield(safe)
+                lastProgress = Date()
             }
         }
 
