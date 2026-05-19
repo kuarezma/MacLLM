@@ -1,8 +1,14 @@
 import Foundation
+import OSLog
 
 @MainActor
 final class HuggingFaceDownloadService: ObservableObject {
     static let shared = HuggingFaceDownloadService()
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "MacLLM", category: "Downloads")
+
+    private static func elapsedMilliseconds(since startedAt: Date) -> Int {
+        Int(Date().timeIntervalSince(startedAt) * 1000)
+    }
 
     @Published private(set) var activeDownloads: [DownloadTaskInfo] = []
 
@@ -70,6 +76,8 @@ final class HuggingFaceDownloadService: ObservableObject {
         entry: CatalogEntry,
         onUpdate: @escaping (DownloadTaskInfo) -> Void
     ) async throws -> URL {
+        let startedAt = Date()
+        logger.info("Download request start id=\(entry.id) repo=\(entry.repoId) file=\(entry.filename)")
         if contexts[entry.id] != nil || parallelContexts[entry.id] != nil {
             if activeDownloads.first(where: { $0.id == entry.id })?.state == .paused {
                 resumeDownload(id: entry.id)
@@ -109,10 +117,11 @@ final class HuggingFaceDownloadService: ObservableObject {
         let useParallel = connections > 1
             && metadata.supportsRanges
             && totalBytes >= DownloadPreferences.parallelMinimumBytes
+        logger.debug("Download mode id=\(entry.id) parallel=\(useParallel) size=\(totalBytes)")
 
         if useParallel {
             do {
-                return try await downloadParallel(
+                let output = try await downloadParallel(
                     entry: entry,
                     destination: dest,
                     metadata: metadata,
@@ -120,12 +129,17 @@ final class HuggingFaceDownloadService: ObservableObject {
                     connections: connections,
                     onUpdate: onUpdate
                 )
+                logger.info("Download success id=\(entry.id) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms mode=parallel")
+                return output
             } catch is CancellationError {
+                logger.notice("Download cancelled id=\(entry.id)")
                 throw CancellationError()
             } catch {
                 if shouldSkipParallelFallback(for: error) {
+                    logger.error("Download failed id=\(entry.id) mode=parallel error=\(String(describing: error))")
                     throw error
                 }
+                logger.notice("Download fallback id=\(entry.id) from=parallel to=single reason=\(String(describing: error))")
                 parallelContexts.removeValue(forKey: entry.id)
                 if FileManager.default.fileExists(atPath: dest.path) {
                     try? FileManager.default.removeItem(at: dest)
@@ -140,23 +154,27 @@ final class HuggingFaceDownloadService: ObservableObject {
                 )
                 upsertActive(fallbackInfo)
                 onUpdate(fallbackInfo)
-                return try await downloadSingleStream(
+                let output = try await downloadSingleStream(
                     entry: entry,
                     destination: dest,
                     url: metadata.url,
                     totalBytes: totalBytes,
                     onUpdate: onUpdate
                 )
+                logger.info("Download success id=\(entry.id) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms mode=single-fallback")
+                return output
             }
         }
 
-        return try await downloadSingleStream(
+        let output = try await downloadSingleStream(
             entry: entry,
             destination: dest,
             url: metadata.url,
             totalBytes: totalBytes,
             onUpdate: onUpdate
         )
+        logger.info("Download success id=\(entry.id) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms mode=single")
+        return output
     }
 
     private func downloadParallel(
@@ -321,6 +339,7 @@ final class HuggingFaceDownloadService: ObservableObject {
     }
 
     func cancelDownload(id: String) {
+        logger.notice("Download cancel requested id=\(id)")
         if let pctx = parallelContexts[id] {
             pctx.cancelled = true
             pctx.task?.cancel()

@@ -1,8 +1,10 @@
 import Foundation
+import OSLog
 
 @MainActor
 final class InferenceService: ObservableObject {
     static let shared = InferenceService()
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "MacLLM", category: "Inference")
 
     @Published private(set) var isModelLoaded = false
     @Published private(set) var loadedModelId: String?
@@ -22,6 +24,9 @@ final class InferenceService: ObservableObject {
 
     private static let generationStallSeconds: TimeInterval = 60
     private static let maxEmptyDecodeLoops = 8_192
+    private static func elapsedMilliseconds(since startedAt: Date) -> Int {
+        Int(Date().timeIntervalSince(startedAt) * 1000)
+    }
 
     private static func modelHaystack(_ model: InstalledModel?) -> String {
         guard let model else { return "" }
@@ -35,6 +40,8 @@ final class InferenceService: ObservableObject {
     }
 
     func loadModel(_ model: InstalledModel, settingsOverride: InferenceSettings? = nil) async throws {
+        let startedAt = Date()
+        logger.info("Model load start id=\(model.id) name=\(model.name)")
         defer { modelLoadingStage = nil }
         modelLoadingStage = "Mevcut model kapatiliyor"
         await stopGeneration()
@@ -55,6 +62,7 @@ final class InferenceService: ObservableObject {
         }.value
         if Task.isCancelled {
             await loadedContext.shutdown()
+            logger.notice("Model load cancelled id=\(model.id) after=\(Self.elapsedMilliseconds(since: startedAt))ms")
             throw CancellationError()
         }
         modelLoadingStage = "Calisma profili hazirlaniyor"
@@ -63,6 +71,7 @@ final class InferenceService: ObservableObject {
         loadedModelId = model.id
         lastLoadedModel = model
         try ModelStore.shared.touchLastUsed(id: model.id)
+        logger.info("Model load success id=\(model.id) elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms")
     }
 
     func buildLoadedProfile(
@@ -116,8 +125,10 @@ final class InferenceService: ObservableObject {
     }
 
     func stopGeneration() async {
+        let startedAt = Date()
         let task = generationTask
         guard task != nil || isGenerating || isStoppingGeneration else { return }
+        logger.debug("Stop generation requested hasTask=\(task != nil)")
         isStoppingGeneration = true
         generationRunID &+= 1
         generationTask = nil
@@ -128,6 +139,7 @@ final class InferenceService: ObservableObject {
         }
         isGenerating = false
         isStoppingGeneration = false
+        logger.debug("Stop generation finished elapsed=\(Self.elapsedMilliseconds(since: startedAt))ms")
     }
 
     private static func messagesWithSystem(_ messages: [ChatMessage], systemPrompt: String) -> [ChatMessage] {
@@ -180,6 +192,7 @@ final class InferenceService: ObservableObject {
                 await self.stopGeneration()
                 self.generationRunID &+= 1
                 let runID = self.generationRunID
+                self.logger.info("Generation start run=\(runID) session=\(sessionId.uuidString)")
                 self.isStoppingGeneration = false
                 self.isGenerating = true
                 self.lastGenerationStats = nil
@@ -212,6 +225,7 @@ final class InferenceService: ObservableObject {
                         var didRetryWithoutFlash = false
 
                         generationAttempt: for attempt in 0..<3 {
+                            self.logger.debug("Generation attempt run=\(runID) attempt=\(attempt + 1)")
                             var outputFilter = GenerationOutputFilter(stopSequences: stops)
                             emittedOutput = ""
 
@@ -269,6 +283,9 @@ final class InferenceService: ObservableObject {
                                        !didRetryWithoutFlash,
                                        let model = await MainActor.run(body: { self.lastLoadedModel }) {
                                         didRetryWithoutFlash = true
+                                        self.logger.notice(
+                                            "Decode failed run=\(runID), retrying with flash attention off"
+                                        )
                                         var relaxed = inferenceSettings
                                         relaxed.flashAttention = false
                                         try await self.loadModel(model, settingsOverride: relaxed)
@@ -297,6 +314,9 @@ final class InferenceService: ObservableObject {
                         }
                         let duration = max(Date().timeIntervalSince(started), 0.001)
                         let tps = Double(savedOutputTokens) / duration
+                        self.logger.info(
+                            "Generation success run=\(runID) tokens=\(savedOutputTokens) elapsed=\(Int(duration * 1000))ms tps=\(tps)"
+                        )
 
                         await MainActor.run {
                             self.lastGenerationStats = GenerationStats(
@@ -314,6 +334,7 @@ final class InferenceService: ObservableObject {
                         }
                         continuation.finish()
                     } catch {
+                        self.logger.error("Generation failure run=\(runID) error=\(String(describing: error))")
                         await self.clearKVCache()
                         continuation.finish(throwing: error)
                     }

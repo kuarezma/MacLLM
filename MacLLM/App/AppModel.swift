@@ -1,10 +1,12 @@
 import Foundation
+import OSLog
 import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
 @Observable
 final class AppModel {
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "MacLLM", category: "AppModel")
     var installedModels: [InstalledModel] = []
     var catalogEntries: [CatalogEntry] = []
     var modelRecommendations: [ScoredCatalogEntry] = []
@@ -342,6 +344,7 @@ final class AppModel {
     func selectModel(_ model: InstalledModel) async -> Bool {
         modelLoadGeneration &+= 1
         let generation = modelLoadGeneration
+        let startedAt = Date()
 
         isLoadingModel = true
         setStatusMessage("\(model.name) hazırlanıyor…")
@@ -364,11 +367,14 @@ final class AppModel {
             }
             setStatusMessage("\(model.name) kullanıma hazır")
             refreshModels()
+            logger.info("Select model success id=\(model.id) elapsed=\(Int(Date().timeIntervalSince(startedAt) * 1000))ms")
             return true
         } catch is CancellationError {
+            logger.notice("Select model cancelled id=\(model.id)")
             return false
         } catch {
             guard generation == modelLoadGeneration else { return false }
+            logger.error("Select model failed id=\(model.id) error=\(String(describing: error))")
             reportError(error, context: "Yukleme hatasi")
             return false
         }
@@ -765,6 +771,7 @@ final class AppModel {
         appendUserMessage: Bool = true,
         forceFullPrefill: Bool = false
     ) async {
+        let sendStartedAt = Date()
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if appendUserMessage {
             guard !trimmed.isEmpty || !pendingAttachments.isEmpty else { return }
@@ -945,6 +952,9 @@ final class AppModel {
                 contextTokenFingerprint = ""
                 scheduleSaveCurrentSession()
                 GenerationNotificationService.notifyGenerationComplete(sessionTitle: currentSession.title)
+                logger.info(
+                    "Send message success session=\(activeSessionId.uuidString) elapsed=\(Int(Date().timeIntervalSince(sendStartedAt) * 1000))ms"
+                )
             }
         } catch is CancellationError {
             streamingBuffer.reset()
@@ -955,6 +965,7 @@ final class AppModel {
             }
             setStatusMessage("Üretim durduruldu")
             try? await saveCurrentSession()
+            logger.notice("Send message cancelled session=\(activeSessionId.uuidString)")
         } catch let llamaError as LlamaError {
             guard currentSession.id == activeSessionId,
                   assistantIndex < currentSession.messages.count else { return }
@@ -972,6 +983,7 @@ final class AppModel {
             }
             await inferenceService.clearKVCache()
             try? await saveCurrentSession()
+            logger.error("Send message llama failure session=\(activeSessionId.uuidString) error=\(String(describing: llamaError))")
         } catch {
             guard currentSession.id == activeSessionId,
                   assistantIndex < currentSession.messages.count else { return }
@@ -982,6 +994,7 @@ final class AppModel {
             reportError(error, context: "Uretim hatasi")
             await inferenceService.clearKVCache()
             try? await saveCurrentSession()
+            logger.error("Send message failure session=\(activeSessionId.uuidString) error=\(String(describing: error))")
         }
     }
 
