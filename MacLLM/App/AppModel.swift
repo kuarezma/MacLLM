@@ -112,6 +112,10 @@ final class AppModel {
         ModelCapabilities.attachmentWarning(model: selectedModel, attachments: attachments)
     }
 
+    func chatCompatibilityWarning() -> String? {
+        ModelCapabilities.chatCompatibilityWarning(model: selectedModel)
+    }
+
     func deleteSession(_ session: ChatSession) async {
         await stopGenerationAndWait()
         do {
@@ -628,10 +632,8 @@ final class AppModel {
                 }
                 pending += chunk
                 let now = Date()
-                if now.timeIntervalSince(lastFlush) >= 0.06 {
-                    let combined = currentSession.messages[assistantIndex].content + pending
-                    currentSession.messages[assistantIndex].content =
-                        ControlTokenSanitizer.sanitizeForDisplay(combined)
+                if now.timeIntervalSince(lastFlush) >= 0.032 {
+                    currentSession.messages[assistantIndex].content += pending
                     pending = ""
                     lastFlush = now
                 }
@@ -640,14 +642,12 @@ final class AppModel {
                assistantIndex < currentSession.messages.count,
                currentSession.messages[assistantIndex].id == assistantMessageId {
                 if !pending.isEmpty {
-                    let combined = currentSession.messages[assistantIndex].content + pending
-                    currentSession.messages[assistantIndex].content =
-                        ControlTokenSanitizer.sanitizeForDisplay(combined)
+                    currentSession.messages[assistantIndex].content += pending
                 }
                 currentSession.messages[assistantIndex].content = ControlTokenSanitizer.sanitizeForDisplay(
                     currentSession.messages[assistantIndex].content
                 )
-                try await saveCurrentSession()
+                Task(priority: .utility) { try? await self.saveCurrentSession() }
             }
         } catch is CancellationError {
             if currentSession.id == activeSessionId,
@@ -687,6 +687,7 @@ final class AppModel {
     }
 
     func scheduleContextTokenRefresh() {
+        guard !inferenceService.isGenerating else { return }
         contextRefreshTask?.cancel()
         contextRefreshTask = Task {
             try? await Task.sleep(for: .milliseconds(350))
@@ -696,6 +697,11 @@ final class AppModel {
     }
 
     func refreshContextTokenCount() async {
+        guard !inferenceService.isGenerating else {
+            contextTokenCount = estimatedContextTokens()
+            contextTokenCountIsEstimate = true
+            return
+        }
         guard let model = selectedModel, inferenceService.isModelLoaded else {
             contextTokenCount = estimatedContextTokens()
             contextTokenCountIsEstimate = true

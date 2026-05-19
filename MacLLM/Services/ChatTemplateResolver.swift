@@ -22,6 +22,8 @@ enum ChatTemplateResolver {
             return "llama2"
         case "phi3", "phi-3":
             return "phi3"
+        case "phi2", "phi-2":
+            return "phi2"
         case "gemma", "gemma2":
             return "gemma"
         case "chatml", "qwen", "qwen2", "qwen2.5":
@@ -58,6 +60,13 @@ enum ChatTemplateResolver {
             }
             return "mistral-v1"
         }
+        let haystack = "\(repoId) \(filename)".lowercased()
+        if haystack.contains("phi-2") || haystack.contains("phi2") {
+            let lower = template.lowercased()
+            if lower == "phi3" || lower == "chatml" || isJinjaTemplate(template) {
+                return "phi2"
+            }
+        }
         return resolveBuiltin(template)
     }
 
@@ -69,6 +78,12 @@ enum ChatTemplateResolver {
         }
         if lower.contains("llama3") {
             return ["</s>", "<|eot_id|>", "<|start_header_id|>"]
+        }
+        if lower.contains("phi3") || lower.contains("phi-3") {
+            return ["</s>", "<|end|>"]
+        }
+        if lower.contains("phi2") || lower.contains("phi-2") {
+            return ["<|endoftext|>", "\nInstruct:"]
         }
         if lower.contains("phi") {
             return ["</s>", "<|end|>"]
@@ -107,7 +122,8 @@ enum ChatTemplateResolver {
             return "mistral-v1"
         }
         if haystack.contains("llama-3") || haystack.contains("llama3") { return "llama3" }
-        if haystack.contains("phi") { return "phi3" }
+        if haystack.contains("phi-2") || haystack.contains("phi2") { return "phi2" }
+        if haystack.contains("phi-3") || haystack.contains("phi3") { return "phi3" }
         if haystack.contains("gemma") { return "gemma" }
         if haystack.contains("qwen") { return "chatml" }
         if haystack.contains("qwopus") || haystack.contains("opus") || haystack.contains("coder") { return "chatml" }
@@ -155,11 +171,38 @@ enum ChatTemplateResolver {
         return resolveBuiltin(fallback)
     }
 
+    /// phi-2 instruct format — llama.cpp built-in yok; Swift'te üretilir.
+    static func applyPhi2Template(messages: [ChatMessage], addGenerationPrompt: Bool) -> String {
+        var output = ""
+        var systemText: String?
+
+        for message in messages {
+            switch message.role {
+            case .system:
+                systemText = message.content
+            case .user:
+                var instruct = message.content
+                if let system = systemText {
+                    instruct = "\(system)\n\n\(instruct)"
+                    systemText = nil
+                }
+                output += "Instruct: \(instruct)\nOutput: "
+            case .assistant:
+                output += "\(message.content)\n"
+            }
+        }
+
+        if addGenerationPrompt, messages.last?.role != .user {
+            output += "Instruct: \nOutput: "
+        }
+        return output
+    }
+
     private static func isKnownBuiltin(_ name: String) -> Bool {
         let known: Set<String> = [
             "chatml", "llama2", "llama2-sys", "llama2-sys-bos", "llama2-sys-strip",
             "mistral-v1", "mistral-v3", "mistral-v3-tekken", "mistral-v7", "mistral-v7-tekken",
-            "llama3", "llama4", "phi3", "phi4", "gemma", "gemma2", "zephyr", "vicuna",
+            "llama3", "llama4", "phi3", "phi2", "phi4", "gemma", "gemma2", "zephyr", "vicuna",
         ]
         return known.contains(name.lowercased())
     }

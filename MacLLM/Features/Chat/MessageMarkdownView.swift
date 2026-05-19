@@ -10,7 +10,11 @@ struct MessageMarkdownView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if blocks.isEmpty {
+            if isStreaming {
+                Text(text)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if blocks.isEmpty {
                 Text(text)
                     .textSelection(.enabled)
             } else {

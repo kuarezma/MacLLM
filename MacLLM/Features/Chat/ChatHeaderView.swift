@@ -3,6 +3,7 @@ import SwiftUI
 struct ChatHeaderView: View {
     @Environment(AppModel.self) private var appModel
     @EnvironmentObject private var inferenceService: InferenceService
+    @State private var settingsHovered = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -15,12 +16,18 @@ struct ChatHeaderView: View {
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.secondaryText)
+                    .foregroundStyle(settingsHovered ? AppTheme.accent : AppTheme.primaryText)
                     .frame(width: 32, height: 32)
             }
-            .buttonStyle(AccentIconButtonStyle())
-            .appHitTarget(minWidth: 36, minHeight: 36)
+            .buttonStyle(.plain)
+            .background {
+                Circle()
+                    .fill(settingsHovered ? AppTheme.accent.opacity(0.16) : Color.primary.opacity(0.06))
+            }
+            .appHitTarget(minWidth: 40, minHeight: 40)
             .help("Ayarlar")
+            .accessibilityLabel("Ayarlar")
+            .onHover { settingsHovered = $0 }
 
             AnimatedStatusDot(color: statusColor, pulse: shouldPulse)
 

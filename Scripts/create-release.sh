@@ -44,7 +44,14 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.8)
+### Bu sürümde (1.14.9)
+
+- phi-2 Instruct prompt formatı; echo sorunu ve yanlış chatml/phi3 şablonu düzeltildi
+- Base model uyarı bandı (phi-2 base için composer rehberi)
+- Streaming performans: üretim sırasında bağlam sayımı durduruldu, akıcı metin akışı
+- Header ayarlar butonu: openSettings bridge, görsel ve hit-target iyileştirmesi
+
+### Önceki (1.14.8)
 
 - Ayarlar butonu düzeltmesi: sidebar, header ve composer menüsünden açılır
 - Sohbet silme: onay penceresi sidebar üzerinde, swipe ile silme desteği

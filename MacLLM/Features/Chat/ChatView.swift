@@ -157,6 +157,7 @@ struct ChatView: View {
                 scrollToBottom(proxy: proxy, animated: true)
             }
             .onChange(of: model.currentSession.messages.last?.content) { _, _ in
+                guard !inferenceService.isGenerating else { return }
                 model.scheduleContextTokenRefresh()
             }
             .onChange(of: messageSearchText) { _, _ in
@@ -195,31 +196,19 @@ struct ChatView: View {
             }
 
             if let warning = model.visionAttachmentWarning(for: pendingAttachments) {
-                HStack(spacing: 8) {
-                    Image(systemName: "eye.slash")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.orange)
-                    Text(warning)
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .lineLimit(2)
-                    Spacer(minLength: 0)
-                    Button("Hub") {
-                        model.showCatalog = true
-                    }
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.plain)
-                    .appHitTarget(minWidth: 44, minHeight: 28)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.orange.opacity(0.25), lineWidth: 1)
-                }
-                .padding(.horizontal, AppTheme.contentPadding)
-                .padding(.bottom, 6)
+                composerWarningRibbon(
+                    icon: "eye.slash",
+                    message: warning,
+                    actionTitle: "Hub",
+                    action: { model.showCatalog = true }
+                )
+            } else if let chatWarning = model.chatCompatibilityWarning() {
+                composerWarningRibbon(
+                    icon: "exclamationmark.triangle",
+                    message: chatWarning,
+                    actionTitle: "Hub",
+                    action: { model.showCatalog = true }
+                )
             }
 
             HStack(alignment: .bottom, spacing: 12) {
@@ -362,6 +351,38 @@ struct ChatView: View {
             && !visionBlocked
             && !appModel.isLoadingModel
             && inferenceService.isModelLoaded
+    }
+
+    @ViewBuilder
+    private func composerWarningRibbon(
+        icon: String,
+        message: String,
+        actionTitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
+                .lineLimit(2)
+            Spacer(minLength: 0)
+            Button(actionTitle, action: action)
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.plain)
+                .appHitTarget(minWidth: 44, minHeight: 28)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.orange.opacity(0.25), lineWidth: 1)
+        }
+        .padding(.horizontal, AppTheme.contentPadding)
+        .padding(.bottom, 6)
     }
 
     private func stats(for message: ChatMessage, isLastAssistant: Bool) -> GenerationStats? {

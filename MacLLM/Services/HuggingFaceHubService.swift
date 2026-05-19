@@ -197,6 +197,7 @@ final class HuggingFaceHubService: Sendable {
             return "mistral-v1"
         }
         if haystack.contains("phi-3") || haystack.contains("phi3") { return "phi3" }
+        if haystack.contains("phi-2") || haystack.contains("phi2") { return "phi2" }
         if haystack.contains("gemma-2") || haystack.contains("gemma2") { return "gemma" }
         if haystack.contains("gemma") { return "gemma" }
         if haystack.contains("qwen2.5") || haystack.contains("qwen2") || haystack.contains("qwen") { return "chatml" }

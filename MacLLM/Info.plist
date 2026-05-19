@@ -13,9 +13,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.macllm.app</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.14.8</string>
+	<string>1.14.9</string>
 	<key>CFBundleVersion</key>
-	<string>36</string>
+	<string>37</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSApplicationCategoryType</key>

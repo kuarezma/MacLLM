@@ -25,6 +25,7 @@ struct MacLLMApp: App {
                         await appUpdate.checkForUpdates()
                     }
                 }
+                .background(SettingsOpenerRegistrar())
         }
         .commands {
             CommandGroup(replacing: .newItem) {

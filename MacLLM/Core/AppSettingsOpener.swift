@@ -1,9 +1,21 @@
 import AppKit
+import SwiftUI
 
 enum AppSettingsOpener {
+    private static var openHandler: (@MainActor () -> Void)?
+
+    @MainActor
+    static func register(_ handler: @escaping @MainActor () -> Void) {
+        openHandler = handler
+    }
+
     @MainActor
     static func open() {
         NSApp.activate(ignoringOtherApps: true)
+        if let openHandler {
+            openHandler()
+            return
+        }
 
         let settingsSelector = Selector(("showSettingsWindow:"))
         if NSApp.responds(to: settingsSelector) {
@@ -31,5 +43,18 @@ enum AppSettingsOpener {
             }
         }
         return false
+    }
+}
+
+struct SettingsOpenerRegistrar: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .onAppear {
+                AppSettingsOpener.register { openSettings() }
+            }
     }
 }

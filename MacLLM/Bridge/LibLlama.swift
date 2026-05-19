@@ -237,6 +237,9 @@ actor LlamaContext {
         let tmpl = ChatTemplateResolver.resolveBuiltin(
             chatTemplate.isEmpty ? templateName : chatTemplate
         )
+        if tmpl == "phi2" {
+            return ChatTemplateResolver.applyPhi2Template(messages: messages, addGenerationPrompt: true)
+        }
         var cMessages: [llama_chat_message] = messages.map { msg in
             llama_chat_message(
                 role: (msg.role.rawValue as NSString).utf8String,

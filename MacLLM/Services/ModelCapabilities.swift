@@ -53,6 +53,18 @@ struct ModelCapabilities: Equatable {
         return nil
     }
 
+    /// Base / completion modeller için sohbet uyumluluk uyarısı.
+    static func chatCompatibilityWarning(model: InstalledModel?) -> String? {
+        guard let model else { return nil }
+        let haystack = "\(model.name) \(model.filename) \(model.repoId)".lowercased()
+        if haystack.contains("phi-2") || haystack.contains("phi2") {
+            if !haystack.contains("instruct") {
+                return "phi-2 base model sohbet için eğitilmemiş. Phi-3-mini-instruct veya Qwen2.5-Instruct deneyin."
+            }
+        }
+        return nil
+    }
+
     func canUse(attachment: MessageAttachment) -> Bool {
         switch attachment.kind {
         case .image, .video:
