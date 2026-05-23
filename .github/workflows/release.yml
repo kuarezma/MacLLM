@@ -24,7 +24,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          fetch-depth: 0
+          submodules: false
+
+      - name: Checkout submodules
+        run: |
+          git submodule sync --recursive
+          for attempt in 1 2 3; do
+            if git submodule update --init --force --recursive; then
+              exit 0
+            fi
+            echo "Submodule checkout failed; retrying ($attempt/3)..."
+            git submodule deinit -f --all || true
+            rm -rf .git/modules/Vendor/llama.cpp Vendor/llama.cpp
+            sleep $((attempt * 5))
+          done
+          git submodule update --init --force --recursive
 
       - name: Install build tools
         run: brew install cmake ninja
@@ -94,6 +109,7 @@ jobs:
             dist/MacLLM-*-macOS-arm64.pkg
             dist/MacLLM-*-macOS-arm64.zip
             dist/SHA256SUMS.txt
+          overwrite_files: true
           generate_release_notes: true
           body: |
             ## MacLLM — macOS Apple Silicon
