@@ -9,7 +9,7 @@ enum ModelModality: String, Equatable {
     var label: String {
         switch self {
         case .textOnly: return "Metin"
-        case .vision: return "Vision"
+        case .vision: return "Görüntü"
         case .audio: return "Ses"
         case .multimodal: return "Çok modlu"
         }
@@ -79,10 +79,10 @@ struct LoadedModelProfile: Equatable {
             return "«\(displayName)» ses desteklemiyor. Sesli çok modlu model gerekir."
         }
         if (hasImage || hasAudio), supportsVision || supportsAudio, !hasMmproj {
-            return "Vision için mmproj GGUF gerekli. Hub'dan indirirken otomatik gelir; elle eklediyseniz modeli yeniden yükleyin."
+            return "Görüntü için mmproj GGUF gerekli. Hub'dan indirirken otomatik gelir; elle eklediyseniz modeli yeniden yükleyin."
         }
         if (hasImage || hasAudio), hasMmproj, !runtimeMultimodal {
-            return "mmproj yüklü ancak vision motoru hazır değil. Modeli yeniden yükleyin."
+            return "mmproj yüklü ancak görüntü motoru hazır değil. Modeli yeniden yükleyin."
         }
         return nil
     }
@@ -163,14 +163,14 @@ enum ModelProfileBuilder {
         if supportsVision, !hasMmproj {
             hints.append(ComposerHint(
                 kind: .warning,
-                message: "Vision model — mmproj GGUF gerekli. Hub üzerinden indirirken otomatik gelir.",
+                message: "Görüntü modeli — mmproj GGUF gerekli. Hub üzerinden indirirken otomatik gelir.",
                 icon: "eye.slash",
                 actionTitle: "Hub"
             ))
         } else if supportsVision, hasMmproj, runtimeMultimodal {
             hints.append(ComposerHint(
                 kind: .info,
-                message: "Vision hazır — görüntü ve taranmış PDF gönderebilirsiniz.",
+                message: "Görüntü hazır — görüntü ve taranmış PDF gönderebilirsiniz.",
                 icon: "eye",
                 actionTitle: nil
             ))

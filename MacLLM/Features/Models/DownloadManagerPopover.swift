@@ -6,11 +6,11 @@ struct DownloadManagerPopover: View {
     @Environment(AppModel.self) private var appModel
     @Binding var showAllDownloadsSheet: Bool
 
-    private var activeDownloads: [DownloadTaskInfo] {
+    private var visibleDownloads: [DownloadTaskInfo] {
         downloadService.activeDownloads.filter {
             switch $0.state {
-            case .downloading, .paused, .queued: return true
-            default: return false
+            case .downloading, .paused, .queued, .failed, .completed, .cancelled:
+                return true
             }
         }
     }
@@ -20,16 +20,16 @@ struct DownloadManagerPopover: View {
             Text("İndirmeler")
                 .font(.headline)
 
-            if activeDownloads.isEmpty {
-                Text("Aktif indirme yok")
+            if visibleDownloads.isEmpty {
+                Text("İndirme yok")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryText)
             } else {
-                ForEach(activeDownloads) { download in
+                ForEach(visibleDownloads) { download in
                     DownloadTaskRowView(download: download) { entry in
                         Task { await appModel.downloadModel(entry) }
                     }
-                    if download.id != activeDownloads.last?.id {
+                    if download.id != visibleDownloads.last?.id {
                         Divider().opacity(0.35)
                     }
                 }
@@ -63,7 +63,7 @@ struct DownloadToolbarButton: View {
     }
 
     private var shouldShowButton: Bool {
-        downloadService.hasActiveTransfers || inProgressCount > 0 || isPresented
+        downloadService.hasActiveTransfers || !downloadService.activeDownloads.isEmpty || isPresented
     }
 
     var body: some View {

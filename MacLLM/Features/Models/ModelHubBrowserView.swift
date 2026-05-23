@@ -216,7 +216,7 @@ struct ModelHubBrowserView: View {
                 selectedRepo = fetched.first
             }
         } catch {
-            searchError = error.localizedDescription
+            searchError = UserErrorFormatter.details(for: error).displayText
         }
     }
 }
@@ -388,7 +388,7 @@ private struct HubSearchStatusIcons: View {
                 .opacity(isVerified ? 1 : 0)
                 .frame(width: 12)
 
-            Text("Gated")
+            Text("Kilitli")
                 .font(.system(size: 9, weight: .medium))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)
@@ -396,7 +396,7 @@ private struct HubSearchStatusIcons: View {
                 .background(Color.orange.opacity(0.15))
                 .clipShape(Capsule())
                 .opacity(isGated ? 1 : 0)
-                .frame(width: 42)
+                .frame(width: 44)
         }
     }
 }
@@ -512,7 +512,7 @@ struct HubDetailPane: View {
                     Label(updated, systemImage: "clock")
                 }
                 if gated {
-                    AppTheme.badge("Gated", color: .orange)
+                    AppTheme.badge("Kilitli", color: .orange)
                 }
             }
             .font(.caption)
@@ -591,13 +591,13 @@ struct HubDetailPane: View {
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryText)
             } else if gated && (HuggingFaceCredentials.token ?? "").isEmpty {
-                Label("Gated model — Ayarlar'dan Hugging Face token ekleyin.", systemImage: "lock.fill")
+                Label("Kilitli model — Ayarlar'dan Hugging Face token ekleyin.", systemImage: "lock.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
             } else {
                 downloadPicker
                 if mmprojFile != nil {
-                    Label("Vision: mmproj dosyası indirme ile birlikte otomatik eklenir.", systemImage: "eye")
+                    Label("Görüntü: mmproj dosyası indirme ile birlikte otomatik eklenir.", systemImage: "eye")
                         .font(.caption)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -725,7 +725,7 @@ struct HubDetailPane: View {
     private var readmeSection: some View {
         if let readmeText, !readmeText.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Model Card")
+                Text("Model kartı")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(AppTheme.secondaryText)
                     .textCase(.uppercase)
@@ -748,9 +748,9 @@ struct HubDetailPane: View {
 
     private func capabilityIcon(_ cap: String) -> String {
         switch cap {
-        case "Tool Use": return "wrench.and.screwdriver"
-        case "Reasoning": return "brain"
-        case "Vision": return "eye"
+        case "Araç kullanımı", "Tool Use": return "wrench.and.screwdriver"
+        case "Akıl yürütme", "Reasoning": return "brain"
+        case "Görüntü", "Vision": return "eye"
         default: return "bubble.left"
         }
     }
@@ -779,7 +779,7 @@ struct HubDetailPane: View {
                 loadError = "Bu depoda .gguf dosyası bulunamadı."
             }
         } catch {
-            loadError = error.localizedDescription
+            loadError = UserErrorFormatter.details(for: error).displayText
         }
     }
 

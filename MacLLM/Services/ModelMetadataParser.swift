@@ -100,16 +100,16 @@ enum ModelMetadataParser {
         let lower = tags.map { $0.lowercased() }
         var caps: [String] = []
         if lower.contains(where: { $0.contains("tool") || $0.contains("function") }) {
-            caps.append("Tool Use")
+            caps.append("Araç kullanımı")
         }
         if lower.contains(where: { $0.contains("reason") || $0.contains("thinking") }) {
-            caps.append("Reasoning")
+            caps.append("Akıl yürütme")
         }
         if lower.contains(where: { $0.contains("vision") || $0.contains("vl") || $0.contains("multimodal") }) {
-            caps.append("Vision")
+            caps.append("Görüntü")
         }
         if lower.contains("conversational") || lower.contains("chat") {
-            caps.append("Chat")
+            caps.append("Sohbet")
         }
         return caps
     }

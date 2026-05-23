@@ -32,9 +32,19 @@ struct AppUpdateBannerView: View {
 
                 if appUpdate.isDownloading {
                     ProgressView(value: appUpdate.downloadProgress)
-                    Text(appUpdate.downloadStatus ?? "İndiriliyor…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        Text(appUpdate.downloadStatus ?? "İndiriliyor…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button {
+                            appUpdate.cancelDownload()
+                        } label: {
+                            Label("İptal", systemImage: "xmark")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .controlSize(.small)
+                    }
                 } else {
                     HStack(spacing: 10) {
                         Button {

@@ -98,7 +98,7 @@ struct OnlineModelSearchView: View {
         do {
             results = try await HuggingFaceHubService.shared.searchModels(query: query)
         } catch {
-            searchError = error.localizedDescription
+            searchError = UserErrorFormatter.details(for: error).displayText
         }
     }
 }
@@ -145,7 +145,7 @@ private struct OnlineModelRow: View {
                         AppTheme.badge(badge, color: AppTheme.accent)
                     }
                     if model.gated {
-                        AppTheme.badge("Gated", color: .orange)
+                        AppTheme.badge("Kilitli", color: .orange)
                     }
                 }
                 if let author = ModelMetadataParser.repoAuthor(model.repoId) {

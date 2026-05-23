@@ -310,6 +310,7 @@ struct SendCircleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
+            .contentShape(Circle())
             .background {
                 Circle()
                     .fill(
@@ -342,6 +343,7 @@ struct StopCircleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
+            .contentShape(Circle())
             .background {
                 Circle()
                     .fill(Color.red.opacity(0.18))
@@ -443,7 +445,7 @@ struct AppStatusBar: View {
     private var statusIcon: String {
         if message.contains("%") { return "arrow.down.circle" }
         if message.contains("Hata") || message.contains("hata") { return "exclamationmark.circle" }
-        if message.contains("vision") || message.contains("Görüntü") { return "eye.slash" }
+        if message.localizedCaseInsensitiveContains("vision") || message.contains("Görüntü") { return "eye.slash" }
         return "info.circle"
     }
 }

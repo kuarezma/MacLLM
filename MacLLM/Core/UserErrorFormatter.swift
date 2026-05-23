@@ -10,30 +10,56 @@ struct UserFacingError {
     }
 }
 
+protocol UserCancellationError {
+    var isUserCancellation: Bool { get }
+}
+
 enum UserErrorFormatter {
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let cancellation = error as? UserCancellationError {
+            return cancellation.isUserCancellation
+        }
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
+    }
+
     static func message(for error: Error) -> String {
         details(for: error).message
     }
 
     static func details(for error: Error) -> UserFacingError {
+        if isCancellation(error) {
+            return UserFacingError(message: "İşlem iptal edildi.", recovery: nil)
+        }
+
+        if let localized = error as? LocalizedError,
+           let recovery = localized.recoverySuggestion,
+           !recovery.isEmpty {
+            return UserFacingError(
+                message: localized.errorDescription ?? error.localizedDescription,
+                recovery: recovery
+            )
+        }
+
         let nsError = error as NSError
 
         if nsError.domain == NSURLErrorDomain {
             switch nsError.code {
             case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:
                 return UserFacingError(
-                    message: "Internet baglantisi bulunamadi.",
-                    recovery: "Baglantinizi kontrol edip tekrar deneyin."
+                    message: "İnternet bağlantısı bulunamadı.",
+                    recovery: "Bağlantınızı kontrol edip tekrar deneyin."
                 )
             case NSURLErrorTimedOut:
                 return UserFacingError(
-                    message: "Istek zaman asimina ugradi.",
+                    message: "İstek zaman aşımına uğradı.",
                     recovery: "Biraz sonra yeniden deneyin."
                 )
             case NSURLErrorUserAuthenticationRequired, NSURLErrorUserCancelledAuthentication:
                 return UserFacingError(
-                    message: "Kimlik dogrulama gerekiyor.",
-                    recovery: "Hugging Face token ayarlarinizi kontrol edin."
+                    message: "Kimlik doğrulama gerekiyor.",
+                    recovery: "Hugging Face token ayarlarınızı kontrol edin."
                 )
             default:
                 break
@@ -51,7 +77,7 @@ enum UserErrorFormatter {
             if raw.contains("HTTP 401") || raw.contains("HTTP 403") {
                 return UserFacingError(
                     message: "Model indirme yetkisi reddedildi.",
-                    recovery: "Gated model için Hugging Face token ayarını kontrol edin."
+                    recovery: "Kilitli model için Hugging Face token ayarını kontrol edin."
                 )
             }
             if raw.contains("HTTP 404") {
@@ -66,17 +92,17 @@ enum UserErrorFormatter {
             switch nsError.code {
             case CocoaError.fileNoSuchFile.rawValue:
                 return UserFacingError(
-                    message: "Dosya bulunamadi.",
-                    recovery: "Dosyanin konumunu kontrol edip tekrar deneyin."
+                    message: "Dosya bulunamadı.",
+                    recovery: "Dosyanın konumunu kontrol edip tekrar deneyin."
                 )
             case CocoaError.fileWriteOutOfSpace.rawValue:
                 return UserFacingError(
                     message: "Diskte yeterli alan yok.",
-                    recovery: "Bos alan acip islemi yeniden baslatin."
+                    recovery: "Boş alan açıp işlemi yeniden başlatın."
                 )
             case CocoaError.fileReadNoPermission.rawValue, CocoaError.fileWriteNoPermission.rawValue:
                 return UserFacingError(
-                    message: "Dosya erisim izni yok.",
+                    message: "Dosya erişim izni yok.",
                     recovery: "Dosya izinlerini kontrol edin."
                 )
             default:
@@ -92,10 +118,11 @@ enum UserErrorFormatter {
         let raw = error.localizedDescription
         if raw.isEmpty {
             return UserFacingError(
-                message: "Beklenmeyen bir hata olustu.",
-                recovery: "Lutfen tekrar deneyin."
+                message: "Beklenmeyen bir hata oluştu.",
+                recovery: "Lütfen tekrar deneyin."
             )
         }
-        return UserFacingError(message: raw, recovery: nil)
+        let recovery = (error as? LocalizedError)?.recoverySuggestion
+        return UserFacingError(message: raw, recovery: recovery)
     }
 }

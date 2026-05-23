@@ -44,10 +44,14 @@ final class HuggingFaceDownloadService: ObservableObject {
     private final class ParallelContext {
         let entry: CatalogEntry
         let destination: URL
+        let cancellation = DownloadCancellationFlag()
         var task: Task<Void, Never>?
         var onUpdate: (DownloadTaskInfo) -> Void
         var continuation: CheckedContinuation<URL, Error>?
-        var cancelled = false
+        var cancelled: Bool {
+            get { cancellation.isCancelled }
+            set { cancellation.isCancelled = newValue }
+        }
 
         init(
             entry: CatalogEntry,
@@ -76,6 +80,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         entry: CatalogEntry,
         onUpdate: @escaping (DownloadTaskInfo) -> Void
     ) async throws -> URL {
+        try Task.checkCancellation()
         let startedAt = Date()
         logger.info("Download request start id=\(entry.id) repo=\(entry.repoId) file=\(entry.filename)")
         if contexts[entry.id] != nil || parallelContexts[entry.id] != nil {
@@ -141,9 +146,7 @@ final class HuggingFaceDownloadService: ObservableObject {
                 }
                 logger.notice("Download fallback id=\(entry.id) from=parallel to=single reason=\(String(describing: error))")
                 parallelContexts.removeValue(forKey: entry.id)
-                if FileManager.default.fileExists(atPath: dest.path) {
-                    try? FileManager.default.removeItem(at: dest)
-                }
+                removePartialDownload(at: dest)
                 let fallbackInfo = makeTaskInfo(
                     entry: entry,
                     bytesReceived: 0,
@@ -185,6 +188,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         connections: Int,
         onUpdate: @escaping (DownloadTaskInfo) -> Void
     ) async throws -> URL {
+        try Task.checkCancellation()
         let initial = makeTaskInfo(
             entry: entry,
             bytesReceived: 0,
@@ -200,36 +204,49 @@ final class HuggingFaceDownloadService: ObservableObject {
         let ctx = ParallelContext(entry: entry, destination: destination, onUpdate: onUpdate, continuation: nil)
         parallelContexts[entry.id] = ctx
 
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-            ctx.continuation = continuation
-            ctx.task = Task {
-                do {
-                    try await RangeDownloadEngine.downloadParallel(
-                        metadata: metadata,
-                        destination: destination,
-                        connections: connections,
-                        speedTracker: speedTracker,
-                        isCancelled: { [weak ctx] in ctx?.cancelled == true },
-                        onProgress: { [weak self] info in
-                            guard let self,
-                                  let pctx = self.parallelContexts[entry.id],
-                                  !pctx.cancelled,
-                                  !self.isTerminalState(for: entry.id)
-                            else { return }
-                            self.upsertActive(info)
-                            pctx.onUpdate(info)
-                        },
-                        entry: entry
-                    )
-                    try GGUFFileValidator.validateDownload(at: destination, expectedBytes: totalBytes)
-                    await MainActor.run {
-                        self.finishParallelDownload(entryId: entry.id, entry: entry, result: .success(destination))
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.finishParallelDownload(entryId: entry.id, entry: entry, result: .failure(error))
+        let entryId = entry.id
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+                if Task.isCancelled || ctx.cancelled {
+                    finishParallelDownload(entryId: entry.id, entry: entry, result: .failure(CancellationError()))
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                ctx.continuation = continuation
+                ctx.task = Task {
+                    do {
+                        try Task.checkCancellation()
+                        try await RangeDownloadEngine.downloadParallel(
+                            metadata: metadata,
+                            destination: destination,
+                            connections: connections,
+                            speedTracker: speedTracker,
+                            isCancelled: { [weak ctx] in ctx?.cancelled == true },
+                            onProgress: { [weak self] info in
+                                guard let self,
+                                      let pctx = self.parallelContexts[entry.id],
+                                      !pctx.cancelled,
+                                      !self.isTerminalState(for: entry.id)
+                                else { return }
+                                self.upsertActive(info)
+                                pctx.onUpdate(info)
+                            },
+                            entry: entry
+                        )
+                        try GGUFFileValidator.validateDownload(at: destination, expectedBytes: totalBytes)
+                        await MainActor.run {
+                            self.finishParallelDownload(entryId: entry.id, entry: entry, result: .success(destination))
+                        }
+                    } catch {
+                        await MainActor.run {
+                            self.finishParallelDownload(entryId: entry.id, entry: entry, result: .failure(error))
+                        }
                     }
                 }
+            }
+        } onCancel: {
+            Task { @MainActor in
+                HuggingFaceDownloadService.shared.cancelDownload(id: entryId)
             }
         }
     }
@@ -241,6 +258,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         totalBytes: Int64,
         onUpdate: @escaping (DownloadTaskInfo) -> Void
     ) async throws -> URL {
+        try Task.checkCancellation()
         let initial = makeTaskInfo(
             entry: entry,
             bytesReceived: 0,
@@ -252,55 +270,76 @@ final class HuggingFaceDownloadService: ObservableObject {
         upsertActive(initial)
         onUpdate(initial)
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let delegate = DownloadDelegate(entry: entry, destination: destination, expectedTotalBytes: totalBytes)
-
-            delegate.onProgress = { [weak self] updated in
-                Task { @MainActor in
-                    guard let self,
-                          let ctx = self.contexts[entry.id],
-                          !ctx.didFinish,
-                          !self.isTerminalState(for: entry.id)
-                    else { return }
-                    self.upsertActive(updated)
-                    ctx.onUpdate(updated)
+        let entryId = entry.id
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                if Task.isCancelled {
+                    let cancelled = makeTaskInfo(
+                        entry: entry,
+                        bytesReceived: 0,
+                        totalBytes: totalBytes,
+                        speed: 0,
+                        eta: nil,
+                        state: .cancelled
+                    )
+                    upsertActive(cancelled)
+                    scheduleRemoval(entryId: entry.id)
+                    continuation.resume(throwing: CancellationError())
+                    return
                 }
-            }
+                let delegate = DownloadDelegate(entry: entry, destination: destination, expectedTotalBytes: totalBytes)
 
-            delegate.onComplete = { [weak self] result in
-                Task { @MainActor in
-                    self?.finishDownload(entryId: entry.id, entry: entry, result: result)
+                delegate.onProgress = { [weak self] updated in
+                    Task { @MainActor in
+                        guard let self,
+                              let ctx = self.contexts[entry.id],
+                              !ctx.didFinish,
+                              !self.isTerminalState(for: entry.id)
+                        else { return }
+                        self.upsertActive(updated)
+                        ctx.onUpdate(updated)
+                    }
                 }
+
+                delegate.onComplete = { [weak self] result in
+                    Task { @MainActor in
+                        self?.finishDownload(entryId: entry.id, entry: entry, result: result)
+                    }
+                }
+
+                let config = URLSessionConfiguration.default
+                config.timeoutIntervalForResource = 60 * 60 * 6
+                config.httpMaximumConnectionsPerHost = 4
+                config.requestCachePolicy = .reloadIgnoringLocalCacheData
+
+                let delegateQueue = OperationQueue()
+                delegateQueue.maxConcurrentOperationCount = 2
+                delegateQueue.qualityOfService = .userInitiated
+
+                let session = URLSession(configuration: config, delegate: delegate, delegateQueue: delegateQueue)
+
+                var request = URLRequest(url: url)
+                request.setValue("MacLLM", forHTTPHeaderField: "User-Agent")
+                HuggingFaceCredentials.applyAuth(to: &request)
+                let task = session.downloadTask(with: request)
+                delegate.task = task
+
+                let context = DownloadContext(
+                    entry: entry,
+                    destination: destination,
+                    session: session,
+                    delegate: delegate,
+                    task: task,
+                    onUpdate: onUpdate,
+                    continuation: continuation
+                )
+                contexts[entry.id] = context
+                task.resume()
             }
-
-            let config = URLSessionConfiguration.default
-            config.timeoutIntervalForResource = 60 * 60 * 6
-            config.httpMaximumConnectionsPerHost = 4
-            config.requestCachePolicy = .reloadIgnoringLocalCacheData
-
-            let delegateQueue = OperationQueue()
-            delegateQueue.maxConcurrentOperationCount = 2
-            delegateQueue.qualityOfService = .userInitiated
-
-            let session = URLSession(configuration: config, delegate: delegate, delegateQueue: delegateQueue)
-
-        var request = URLRequest(url: url)
-        request.setValue("MacLLM", forHTTPHeaderField: "User-Agent")
-        HuggingFaceCredentials.applyAuth(to: &request)
-            let task = session.downloadTask(with: request)
-            delegate.task = task
-
-            let context = DownloadContext(
-                entry: entry,
-                destination: destination,
-                session: session,
-                delegate: delegate,
-                task: task,
-                onUpdate: onUpdate,
-                continuation: continuation
-            )
-            contexts[entry.id] = context
-            task.resume()
+        } onCancel: {
+            Task { @MainActor in
+                HuggingFaceDownloadService.shared.cancelDownload(id: entryId)
+            }
         }
     }
 
@@ -338,15 +377,19 @@ final class HuggingFaceDownloadService: ObservableObject {
         }
     }
 
+    func dismissDownload(id: String) {
+        activeDownloads.removeAll { item in
+            guard item.id == id else { return false }
+            return item.state == .completed || item.state == .failed || item.state == .cancelled
+        }
+    }
+
     func cancelDownload(id: String) {
         logger.notice("Download cancel requested id=\(id)")
         if let pctx = parallelContexts[id] {
             pctx.cancelled = true
             pctx.task?.cancel()
             finishParallelDownload(entryId: id, entry: pctx.entry, result: .failure(CancellationError()))
-            if FileManager.default.fileExists(atPath: pctx.destination.path) {
-                try? FileManager.default.removeItem(at: pctx.destination)
-            }
             return
         }
 
@@ -362,9 +405,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         ctx.task.cancel()
         ctx.session.invalidateAndCancel()
 
-        if FileManager.default.fileExists(atPath: ctx.destination.path) {
-            try? FileManager.default.removeItem(at: ctx.destination)
-        }
+        removePartialDownload(at: ctx.destination)
     }
 
     private func finishParallelDownload(entryId: String, entry: CatalogEntry, result: Result<URL, Error>) {
@@ -390,15 +431,20 @@ final class HuggingFaceDownloadService: ObservableObject {
             upsertActive(done)
             scheduleRemoval(entryId: entryId)
             ctx.continuation?.resume(returning: fileURL)
-        case .failure(let error) where error is CancellationError:
-            let cancelled = makeTaskInfo(
-                entry: entry, bytesReceived: 0, totalBytes: entry.estimatedSizeBytes,
-                speed: 0, eta: nil, state: .cancelled
-            )
+        case .failure(let error) where UserErrorFormatter.isCancellation(error):
+            removePartialDownload(at: ctx.destination)
+            var cancelled = activeDownloads.first(where: { $0.id == entryId })
+                ?? makeTaskInfo(
+                    entry: entry, bytesReceived: 0, totalBytes: entry.estimatedSizeBytes,
+                    speed: 0, eta: nil, state: .cancelled
+                )
+            cancelled.state = .cancelled
+            cancelled.errorMessage = nil
             upsertActive(cancelled)
             scheduleRemoval(entryId: entryId)
-            ctx.continuation?.resume(throwing: error)
+            ctx.continuation?.resume(throwing: CancellationError())
         case .failure(let error):
+            removePartialDownload(at: ctx.destination)
             var failed = activeDownloads.first(where: { $0.id == entryId })
                 ?? makeTaskInfo(
                     entry: entry, bytesReceived: 0, totalBytes: entry.estimatedSizeBytes,
@@ -417,6 +463,7 @@ final class HuggingFaceDownloadService: ObservableObject {
         guard let ctx = contexts[entryId], !ctx.didFinish else { return }
         ctx.didFinish = true
         contexts[entryId] = nil
+        defer { ctx.session.finishTasksAndInvalidate() }
 
         switch result {
         case .success(let fileURL):
@@ -456,21 +503,7 @@ final class HuggingFaceDownloadService: ObservableObject {
             upsertActive(done)
             scheduleRemoval(entryId: entryId)
             ctx.continuation?.resume(returning: fileURL)
-        case .failure(let error) where error is CancellationError:
-            var cancelled = activeDownloads.first(where: { $0.id == entryId })
-                ?? makeTaskInfo(
-                    entry: entry,
-                    bytesReceived: 0,
-                    totalBytes: entry.estimatedSizeBytes,
-                    speed: 0,
-                    eta: nil,
-                    state: .cancelled
-                )
-            cancelled.state = .cancelled
-            upsertActive(cancelled)
-            scheduleRemoval(entryId: entryId)
-            ctx.continuation?.resume(throwing: error)
-        case .failure(let error as NSError) where error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled:
+        case .failure(let error) where UserErrorFormatter.isCancellation(error):
             var cancelled = activeDownloads.first(where: { $0.id == entryId })
                 ?? makeTaskInfo(
                     entry: entry,
@@ -562,6 +595,12 @@ final class HuggingFaceDownloadService: ObservableObject {
             return true
         case .queued, .downloading, .paused:
             return false
+        }
+    }
+
+    private func removePartialDownload(at url: URL) {
+        if FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.removeItem(at: url)
         }
     }
 
@@ -658,5 +697,23 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unc
             state: state,
             errorMessage: nil
         ))
+    }
+}
+
+private final class DownloadCancellationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    var isCancelled: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return value
+        }
+        set {
+            lock.lock()
+            value = newValue
+            lock.unlock()
+        }
     }
 }

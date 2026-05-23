@@ -41,7 +41,7 @@ final class InferenceService: ObservableObject {
             }
         }
 
-        modelLoadingStage = "Mevcut model kapatiliyor"
+        modelLoadingStage = "Mevcut model kapatılıyor"
         await stopGeneration()
         await shutdownLoadedContext()
         invalidatePromptCache()
@@ -52,7 +52,7 @@ final class InferenceService: ObservableObject {
         }
 
         let effectiveSettings = settingsOverride ?? settings
-        modelLoadingStage = "Model dosyasi yukleniyor"
+        modelLoadingStage = "Model dosyası yükleniyor"
         let path = model.localPath
         let chatTemplateHint = model.chatTemplate
         let mmprojPath = model.mmprojLocalPath
@@ -73,7 +73,7 @@ final class InferenceService: ObservableObject {
             throw CancellationError()
         }
 
-        modelLoadingStage = "Calisma profili hazirlaniyor"
+        modelLoadingStage = "Çalışma profili hazırlanıyor"
         llamaContext = loadedContext
         isModelLoaded = true
         loadedModelId = model.id
@@ -241,7 +241,7 @@ final class InferenceService: ObservableObject {
                             messages: promptMessages,
                             templateName: chatTemplate
                         )
-                        let promptTokenCount = await llamaContext.countTokens(in: prompt, addBos: true)
+                        let promptTokenCount = try await llamaContext.countTokens(in: prompt, addBos: true)
 
                         var emittedOutput = ""
                         var didRetryWithoutFlash = false
@@ -396,13 +396,14 @@ final class InferenceService: ObservableObject {
                             "Generation success run=\(runID) tokens=\(savedOutputTokens) elapsed=\(Int(duration * 1000))ms tps=\(tps)"
                         )
 
+                        let finalInferenceSettings = inferenceSettings
                         await MainActor.run {
                             self.lastGenerationStats = GenerationStats(
                                 outputTokens: savedOutputTokens,
                                 tokensPerSecond: tps,
                                 durationSeconds: duration
                             )
-                            if inferenceSettings.usePromptCache,
+                            if finalInferenceSettings.usePromptCache,
                                savedOutputTokens > 0,
                                promptTokenCount + savedOutputTokens == Int(finalKVPosition) {
                                 self.promptCacheSessionId = sessionId
@@ -478,6 +479,6 @@ final class InferenceService: ObservableObject {
             messages: promptMessages,
             templateName: chatTemplate
         )
-        return await llamaContext.countTokens(in: prompt, addBos: true)
+        return try await llamaContext.countTokens(in: prompt, addBos: true)
     }
 }

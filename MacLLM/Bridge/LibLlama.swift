@@ -1,14 +1,23 @@
 import Foundation
+import Darwin
 import llama
 
-enum LlamaError: Error, LocalizedError {
+enum LlamaError: Error, LocalizedError, UserCancellationError {
     case couldNotInitializeContext
     case contextOverflow(promptTokens: Int, contextSize: Int)
     case decodeFailed
+    case contextShutdown
     case templateFailed
+    case tokenizationFailed
+    case tokenPieceFailed
     case generationCancelled
     case generationStalled
     case generationEmpty
+
+    var isUserCancellation: Bool {
+        if case .generationCancelled = self { return true }
+        return false
+    }
 
     var errorDescription: String? {
         switch self {
@@ -18,8 +27,14 @@ enum LlamaError: Error, LocalizedError {
             return "Bağlam doldu (\(promptTokens) token, limit \(contextSize)). Ayarlardan num_ctx düşürün veya yeni sohbet açın."
         case .decodeFailed:
             return "Çıkarım hatası. Yeni sohbet açmayı deneyin. Sorun sürerse Ayarlar → Performans'tan Flash Attention'ı kapatın veya farklı bir model seçin."
+        case .contextShutdown:
+            return "Model bellekte değil. Modeli yeniden yükleyip tekrar deneyin."
         case .templateFailed:
             return "Sohbet şablonu uygulanamadı."
+        case .tokenizationFailed:
+            return "Mesaj token'lara ayrılamadı. Metni kısaltıp tekrar deneyin."
+        case .tokenPieceFailed:
+            return "Model çıktısı güvenli metne dönüştürülemedi. Yeni sohbet açıp tekrar deneyin."
         case .generationCancelled:
             return "Üretim iptal edildi."
         case .generationStalled:
@@ -34,15 +49,18 @@ func llama_batch_clear(_ batch: inout llama_batch) {
     batch.n_tokens = 0
 }
 
-func llama_batch_add(_ batch: inout llama_batch, _ id: llama_token, _ pos: llama_pos, _ seq_ids: [llama_seq_id], _ logits: Bool) {
-    batch.token[Int(batch.n_tokens)] = id
-    batch.pos[Int(batch.n_tokens)] = pos
-    batch.n_seq_id[Int(batch.n_tokens)] = Int32(seq_ids.count)
+func llama_batch_add(_ batch: inout llama_batch, _ id: llama_token, _ pos: llama_pos, _ seq_ids: [llama_seq_id], _ logits: Bool) -> Bool {
+    let tokenIndex = Int(batch.n_tokens)
+    guard let seqIDPointer = batch.seq_id[tokenIndex] else { return false }
+    batch.token[tokenIndex] = id
+    batch.pos[tokenIndex] = pos
+    batch.n_seq_id[tokenIndex] = Int32(seq_ids.count)
     for i in 0..<seq_ids.count {
-        batch.seq_id[Int(batch.n_tokens)]![Int(i)] = seq_ids[i]
+        seqIDPointer[Int(i)] = seq_ids[i]
     }
-    batch.logits[Int(batch.n_tokens)] = logits ? 1 : 0
+    batch.logits[tokenIndex] = logits ? 1 : 0
     batch.n_tokens += 1
+    return true
 }
 
 private enum LlamaBackend {
@@ -61,6 +79,7 @@ private enum LlamaBackend {
     static func release() {
         lock.lock()
         defer { lock.unlock() }
+        guard instanceCount > 0 else { return }
         instanceCount -= 1
         if instanceCount == 0 {
             llama_backend_free()
@@ -117,11 +136,23 @@ actor LlamaContext {
         Self.configureSamplerChain(sampling, vocab: vocab, settings: settings)
 
         if let path = mmprojPath, !path.isEmpty, FileManager.default.fileExists(atPath: path) {
-            try mtmdShim.load(mmprojPath: path, model: model, nThreads: threadCount)
+            do {
+                try mtmdShim.load(mmprojPath: path, model: model, nThreads: threadCount)
+            } catch {
+                shutDown = true
+                Self.freeNativeResources(
+                    sampling: sampling,
+                    batch: batch,
+                    context: context,
+                    model: model
+                )
+                throw error
+            }
         }
     }
 
     func updateRuntimeSettings(_ settings: InferenceSettings) {
+        guard !shutDown else { return }
         n_len = settings.maxTokens
         threadCount = settings.threadCount
         llama_sampler_free(sampling)
@@ -174,44 +205,73 @@ actor LlamaContext {
 
     deinit {
         if !shutDown {
-            shutDown = true
-            llama_sampler_free(sampling)
-            llama_batch_free(batch)
-            llama_model_free(model)
-            llama_free(context)
-            LlamaBackend.release()
+            Self.freeNativeResources(
+                sampling: sampling,
+                batch: batch,
+                context: context,
+                model: model
+            )
         }
     }
 
     /// Belleği serbest bırakır; uygulama kapanırken önce bu çağrılmalıdır.
     func shutdown() {
         guard !shutDown else { return }
-        shutDown = true
         cancelled = true
+        releaseNativeResources()
+    }
+
+    private func releaseNativeResources() {
+        guard !shutDown else { return }
+        shutDown = true
+        Self.freeNativeResources(
+            sampling: sampling,
+            batch: batch,
+            context: context,
+            model: model
+        )
+    }
+
+    private static func freeNativeResources(
+        sampling: UnsafeMutablePointer<llama_sampler>,
+        batch: llama_batch,
+        context: OpaquePointer,
+        model: OpaquePointer
+    ) {
         llama_sampler_free(sampling)
         llama_batch_free(batch)
-        llama_model_free(model)
         llama_free(context)
+        llama_model_free(model)
         LlamaBackend.release()
     }
 
+    private func ensureActive() throws {
+        if shutDown {
+            throw LlamaError.contextShutdown
+        }
+    }
+
     func loadMmproj(path: String?) throws {
+        try ensureActive()
         guard let path, !path.isEmpty, FileManager.default.fileExists(atPath: path) else { return }
         try mtmdShim.load(mmprojPath: path, model: model, nThreads: threadCount)
     }
 
     var hasMultimodalEncoder: Bool {
-        mtmdShim.supportsVision || mtmdShim.supportsAudio
+        guard !shutDown else { return false }
+        return mtmdShim.supportsVision || mtmdShim.supportsAudio
     }
 
     func modelMetadata() -> (nCtxTrain: Int, nParams: UInt64, description: String) {
+        guard !shutDown else { return (0, 0, "") }
         let nCtxTrain = Int(llama_model_n_ctx_train(model))
         let nParams = llama_model_n_params(model)
         return (nCtxTrain, nParams, modelDescription())
     }
 
     func runtimeCapabilities() -> (vision: Bool, audio: Bool) {
-        (mtmdShim.supportsVision, mtmdShim.supportsAudio)
+        guard !shutDown else { return (false, false) }
+        return (mtmdShim.supportsVision, mtmdShim.supportsAudio)
     }
 
     static func createContext(
@@ -270,16 +330,39 @@ actor LlamaContext {
     }
 
     func applyChatTemplate(messages: [ChatMessage], templateName: String) throws -> String {
+        try ensureActive()
         let tmpl = ChatTemplateResolver.resolveBuiltin(
             chatTemplate.isEmpty ? templateName : chatTemplate
         )
         if tmpl == "phi2" {
             return ChatTemplateResolver.applyPhi2Template(messages: messages, addGenerationPrompt: true)
         }
-        var cMessages: [llama_chat_message] = messages.map { msg in
+
+        var rolePointers: [UnsafeMutablePointer<CChar>] = []
+        var contentPointers: [UnsafeMutablePointer<CChar>] = []
+        rolePointers.reserveCapacity(messages.count)
+        contentPointers.reserveCapacity(messages.count)
+        defer {
+            rolePointers.forEach { free($0) }
+            contentPointers.forEach { free($0) }
+        }
+
+        for message in messages {
+            guard let role = strdup(message.role.rawValue) else {
+                throw LlamaError.templateFailed
+            }
+            guard let content = strdup(message.content) else {
+                free(role)
+                throw LlamaError.templateFailed
+            }
+            rolePointers.append(role)
+            contentPointers.append(content)
+        }
+
+        var cMessages: [llama_chat_message] = messages.indices.map { index in
             llama_chat_message(
-                role: (msg.role.rawValue as NSString).utf8String,
-                content: (msg.content as NSString).utf8String
+                role: UnsafePointer(rolePointers[index]),
+                content: UnsafePointer(contentPointers[index])
             )
         }
 
@@ -298,7 +381,7 @@ actor LlamaContext {
                 bufferSize *= 2
                 continue
             }
-            if written > bufferSize {
+            if written >= bufferSize {
                 bufferSize = Int(written) + 256
                 continue
             }
@@ -308,6 +391,7 @@ actor LlamaContext {
     }
 
     func completionInit(text: String, mediaPaths: [String] = [], reuseTokenCount: Int = 0) throws {
+        try ensureActive()
         cancelled = false
         is_done = false
         n_decode = 0
@@ -331,7 +415,7 @@ actor LlamaContext {
             return
         }
 
-        let allTokens = tokenize(text: text, add_bos: true)
+        let allTokens = try tokenize(text: text, add_bos: true)
         tokens_list = allTokens
         temporary_invalid_cchars = []
         lastPromptTokenCount = allTokens.count
@@ -368,7 +452,9 @@ actor LlamaContext {
             llama_batch_clear(&batch)
             for index in offset..<end {
                 let isLast = index == tokens.count - 1
-                llama_batch_add(&batch, tokens[index], startPos + Int32(index), [0], isLast)
+                guard llama_batch_add(&batch, tokens[index], startPos + Int32(index), [0], isLast) else {
+                    throw LlamaError.decodeFailed
+                }
             }
             if llama_decode(context, batch) != 0 {
                 throw LlamaError.decodeFailed
@@ -379,6 +465,7 @@ actor LlamaContext {
     }
 
     func completionLoop() throws -> String {
+        try ensureActive()
         if cancelled {
             is_done = true
             throw LlamaError.generationCancelled
@@ -394,7 +481,7 @@ actor LlamaContext {
             return tail
         }
 
-        let new_token_cchars = tokenToPiece(token: new_token_id)
+        let new_token_cchars = try tokenToPiece(token: new_token_id)
         temporary_invalid_cchars.append(contentsOf: new_token_cchars)
 
         let new_token_str: String
@@ -406,7 +493,9 @@ actor LlamaContext {
         }
 
         llama_batch_clear(&batch)
-        llama_batch_add(&batch, new_token_id, n_cur, [0], true)
+        guard llama_batch_add(&batch, new_token_id, n_cur, [0], true) else {
+            throw LlamaError.decodeFailed
+        }
         n_decode += 1
         n_cur += 1
 
@@ -423,6 +512,7 @@ actor LlamaContext {
     }
 
     func clear() {
+        guard !shutDown else { return }
         tokens_list.removeAll()
         temporary_invalid_cchars.removeAll()
         is_done = false
@@ -436,38 +526,92 @@ actor LlamaContext {
     }
 
     func modelDescription() -> String {
-        let result = UnsafeMutablePointer<Int8>.allocate(capacity: 256)
-        result.initialize(repeating: 0, count: 256)
+        guard !shutDown else { return "" }
+        let capacity = 512
+        let result = UnsafeMutablePointer<Int8>.allocate(capacity: capacity)
+        result.initialize(repeating: 0, count: capacity)
         defer { result.deallocate() }
-        let nChars = llama_model_desc(model, result, 256)
-        return String(cString: Array(UnsafeBufferPointer(start: result, count: Int(nChars))) + [0])
+        let nChars = llama_model_desc(model, result, capacity)
+        guard nChars > 0 else { return "" }
+        let safeCount = min(Int(nChars), capacity - 1)
+        return String(cString: Array(UnsafeBufferPointer(start: result, count: safeCount)) + [0])
     }
 
-    func countTokens(in text: String, addBos: Bool = false) -> Int {
+    func countTokens(in text: String, addBos: Bool = false) throws -> Int {
+        try ensureActive()
         guard !text.isEmpty else { return addBos ? 1 : 0 }
-        return tokenize(text: text, add_bos: addBos).count
+        return try tokenize(text: text, add_bos: addBos).count
     }
 
-    private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
+    private func tokenize(text: String, add_bos: Bool) throws -> [llama_token] {
         let utf8Count = text.utf8.count
-        let n_tokens = utf8Count + (add_bos ? 1 : 0) + 1
-        let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-        defer { tokens.deallocate() }
-        let tokenCount = llama_tokenize(vocab, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, false)
-        return (0..<tokenCount).map { tokens[Int($0)] }
+        guard utf8Count <= Int(Int32.max) else {
+            throw LlamaError.tokenizationFailed
+        }
+
+        let initialCapacity = max(1, utf8Count + (add_bos ? 1 : 0) + 1)
+        return try tokenize(text: text, utf8Count: utf8Count, addBos: add_bos, capacity: initialCapacity)
     }
 
-    private func tokenToPiece(token: llama_token) -> [CChar] {
+    private func tokenize(
+        text: String,
+        utf8Count: Int,
+        addBos: Bool,
+        capacity: Int
+    ) throws -> [llama_token] {
+        guard capacity > 0, capacity <= Int(Int32.max) else {
+            throw LlamaError.tokenizationFailed
+        }
+
+        let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: capacity)
+        defer { tokens.deallocate() }
+        let tokenCount = llama_tokenize(
+            vocab,
+            text,
+            Int32(utf8Count),
+            tokens,
+            Int32(capacity),
+            addBos,
+            false
+        )
+
+        if tokenCount < 0 {
+            let requiredCapacity = Int(-tokenCount)
+            guard requiredCapacity > capacity else {
+                throw LlamaError.tokenizationFailed
+            }
+            return try tokenize(
+                text: text,
+                utf8Count: utf8Count,
+                addBos: addBos,
+                capacity: requiredCapacity
+            )
+        }
+
+        return (0..<Int(tokenCount)).map { tokens[$0] }
+    }
+
+    private func tokenToPiece(token: llama_token) throws -> [CChar] {
         let result = UnsafeMutablePointer<Int8>.allocate(capacity: 8)
         result.initialize(repeating: 0, count: 8)
         defer { result.deallocate() }
         let nTokens = llama_token_to_piece(vocab, token, result, 8, 0, false)
         if nTokens < 0 {
-            let newResult = UnsafeMutablePointer<Int8>.allocate(capacity: Int(-nTokens))
-            newResult.initialize(repeating: 0, count: Int(-nTokens))
+            let requiredCapacity = Int(-nTokens)
+            guard requiredCapacity > 0 else {
+                throw LlamaError.tokenPieceFailed
+            }
+            let newResult = UnsafeMutablePointer<Int8>.allocate(capacity: requiredCapacity)
+            newResult.initialize(repeating: 0, count: requiredCapacity)
             defer { newResult.deallocate() }
             let nNewTokens = llama_token_to_piece(vocab, token, newResult, -nTokens, 0, false)
+            guard nNewTokens >= 0 else {
+                throw LlamaError.tokenPieceFailed
+            }
             return Array(UnsafeBufferPointer(start: newResult, count: Int(nNewTokens)))
+        }
+        guard nTokens >= 0 else {
+            throw LlamaError.tokenPieceFailed
         }
         return Array(UnsafeBufferPointer(start: result, count: Int(nTokens)))
     }

@@ -26,16 +26,7 @@ struct DownloadTaskRowView: View {
                 if !compact {
                     stateBadge
                 }
-                Button {
-                    downloadService.cancelDownload(id: download.id)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
-                .buttonStyle(.plain)
-                .appHitTarget(minWidth: 24, minHeight: 24)
-                .help("İndirmeyi iptal et")
+                rowActionButton
             }
 
             switch download.state {
@@ -98,9 +89,43 @@ struct DownloadTaskRowView: View {
                         .buttonStyle(SecondaryButtonStyle())
                         .controlSize(.small)
                 }
-            default:
-                EmptyView()
+            case .cancelled:
+                Text("İndirme iptal edildi")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+            case .completed:
+                Text("\(DownloadMetrics.formatBytes(download.bytesReceived)) indirildi")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var rowActionButton: some View {
+        switch download.state {
+        case .downloading, .paused, .queued:
+            Button {
+                downloadService.cancelDownload(id: download.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            .buttonStyle(.plain)
+            .appHitTarget(minWidth: 24, minHeight: 24)
+            .help("İndirmeyi iptal et")
+        case .completed, .failed, .cancelled:
+            Button {
+                downloadService.dismissDownload(id: download.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            .buttonStyle(.plain)
+            .appHitTarget(minWidth: 24, minHeight: 24)
+            .help("Satırı kapat")
         }
     }
 
@@ -109,10 +134,16 @@ struct DownloadTaskRowView: View {
         switch download.state {
         case .downloading:
             AppTheme.badge("İndiriliyor", color: AppTheme.accentTertiary)
+        case .queued:
+            AppTheme.badge("Kuyrukta", color: AppTheme.secondaryText)
         case .paused:
             AppTheme.badge("Duraklatıldı", color: .orange)
-        default:
-            EmptyView()
+        case .failed:
+            AppTheme.badge("Başarısız", color: .red)
+        case .completed:
+            AppTheme.badge("Tamamlandı", color: .green)
+        case .cancelled:
+            AppTheme.badge("İptal edildi", color: AppTheme.secondaryText)
         }
     }
 }

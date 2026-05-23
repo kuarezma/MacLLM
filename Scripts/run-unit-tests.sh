@@ -9,12 +9,18 @@ mkdir -p "$ROOT/build"
 
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
 BIN="$ROOT/build/unit-test-markdown"
+MODEL_CORE_SOURCES=(
+  MacLLM/Core/MessageAttachment.swift
+  MacLLM/Core/GenerationStats.swift
+  MacLLM/Core/Models.swift
+  MacLLM/Services/MacSystemProfile.swift
+)
 
 echo "==> MarkdownContentParserTests"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
-  -O \
+  -Onone \
   -o "$BIN" \
   MacLLM/Core/MarkdownContentParser.swift \
   Tests/MarkdownContentParserTests.swift
@@ -26,7 +32,7 @@ echo "==> ControlTokenSanitizerTests"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
-  -O \
+  -Onone \
   -o "$SANITIZER_BIN" \
   MacLLM/Services/GenerationOutputFilter.swift \
   Tests/ControlTokenSanitizerTests.swift
@@ -38,7 +44,7 @@ echo "==> GenerationOutputFilterTests"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
-  -O \
+  -Onone \
   -o "$FILTER_BIN" \
   MacLLM/Services/GenerationOutputFilter.swift \
   Tests/GenerationOutputFilterTests.swift
@@ -50,19 +56,71 @@ echo "==> LaunchPreferencesTests"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
-  -O \
+  -Onone \
   -o "$LAUNCH_BIN" \
   MacLLM/Services/LaunchPreferences.swift \
   Tests/LaunchPreferencesTests.swift
 
 "$LAUNCH_BIN"
 
+METADATA_BIN="$ROOT/build/unit-test-model-metadata"
+echo "==> ModelMetadataParserTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -Onone \
+  -o "$METADATA_BIN" \
+  MacLLM/Services/ModelMetadataParser.swift \
+  Tests/ModelMetadataParserTests.swift
+"$METADATA_BIN"
+
+CAPABILITIES_BIN="$ROOT/build/unit-test-model-capabilities"
+echo "==> ModelCapabilitiesTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -Onone \
+  -o "$CAPABILITIES_BIN" \
+  MacLLM/Core/HFModelTypes.swift \
+  "${MODEL_CORE_SOURCES[@]}" \
+  MacLLM/Services/ModelMetadataParser.swift \
+  MacLLM/Services/ModelCapabilities.swift \
+  Tests/ModelCapabilitiesTests.swift
+"$CAPABILITIES_BIN"
+
+HUB_LIST_BIN="$ROOT/build/unit-test-hub-file-list"
+echo "==> HubFileListLogicTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -Onone \
+  -o "$HUB_LIST_BIN" \
+  MacLLM/Core/HubFileListLogic.swift \
+  MacLLM/Core/HFModelTypes.swift \
+  "${MODEL_CORE_SOURCES[@]}" \
+  MacLLM/Services/ModelMetadataParser.swift \
+  MacLLM/Services/ModelRecommendationService.swift \
+  Tests/HubFileListLogicTests.swift
+"$HUB_LIST_BIN"
+
+CATALOG_BIN="$ROOT/build/unit-test-model-catalog"
+echo "==> ModelCatalogServiceTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -Onone \
+  -o "$CATALOG_BIN" \
+  "${MODEL_CORE_SOURCES[@]}" \
+  MacLLM/Services/ModelCatalogService.swift \
+  Tests/ModelCatalogServiceTests.swift
+"$CATALOG_BIN"
+
 MEDIA_BIN="$ROOT/build/unit-test-media"
 echo "==> MediaContentProcessorTests"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
-  -O \
+  -Onone \
   -framework PDFKit \
   -framework AVFoundation \
   -framework AppKit \
@@ -70,10 +128,7 @@ swiftc \
   MacLLM/Services/MediaContentProcessor.swift \
   MacLLM/Services/AttachmentStore.swift \
   MacLLM/Services/ModelStore.swift \
-  MacLLM/Core/MessageAttachment.swift \
-  MacLLM/Core/GenerationStats.swift \
-  MacLLM/Core/Models.swift \
-  MacLLM/Services/MacSystemProfile.swift \
+  "${MODEL_CORE_SOURCES[@]}" \
   Tests/MediaContentProcessorTests.swift
 "$MEDIA_BIN"
 
@@ -82,14 +137,11 @@ echo "==> AttachmentStoreKindTests"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
-  -O \
+  -Onone \
   -o "$ATTACH_BIN" \
   MacLLM/Services/AttachmentStore.swift \
   MacLLM/Services/ModelStore.swift \
-  MacLLM/Core/MessageAttachment.swift \
-  MacLLM/Core/GenerationStats.swift \
-  MacLLM/Core/Models.swift \
-  MacLLM/Services/MacSystemProfile.swift \
+  "${MODEL_CORE_SOURCES[@]}" \
   Tests/AttachmentStoreKindTests.swift
 "$ATTACH_BIN"
 
@@ -98,13 +150,10 @@ echo "==> ChatExporterTests"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
-  -O \
+  -Onone \
   -o "$EXPORT_BIN" \
-  MacLLM/Core/GenerationStats.swift \
-  MacLLM/Core/Models.swift \
-  MacLLM/Core/MessageAttachment.swift \
+  "${MODEL_CORE_SOURCES[@]}" \
   MacLLM/Services/ModelStore.swift \
-  MacLLM/Services/MacSystemProfile.swift \
   MacLLM/Services/ChatProjectStore.swift \
   MacLLM/Services/ChatImporter.swift \
   Tests/ChatExporterTests.swift
@@ -115,7 +164,7 @@ echo "==> HuggingFaceCredentialsTests"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
-  -O \
+  -Onone \
   -o "$KEYCHAIN_BIN" \
   MacLLM/Services/KeychainStorage.swift \
   Tests/HuggingFaceCredentialsTests.swift
@@ -126,9 +175,10 @@ echo "==> UserErrorFormatterTests"
 swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
-  -O \
+  -Onone \
   -o "$FORMATTER_BIN" \
   MacLLM/Core/UserErrorFormatter.swift \
+  MacLLM/Services/WebSearchService.swift \
   Tests/UserErrorFormatterTests.swift
 "$FORMATTER_BIN"
 

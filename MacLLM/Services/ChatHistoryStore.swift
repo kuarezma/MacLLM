@@ -50,7 +50,7 @@ private struct ChatSessionIndexFile: Codable {
     var sessions: [ChatSessionSummary]
 }
 
-final class ChatHistoryStore: Sendable {
+final class ChatHistoryStore: @unchecked Sendable {
     static let shared = ChatHistoryStore()
 
     private let fileManager = FileManager.default
@@ -117,7 +117,7 @@ final class ChatHistoryStore: Sendable {
     func writeSessionFile(_ session: ChatSession) throws {
         try ModelStore.shared.ensureDirectories()
         let url = sessionFileURL(id: session.id)
-        var encoder = JSONEncoder()
+        let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(session)
         try data.write(to: url, options: .atomic)

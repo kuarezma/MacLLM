@@ -119,7 +119,7 @@ final class AppModel {
             repairQwopusGenerationRuntimeIfNeeded()
             await configureLaunchModelSelection()
         } catch {
-            reportError(error, context: "Baslatma hatasi")
+            reportError(error, context: "Başlatma hatası")
         }
     }
 
@@ -270,6 +270,11 @@ final class AppModel {
         context: String? = nil,
         persistent: Bool = true
     ) {
+        if UserErrorFormatter.isCancellation(error) {
+            setStatusMessage(UserErrorFormatter.message(for: error), persistent: false)
+            return
+        }
+
         let diagnosticID = Self.makeDiagnosticID()
         let details = UserErrorFormatter.details(for: error)
         let text: String
@@ -285,6 +290,27 @@ final class AppModel {
         setStatusMessage(userText, persistent: persistent)
     }
 
+    func reportUserFacingError(_ error: Error, context: String, persistent: Bool = true) {
+        reportError(error, context: context, persistent: persistent)
+    }
+
+    private func persistSettings(context: String, persistent: Bool = false) {
+        do {
+            let data = try JSONEncoder().encode(settings)
+            UserDefaults.standard.set(data, forKey: "inferenceSettings")
+        } catch {
+            reportError(error, context: context, persistent: persistent)
+        }
+    }
+
+    private func persistInstalledModels(context: String, persistent: Bool = false) {
+        do {
+            try modelStore.saveInstalledModels(installedModels)
+        } catch {
+            reportError(error, context: context, persistent: persistent)
+        }
+    }
+
     /// Kayıtlı ayarlara şablon stop dizilerini ekler (eski kurulumlar için).
     private func mergeDefaultStopSequences() {
         let merged = ChatTemplateResolver.mergedStopSequences(
@@ -294,9 +320,7 @@ final class AppModel {
         if merged != settings.stopSequences {
             settings.stopSequences = merged
             inferenceService.settings = settings
-            if let data = try? JSONEncoder().encode(settings) {
-                UserDefaults.standard.set(data, forKey: "inferenceSettings")
-            }
+            persistSettings(context: "Stop dizileri kaydedilemedi")
         }
     }
 
@@ -314,7 +338,7 @@ final class AppModel {
             }
         }
         if changed {
-            try? modelStore.saveInstalledModels(installedModels)
+            persistInstalledModels(context: "Model şablonları kaydedilemedi")
         }
     }
 
@@ -338,7 +362,7 @@ final class AppModel {
             }
         }
         if modelsChanged {
-            try? modelStore.saveInstalledModels(installedModels)
+            persistInstalledModels(context: "Qwopus model profili kaydedilemedi")
         }
         mergeDefaultStopSequences()
         repairQwopusGenerationRuntimeIfNeeded()
@@ -362,9 +386,7 @@ final class AppModel {
         guard changed else { return }
 
         inferenceService.settings = settings
-        if let data = try? JSONEncoder().encode(settings) {
-            UserDefaults.standard.set(data, forKey: "inferenceSettings")
-        }
+        persistSettings(context: "Qwopus ayarları kaydedilemedi")
         if inferenceService.isModelLoaded,
            let model = selectedModel,
            ModelFamily.isQwopusFamily(model) {
@@ -390,7 +412,7 @@ final class AppModel {
             }
         }
         if changed {
-            try? modelStore.saveInstalledModels(installedModels)
+            persistInstalledModels(context: "mmproj bağlantıları kaydedilemedi")
         }
     }
 
@@ -421,9 +443,7 @@ final class AppModel {
                 loadSettings.flashAttention = false
                 settings.flashAttention = false
                 inferenceService.settings = settings
-                if let data = try? JSONEncoder().encode(settings) {
-                    UserDefaults.standard.set(data, forKey: "inferenceSettings")
-                }
+                persistSettings(context: "Model uyumluluk ayarı kaydedilemedi")
             } else {
                 inferenceService.settings = settings
             }
@@ -451,7 +471,7 @@ final class AppModel {
         } catch {
             guard generation == modelLoadGeneration else { return false }
             logger.error("Select model failed id=\(model.id) error=\(String(describing: error))")
-            reportError(error, context: "Yukleme hatasi")
+            reportError(error, context: "Yükleme hatası")
             return false
         }
     }
@@ -490,7 +510,7 @@ final class AppModel {
 
             var mmprojURL = MmprojDiscovery.findSibling(to: localURL)
             if mmprojURL == nil, let companion = companionMmproj {
-                setStatusMessage("Vision projeksiyonu (mmproj) indiriliyor…")
+                setStatusMessage("Görüntü projeksiyonu (mmproj) indiriliyor…")
                 let mmprojLocal = try await downloadService.download(entry: companion) { info in
                     Task { @MainActor in
                         self.setStatusMessage(String(
@@ -529,7 +549,7 @@ final class AppModel {
         } catch let error as NSError where error.domain == "MacLLM" && error.code == 101 {
             setStatusMessage(UserErrorFormatter.details(for: error).displayText)
         } catch {
-            reportError(error, context: "Indirme hatasi")
+            reportError(error, context: "İndirme hatası")
         }
     }
 
@@ -552,9 +572,13 @@ final class AppModel {
             }
             if let summaries = try? chatStore.loadSessionIndex() {
                 for summary in summaries where summary.modelId == model.id {
-                    guard var full = try? chatStore.loadSession(id: summary.id) else { continue }
-                    full.modelId = nil
-                    try? chatStore.saveSession(full)
+                    do {
+                        guard var full = try chatStore.loadSession(id: summary.id) else { continue }
+                        full.modelId = nil
+                        try chatStore.saveSession(full)
+                    } catch {
+                        reportError(error, context: "Model sohbetlerden kaldırılamadı")
+                    }
                 }
                 sessions = try chatStore.loadSessionIndex()
             }
@@ -606,9 +630,7 @@ final class AppModel {
             if settings.flashAttention {
                 settings.flashAttention = false
                 inferenceService.settings = settings
-                if let data = try? JSONEncoder().encode(settings) {
-                    UserDefaults.standard.set(data, forKey: "inferenceSettings")
-                }
+                persistSettings(context: "İçe aktarma ayarı kaydedilemedi")
             }
             if let model = installedModels.first(where: { $0.id == id }) {
                 let loaded = await selectModel(model)
@@ -617,7 +639,7 @@ final class AppModel {
                 setStatusMessage("Model içe aktarıldı")
             }
         } catch {
-            reportError(error, context: "Ice aktarma hatasi")
+            reportError(error, context: "İçe aktarma hatası")
         }
     }
 
@@ -626,7 +648,7 @@ final class AppModel {
         pendingSaveTask?.cancel()
         pendingSaveTask = nil
         if saveCurrent, !currentSession.messages.isEmpty {
-            try? await saveCurrentSession()
+            await saveCurrentSessionReporting(context: "Sohbet kaydedilemedi")
         }
         invalidateInferenceCache()
         streamingBuffer.reset()
@@ -662,7 +684,7 @@ final class AppModel {
             currentSession.projectId = project.id
             setStatusMessage("Proje oluşturuldu: \(trimmed)")
         } catch {
-            reportError(error, context: "Proje olusturulamadi")
+            reportError(error, context: "Proje oluşturulamadı")
         }
     }
 
@@ -676,7 +698,7 @@ final class AppModel {
             projects[index] = project
             setStatusMessage("Proje istemi güncellendi")
         } catch {
-            reportError(error, context: "Proje istemi guncellenemedi")
+            reportError(error, context: "Proje istemi güncellenemedi")
         }
     }
 
@@ -698,7 +720,7 @@ final class AppModel {
             await loadSession(imported)
             setStatusMessage("Sohbet içe aktarıldı")
         } catch {
-            reportError(error, context: "Sohbet ice aktarilamadi")
+            reportError(error, context: "Sohbet içe aktarılamadı")
         }
     }
 
@@ -710,9 +732,12 @@ final class AppModel {
                 selectedProjectId = nil
             }
             for session in sessions where session.projectId == project.id {
-                if var full = try? chatStore.loadSession(id: session.id) {
+                do {
+                    guard var full = try chatStore.loadSession(id: session.id) else { continue }
                     full.projectId = nil
-                    try? chatStore.saveSession(full)
+                    try chatStore.saveSession(full)
+                } catch {
+                    reportError(error, context: "Proje sohbetleri güncellenemedi")
                 }
             }
             for index in sessions.indices where sessions[index].projectId == project.id {
@@ -728,21 +753,25 @@ final class AppModel {
     }
 
     func assignSession(_ sessionId: UUID, to projectId: UUID?) async {
-        guard var session = try? chatStore.loadSession(id: sessionId) else { return }
-        session.projectId = projectId
-        try? chatStore.saveSession(session)
-        if let index = sessions.firstIndex(where: { $0.id == sessionId }) {
-            sessions[index].projectId = projectId
-        }
-        if currentSession.id == sessionId {
-            currentSession.projectId = projectId
-        }
-        if let projectId, var project = projects.first(where: { $0.id == projectId }) {
-            project.updatedAt = .now
-            try? projectStore.save(project)
-            if let pIndex = projects.firstIndex(where: { $0.id == projectId }) {
-                projects[pIndex] = project
+        do {
+            guard var session = try chatStore.loadSession(id: sessionId) else { return }
+            session.projectId = projectId
+            try chatStore.saveSession(session)
+            if let index = sessions.firstIndex(where: { $0.id == sessionId }) {
+                sessions[index].projectId = projectId
             }
+            if currentSession.id == sessionId {
+                currentSession.projectId = projectId
+            }
+            if let projectId, var project = projects.first(where: { $0.id == projectId }) {
+                project.updatedAt = .now
+                try projectStore.save(project)
+                if let pIndex = projects.firstIndex(where: { $0.id == projectId }) {
+                    projects[pIndex] = project
+                }
+            }
+        } catch {
+            reportError(error, context: "Sohbet projeye taşınamadı")
         }
     }
 
@@ -764,6 +793,14 @@ final class AppModel {
             _ = try ChatHistoryStore.shared.upsertSummary(for: snapshot)
         }.value
         patchLocalSessionSummary(snapshot)
+    }
+
+    private func saveCurrentSessionReporting(context: String) async {
+        do {
+            try await saveCurrentSession()
+        } catch {
+            reportError(error, context: context)
+        }
     }
 
     private func patchLocalSessionSummary(_ session: ChatSession) {
@@ -797,7 +834,7 @@ final class AppModel {
             guard let self, !Task.isCancelled else { return }
             guard !deletedSessionIDs.contains(sessionId) else { return }
             guard currentSession.id == sessionId else { return }
-            try? await saveCurrentSession()
+            await saveCurrentSessionReporting(context: "Sohbet otomatik kaydedilemedi")
         }
     }
 
@@ -810,7 +847,7 @@ final class AppModel {
     func loadSession(_ session: ChatSession) async {
         await stopGenerationAndWait()
         if !currentSession.messages.isEmpty, currentSession.id != session.id {
-            try? await saveCurrentSession()
+            await saveCurrentSessionReporting(context: "Sohbet kaydedilemedi")
         }
         if let stored = try? chatStore.loadSession(id: session.id) {
             currentSession = stored
@@ -880,7 +917,7 @@ final class AppModel {
             do {
                 webContext = try await WebSearchService.fetchContext(for: trimmed)
             } catch {
-                reportError(error, context: "Web aramasi")
+                reportError(error, context: "Web araması")
                 return
             }
         }
@@ -893,7 +930,7 @@ final class AppModel {
             do {
                 try await MediaContentProcessor.enrich(&attachments[index], sessionId: currentSession.id)
             } catch {
-                reportError(error, context: "Ek dosya islenemedi")
+                reportError(error, context: "Ek dosya işlenemedi")
                 return
             }
         }
@@ -908,7 +945,7 @@ final class AppModel {
                 attachments.remove(at: videoIndex)
                 attachments.append(contentsOf: frames)
             } catch {
-                reportError(error, context: "Video kareleri alinamadi")
+                reportError(error, context: "Video kareleri alınamadı")
                 return
             }
         }
@@ -927,7 +964,7 @@ final class AppModel {
                 attachments.remove(at: index)
                 attachments.append(contentsOf: pages)
             } catch {
-                reportError(error, context: "PDF sayfalari islenemedi")
+                reportError(error, context: "PDF sayfaları işlenemedi")
                 return
             }
         }
@@ -947,7 +984,7 @@ final class AppModel {
             if !hasMmproj || !runtimeReady {
                 setStatusMessage(
                     profile?.attachmentWarning(for: pdfPageImages)
-                        ?? "Vision model için mmproj GGUF gerekli. PDF ile aynı klasöre *mmproj*.gguf ekleyip modeli yeniden yükleyin.",
+                        ?? "Görüntü modeli için mmproj GGUF gerekli. PDF ile aynı klasöre *mmproj*.gguf ekleyip modeli yeniden yükleyin.",
                     persistent: true
                 )
                 return
@@ -972,7 +1009,7 @@ final class AppModel {
             } else if !caps.supportsVision, mediaAttachments.contains(where: { $0.kind == .image || $0.kind == .video }) {
                 setStatusMessage(
                     ModelCapabilities.attachmentWarning(model: model, attachments: attachments)
-                        ?? "Görüntü için vision modeli gerekir.",
+                        ?? "Görüntü için görüntü destekli model gerekir.",
                     persistent: true
                 )
                 return
@@ -1038,18 +1075,20 @@ final class AppModel {
                 )
             }
         } catch is CancellationError {
-            streamingBuffer.reset()
-            if currentSession.id == activeSessionId,
-               assistantIndex < currentSession.messages.count,
-               currentSession.messages[assistantIndex].content.isEmpty {
-                currentSession.messages.remove(at: assistantIndex)
-            }
-            setStatusMessage("Üretim durduruldu")
-            try? await saveCurrentSession()
-            logger.notice("Send message cancelled session=\(activeSessionId.uuidString)")
+            await finishCancelledSend(
+                activeSessionId: activeSessionId,
+                assistantIndex: assistantIndex
+            )
         } catch let llamaError as LlamaError {
             guard currentSession.id == activeSessionId,
                   assistantIndex < currentSession.messages.count else { return }
+            if UserErrorFormatter.isCancellation(llamaError) {
+                await finishCancelledSend(
+                    activeSessionId: activeSessionId,
+                    assistantIndex: assistantIndex
+                )
+                return
+            }
             if currentSession.messages[assistantIndex].content.isEmpty {
                 currentSession.messages[assistantIndex].content =
                     "Hata: \(UserErrorFormatter.message(for: llamaError))"
@@ -1060,7 +1099,7 @@ final class AppModel {
             case .generationEmpty:
                 setStatusMessage("Model anlamlı yanıt üretemedi. Yeniden deneyin.", persistent: true)
             default:
-                reportError(llamaError, context: "Uretim hatasi")
+                reportError(llamaError, context: "Üretim hatası")
             }
             await inferenceService.clearKVCache()
             try? await saveCurrentSession()
@@ -1072,11 +1111,23 @@ final class AppModel {
                 currentSession.messages[assistantIndex].content =
                     "Hata: \(UserErrorFormatter.message(for: error))"
             }
-            reportError(error, context: "Uretim hatasi")
+            reportError(error, context: "Üretim hatası")
             await inferenceService.clearKVCache()
             try? await saveCurrentSession()
             logger.error("Send message failure session=\(activeSessionId.uuidString) error=\(String(describing: error))")
         }
+    }
+
+    private func finishCancelledSend(activeSessionId: UUID, assistantIndex: Int) async {
+        streamingBuffer.reset()
+        if currentSession.id == activeSessionId,
+           assistantIndex < currentSession.messages.count,
+           currentSession.messages[assistantIndex].content.isEmpty {
+            currentSession.messages.remove(at: assistantIndex)
+        }
+        setStatusMessage("Üretim durduruldu")
+        await saveCurrentSessionReporting(context: "Durdurulan sohbet kaydedilemedi")
+        logger.notice("Send message cancelled session=\(activeSessionId.uuidString)")
     }
 
     func stopGeneration() {
@@ -1168,7 +1219,7 @@ final class AppModel {
         invalidateInferenceCache()
         guard let index = currentSession.messages.firstIndex(where: { $0.id == id }) else { return }
         currentSession.messages.remove(at: index)
-        try? await saveCurrentSession()
+        await saveCurrentSessionReporting(context: "Mesaj silme kaydedilemedi")
     }
 
     func regenerate(from messageId: UUID) async {
@@ -1218,9 +1269,7 @@ final class AppModel {
 
     func saveSettings(reloadModel: Bool = false, silent: Bool = false) {
         inferenceService.settings = settings
-        if let data = try? JSONEncoder().encode(settings) {
-            UserDefaults.standard.set(data, forKey: "inferenceSettings")
-        }
+        persistSettings(context: "Ayarlar kaydedilemedi", persistent: !silent)
         mergeDefaultStopSequences()
         if reloadModel, let model = selectedModel {
             invalidateInferenceCache()
@@ -1246,7 +1295,7 @@ final class AppModel {
         guard let index = installedModels.firstIndex(where: { $0.id == profile.modelId }) else { return }
         if installedModels[index].chatTemplate != profile.resolvedChatTemplate {
             installedModels[index].chatTemplate = profile.resolvedChatTemplate
-            try? modelStore.saveInstalledModels(installedModels)
+            persistInstalledModels(context: "Çalışma profili kaydedilemedi")
         }
     }
 

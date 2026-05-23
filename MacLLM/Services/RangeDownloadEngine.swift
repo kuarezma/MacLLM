@@ -78,6 +78,7 @@ enum RangeDownloadEngine {
         let chunkSize = (total + Int64(chunkCount) - 1) / Int64(chunkCount)
         let aggregator = ParallelProgressTracker(totalBytes: total, chunkCount: chunkCount)
         let session = makeSession(maxConnections: chunkCount)
+        defer { session.finishTasksAndInvalidate() }
 
         let progressPoller = Task {
             while !Task.isCancelled {
@@ -133,7 +134,6 @@ enum RangeDownloadEngine {
             try mergeParts(completedParts.map(\.1), into: destination)
         }
 
-        session.finishTasksAndInvalidate()
     }
 
     private static let streamBufferSize = 512 * 1024
@@ -150,6 +150,8 @@ enum RangeDownloadEngine {
         request.setValue("bytes=\(start)-\(end)", forHTTPHeaderField: "Range")
         request.setValue("MacLLM", forHTTPHeaderField: "User-Agent")
         HuggingFaceCredentials.applyAuth(to: &request)
+        try Task.checkCancellation()
+        if isCancelled() { throw CancellationError() }
 
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
@@ -169,6 +171,7 @@ enum RangeDownloadEngine {
         var buffer = Data()
         buffer.reserveCapacity(streamBufferSize)
         for try await byte in bytes {
+            try Task.checkCancellation()
             if isCancelled() { throw CancellationError() }
             buffer.append(byte)
             if buffer.count >= streamBufferSize {

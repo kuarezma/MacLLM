@@ -25,6 +25,8 @@ cp MacLLM/Info.plist "$APP/Contents/Info.plist"
 
 cp MacLLM/Resources/default-catalog.json "$APP/Contents/Resources/"
 cp -R "$FW_DIR/llama.framework" "$APP/Contents/Frameworks/"
+rm -f "$APP/Contents/Frameworks/llama.framework/Info.plist"
+ln -sfh "Versions/Current/Resources/Info.plist" "$APP/Contents/Frameworks/llama.framework/Info.plist"
 if [[ -d "$APP/Contents/Frameworks/llama.framework/Resources" && ! -L "$APP/Contents/Frameworks/llama.framework/Resources" ]]; then
   mkdir -p "$APP/Contents/Frameworks/llama.framework/Versions/A/Resources"
   cp -R "$APP/Contents/Frameworks/llama.framework/Resources/." \
@@ -186,6 +188,16 @@ swiftc \
   "$MTMD_SHIM_O"
 
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$BIN" 2>/dev/null || true
+
+# Paketleme imzasında macOS, embedded versioned framework kökündeki symlink'leri
+# unsealed içerik sayabiliyor. Runtime install_name doğrudan Versions/A/llama
+# kullandığı için release çıktısında yalnızca versioned içerik bırakılır.
+rm -f \
+  "$APP/Contents/Frameworks/llama.framework/Headers" \
+  "$APP/Contents/Frameworks/llama.framework/Info.plist" \
+  "$APP/Contents/Frameworks/llama.framework/Modules" \
+  "$APP/Contents/Frameworks/llama.framework/Resources" \
+  "$APP/Contents/Frameworks/llama.framework/llama"
 
 echo "Tamamlandı: $APP"
 echo "Çalıştırmak için: open $APP"

@@ -44,7 +44,14 @@ gh release create "$TAG" \
   --notes "$(cat <<EOF
 ## MacLLM $VERSION — macOS Apple Silicon
 
-### Bu sürümde (1.14.26)
+### Bu sürümde (1.14.27)
+
+- Stabilite: sohbet, model yükleme ve indirme akışlarında kullanıcıya görünen Türkçe hata mesajları sadeleştirildi; iptal işlemleri hata gibi gösterilmez
+- Llama köprüsü: tokenization/template/piece dönüşümleri daha savunmalı hale getirildi; model kaynakları daha güvenli temizlenir
+- İndirme: paralel indirme iptal/hata sonrası oturum temizliği ve terminal durumlar sağlamlaştırıldı
+- Arayüz: gönder/durdur, yükleniyor/durduruluyor/indiriliyor durumları daha net; kalite kapısı ve gerçek model smoke doğrulaması eklendi
+
+### Önceki (1.14.26)
 
 - Bellek: aynı anda yalnızca bir model yüklü; hızlı geçişte en son seçilen kazanır, eski llama bağlamları kapatılır
 

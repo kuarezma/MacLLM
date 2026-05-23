@@ -308,7 +308,7 @@ struct ModelHubDetailView: View {
                 Text(tag)
             }
             if gated {
-                AppTheme.badge("Gated", color: .orange)
+                AppTheme.badge("Kilitli", color: .orange)
             }
             Spacer()
         }
@@ -410,13 +410,13 @@ struct ModelHubDetailView: View {
                 loadError = "Bu depoda .gguf dosyası bulunamadı."
             }
         } catch {
-            loadError = error.localizedDescription
+            loadError = UserErrorFormatter.details(for: error).displayText
         }
     }
 
     private func download(_ file: HFGGUFile) async {
         if gated && (HuggingFaceCredentials.token ?? "").isEmpty {
-            loadError = "Gated model — Ayarlar'dan Hugging Face token ekleyin."
+            loadError = "Kilitli model — Ayarlar'dan Hugging Face token ekleyin."
             return
         }
         await appModel.downloadModel(

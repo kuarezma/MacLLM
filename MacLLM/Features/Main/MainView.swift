@@ -25,17 +25,13 @@ struct MainView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
-                if model.isLoadingModel || inferenceService.isGenerating {
+                if showsToolbarActivity {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
-                        if model.isLoadingModel,
-                           let stage = inferenceService.modelLoadingStage,
-                           !stage.isEmpty {
-                            Text(stage)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text(toolbarActivityText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 DownloadToolbarButton(
@@ -80,6 +76,28 @@ struct MainView: View {
         }
         .tint(AppTheme.accent)
         .launchLoadAlert(model: appModel)
+    }
+
+    private var showsToolbarActivity: Bool {
+        appModel.isLoadingModel
+            || inferenceService.isGenerating
+            || inferenceService.isStoppingGeneration
+    }
+
+    private var toolbarActivityText: String {
+        if appModel.isLoadingModel {
+            if let stage = inferenceService.modelLoadingStage, !stage.isEmpty {
+                return stage
+            }
+            return "Model hazırlanıyor"
+        }
+        if inferenceService.isStoppingGeneration {
+            return "Yanıt durduruluyor"
+        }
+        if inferenceService.isGenerating {
+            return "Yanıt üretiliyor"
+        }
+        return ""
     }
 }
 

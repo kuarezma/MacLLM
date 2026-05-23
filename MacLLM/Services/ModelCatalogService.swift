@@ -13,17 +13,20 @@ final class ModelCatalogService: Sendable {
     }
 
     func resolveDownloadURL(repoId: String, filename: String) -> URL {
-        let encodedRepo = repoId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? repoId
-        let encodedFile = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
         var components = URLComponents()
         components.scheme = "https"
         components.host = "huggingface.co"
-        components.path = "/\(encodedRepo)/resolve/main/\(encodedFile)"
+        components.path = "/\(repoId)/resolve/main/\(filename)"
         components.queryItems = [URLQueryItem(name: "download", value: "true")]
-        guard let url = components.url else {
-            fatalError("Invalid HF URL for \(repoId)/\(filename)")
+        if let url = components.url {
+            return url
         }
-        return url
+
+        var fallback = URLComponents()
+        fallback.scheme = "https"
+        fallback.host = "huggingface.co"
+        fallback.path = "/"
+        return fallback.url ?? URL(fileURLWithPath: "/")
     }
 
     func catalogEntryNotInstalled(_ entry: CatalogEntry, installed: [InstalledModel]) -> Bool {

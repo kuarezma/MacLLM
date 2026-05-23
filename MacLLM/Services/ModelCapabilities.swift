@@ -48,7 +48,7 @@ struct ModelCapabilities: Equatable {
             return "«\(model.name)» ses desteklemiyor. Sesli çok modlu model gerekir."
         }
         if caps.requiresMmproj, model.mmprojLocalPath == nil, hasImage || hasAudio {
-            return "Vision için mmproj GGUF gerekli. Hub'dan indirirken otomatik gelir; elle eklediyseniz modeli yeniden yükleyin."
+            return "Görüntü için mmproj GGUF gerekli. Hub'dan indirirken otomatik gelir; elle eklediyseniz modeli yeniden yükleyin."
         }
         return nil
     }

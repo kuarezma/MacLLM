@@ -12,8 +12,17 @@ enum WebSearchError: LocalizedError {
             return "Arama sorgusu boş."
         case .invalidResponse:
             return "Web araması yanıtı işlenemedi."
-        case .network(let error):
-            return error.localizedDescription
+        case .network:
+            return "Web aramasına ulaşılamadı."
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .network:
+            return "İnternet bağlantınızı kontrol edip tekrar deneyin veya web aramasını kapatın."
+        case .emptyQuery, .invalidResponse:
+            return nil
         }
     }
 }
@@ -38,7 +47,9 @@ enum WebSearchService {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw WebSearchError.emptyQuery }
 
-        var components = URLComponents(string: "https://api.duckduckgo.com/")!
+        guard var components = URLComponents(string: "https://api.duckduckgo.com/") else {
+            throw WebSearchError.invalidResponse
+        }
         components.queryItems = [
             URLQueryItem(name: "q", value: trimmed),
             URLQueryItem(name: "format", value: "json"),

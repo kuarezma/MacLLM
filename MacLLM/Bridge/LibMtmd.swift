@@ -119,7 +119,7 @@ private extension Array where Element == String {
                 if let ptr { free(ptr) }
             }
         }
-        var pointers: [UnsafePointer<CChar>?] = cStrings.map { ptr in
+        let pointers: [UnsafePointer<CChar>?] = cStrings.map { ptr in
             guard let ptr else { return nil }
             return UnsafePointer(ptr)
         }

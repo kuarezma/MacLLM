@@ -40,7 +40,7 @@ cmake -S . -B "$BUILD_DIR" -G Ninja \
 cmake --build "$BUILD_DIR" -j "$JOBS" --target mtmd
 
 FW_DIR="$OUT_DIR/llama.framework"
-mkdir -p "$FW_DIR/Versions/A/Headers" "$FW_DIR/Resources"
+mkdir -p "$FW_DIR/Versions/A/Headers" "$FW_DIR/Versions/A/Resources"
 
 cp include/llama.h "$FW_DIR/Versions/A/Headers/"
 cp tools/mtmd/mtmd.h tools/mtmd/mtmd-helper.h "$FW_DIR/Versions/A/Headers/" 2>/dev/null || true
@@ -84,6 +84,7 @@ ln -sfh A "$FW_DIR/Versions/Current"
 ln -sfh Versions/Current/llama "$FW_DIR/llama"
 ln -sfh Versions/Current/Headers "$FW_DIR/Headers"
 ln -sfh Versions/Current/Modules "$FW_DIR/Modules"
+ln -sfh Versions/Current/Resources "$FW_DIR/Resources"
 
 mkdir -p "$FW_DIR/Versions/A/Modules"
 cat > "$FW_DIR/Versions/A/Modules/module.modulemap" <<'EOF'
@@ -94,7 +95,7 @@ framework module llama {
 }
 EOF
 
-cat > "$FW_DIR/Resources/Info.plist" <<EOF
+cat > "$FW_DIR/Versions/A/Resources/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -105,6 +106,10 @@ cat > "$FW_DIR/Resources/Info.plist" <<EOF
   <key>MinimumOSVersion</key><string>${MACOS_MIN}</string>
 </dict></plist>
 EOF
+
+# Xcode bazı XCFramework kopyalarında kök Info.plist arar; versioned framework
+# imzasının bozulmaması için kökte normal dosya değil symlink olmalı.
+ln -sfh Versions/Current/Resources/Info.plist "$FW_DIR/Info.plist"
 
 xcodebuild -create-xcframework \
   -framework "$FW_DIR" \

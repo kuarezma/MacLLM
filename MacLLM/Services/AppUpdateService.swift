@@ -41,6 +41,7 @@ final class AppUpdateController {
     var downloadProgress: Double = 0
     var downloadStatus: String?
     var lastCheckDate: Date?
+    private var activeDownloadContext: AppUpdateDownloadContext?
     var autoCheckEnabled: Bool {
         get {
             if UserDefaults.standard.object(forKey: Self.autoCheckKey) == nil { return true }
@@ -79,7 +80,7 @@ final class AppUpdateController {
             }
         } catch {
             if userInitiated {
-                downloadStatus = "Güncelleme kontrolü başarısız: \(error.localizedDescription)"
+                downloadStatus = "Güncelleme kontrolü başarısız: \(UserErrorFormatter.details(for: error).displayText)"
             }
         }
     }
@@ -99,19 +100,30 @@ final class AppUpdateController {
         isDownloading = true
         downloadProgress = 0
         downloadStatus = "İndiriliyor…"
+        let context = AppUpdateDownloadContext()
+        activeDownloadContext = context
         defer {
+            activeDownloadContext = nil
             isDownloading = false
         }
 
         do {
-            let localFile = try await downloadAsset(from: url, suggestedName: url.lastPathComponent)
+            let localFile = try await downloadAsset(from: url, suggestedName: url.lastPathComponent, context: context)
             downloadProgress = 1
             downloadStatus = "İndirme tamamlandı. Kurulum penceresi açılıyor…"
             NSWorkspace.shared.open(localFile)
             await showInstallInstructions(version: update.version, fileURL: localFile)
         } catch {
-            downloadStatus = "İndirme hatası: \(error.localizedDescription)"
+            if UserErrorFormatter.isCancellation(error) {
+                downloadStatus = "Güncelleme indirmesi iptal edildi."
+            } else {
+                downloadStatus = "İndirme hatası: \(UserErrorFormatter.details(for: error).displayText)"
+            }
         }
+    }
+
+    func cancelDownload() {
+        activeDownloadContext?.cancel()
     }
 
     func openReleasePage() {
@@ -122,7 +134,9 @@ final class AppUpdateController {
     // MARK: - Private
 
     private func fetchLatestRelease() async throws -> AppReleaseInfo {
-        let apiURL = URL(string: "https://api.github.com/repos/\(Self.repo)/releases/latest")!
+        guard let apiURL = URL(string: "https://api.github.com/repos/\(Self.repo)/releases/latest") else {
+            throw URLError(.badURL)
+        }
         var request = URLRequest(url: apiURL)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("MacLLM-Updater/\(currentVersion)", forHTTPHeaderField: "User-Agent")
@@ -162,7 +176,7 @@ final class AppUpdateController {
         )
     }
 
-    private func downloadAsset(from url: URL, suggestedName: String) async throws -> URL {
+    private func downloadAsset(from url: URL, suggestedName: String, context: AppUpdateDownloadContext) async throws -> URL {
         let updatesDir = ModelStore.shared.appSupportURL.appendingPathComponent("updates", isDirectory: true)
         try FileManager.default.createDirectory(at: updatesDir, withIntermediateDirectories: true)
         let destination = updatesDir.appendingPathComponent(suggestedName)
@@ -170,31 +184,40 @@ final class AppUpdateController {
             try FileManager.default.removeItem(at: destination)
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let delegate = AppUpdateDownloadDelegate(
-                onProgress: { [weak self] progress in
-                    Task { @MainActor in
-                        self?.downloadProgress = progress
-                    }
-                },
-                onComplete: { result in
-                    switch result {
-                    case .success(let tempURL):
-                        do {
-                            try FileManager.default.moveItem(at: tempURL, to: destination)
-                            continuation.resume(returning: destination)
-                        } catch {
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let delegate = AppUpdateDownloadDelegate(
+                    onProgress: { [weak self] progress in
+                        Task { @MainActor in
+                            self?.downloadProgress = progress
+                        }
+                    },
+                    onComplete: { result in
+                        context.clear()
+                        switch result {
+                        case .success(let tempURL):
+                            do {
+                                if FileManager.default.fileExists(atPath: destination.path) {
+                                    try FileManager.default.removeItem(at: destination)
+                                }
+                                try FileManager.default.moveItem(at: tempURL, to: destination)
+                                continuation.resume(returning: destination)
+                            } catch {
+                                continuation.resume(throwing: error)
+                            }
+                        case .failure(let error):
                             continuation.resume(throwing: error)
                         }
-                    case .failure(let error):
-                        continuation.resume(throwing: error)
                     }
-                }
-            )
-            let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
-            let task = session.downloadTask(with: url)
-            delegate.task = task
-            task.resume()
+                )
+                let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+                let task = session.downloadTask(with: url)
+                context.set(session: session, task: task)
+                delegate.task = task
+                task.resume()
+            }
+        } onCancel: {
+            context.cancel()
         }
     }
 
@@ -256,6 +279,36 @@ private struct GitHubAsset: Decodable {
 
 // MARK: - Download delegate
 
+private final class AppUpdateDownloadContext: @unchecked Sendable {
+    private let lock = NSLock()
+    private var session: URLSession?
+    private var task: URLSessionDownloadTask?
+
+    func set(session: URLSession, task: URLSessionDownloadTask) {
+        lock.lock()
+        self.session = session
+        self.task = task
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        let task = task
+        let session = session
+        lock.unlock()
+
+        task?.cancel()
+        session?.invalidateAndCancel()
+    }
+
+    func clear() {
+        lock.lock()
+        task = nil
+        session = nil
+        lock.unlock()
+    }
+}
+
 private final class AppUpdateDownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     let onProgress: (Double) -> Void
     let onComplete: (Result<URL, Error>) -> Void
@@ -278,7 +331,7 @@ private final class AppUpdateDownloadDelegate: NSObject, URLSessionDownloadDeleg
         finished = true
         lock.unlock()
         onComplete(.success(location))
-        session.invalidateAndCancel()
+        session.finishTasksAndInvalidate()
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {

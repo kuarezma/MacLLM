@@ -271,7 +271,7 @@ struct SettingsView: View {
                     SettingsInfoRow(label: "Parametre", value: params)
                 }
                 SettingsInfoRow(
-                    label: "Vision",
+                    label: "Görüntü",
                     value: profile.supportsVision
                         ? (profile.runtimeMultimodal ? "Hazır" : "mmproj gerekli")
                         : "Desteklenmiyor"
@@ -453,12 +453,12 @@ struct SettingsView: View {
         }
 
         SettingsCard("Çevrimiçi indirme") {
-            SecureField("Access Token (opsiyonel)", text: Binding(
+            SecureField("Erişim tokenı (opsiyonel)", text: Binding(
                 get: { HuggingFaceCredentials.token ?? "" },
                 set: { HuggingFaceCredentials.token = $0.isEmpty ? nil : $0 }
             ))
             .textFieldStyle(.roundedBorder)
-            SettingsCaption(text: "Gated modeller için huggingface.co → Settings → Access Tokens")
+            SettingsCaption(text: "Kilitli modeller için huggingface.co → Ayarlar → Access Tokens bölümünden token oluşturun.")
         }
     }
 

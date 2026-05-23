@@ -17,7 +17,7 @@ struct ActiveDownloadsPanel: View {
             case .downloading, .paused, .queued, .failed:
                 return true
             case .completed, .cancelled:
-                return false
+                return style == .full
             }
         }
     }
@@ -70,6 +70,10 @@ struct ActiveDownloadsPanel: View {
                 Spacer()
                 if inProgressCount > 0 {
                     Text("\(inProgressCount) aktif")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if !visibleDownloads.isEmpty {
+                    Text("\(visibleDownloads.count) kayıt")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

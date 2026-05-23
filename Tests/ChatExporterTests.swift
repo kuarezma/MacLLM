@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 @main
 struct ChatExporterTests {
@@ -33,7 +34,8 @@ struct ChatExporterTests {
         )
         let md = ChatExporter.markdown(for: original, modelName: nil)
         guard let imported = ChatImporter.session(fromMarkdown: md) else {
-            fatalError("import failed")
+            print("ChatExporterTests: içe aktarma başarısız")
+            Darwin.exit(1)
         }
         assert(imported.title == "İçe aktarma")
         assert(imported.messages.count == 2)

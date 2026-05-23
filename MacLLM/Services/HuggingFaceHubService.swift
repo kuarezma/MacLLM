@@ -37,7 +37,9 @@ final class HuggingFaceHubService: Sendable {
     ) async throws -> [HFModelSummary] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let searchTerm = q.isEmpty ? "gguf" : "\(q) gguf"
-        var components = URLComponents(string: "https://huggingface.co/api/models")!
+        guard var components = URLComponents(string: "https://huggingface.co/api/models") else {
+            throw HuggingFaceHubError.invalidURL
+        }
         var items = [
             URLQueryItem(name: "search", value: searchTerm),
             URLQueryItem(name: "filter", value: "gguf"),

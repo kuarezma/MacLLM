@@ -27,7 +27,7 @@ struct ChatView: View {
             if model.selectedModel == nil {
                 emptyState(
                     title: "Model seçin",
-                    description: "Model Hub'dan bir GGUF indirip listeden secin, sonra ilk mesaji gonderin.",
+                    description: "Model Hub'dan bir GGUF indirip listeden seçin, sonra ilk mesajı gönderin.",
                     actionTitle: "Model Hub",
                     action: { model.showCatalog = true }
                 )
@@ -340,6 +340,12 @@ struct ChatView: View {
             }
             .buttonStyle(StopCircleButtonStyle())
             .appHitTarget(minWidth: 40, minHeight: 40)
+            .accessibilityLabel(inferenceService.isStoppingGeneration ? "Durduruluyor" : "Durdur")
+            .accessibilityHint(inferenceService.isStoppingGeneration ? "Yanıt durdurma işlemi sürüyor." : "Devam eden yanıt üretimini durdurur.")
+            .accessibilityAction {
+                guard !inferenceService.isStoppingGeneration else { return }
+                Task { await model.stopGenerationAndWait() }
+            }
             .help(inferenceService.isStoppingGeneration ? "Durduruluyor…" : "Durdur")
             .disabled(inferenceService.isStoppingGeneration)
             .keyboardShortcut(.escape, modifiers: [])
@@ -352,6 +358,10 @@ struct ChatView: View {
             }
             .buttonStyle(SendCircleButtonStyle(enabled: canSend))
             .appHitTarget(minWidth: 40, minHeight: 40)
+            .accessibilityLabel("Gönder")
+            .accessibilityHint(sendButtonHelp)
+            .accessibilityAction { send() }
+            .help(sendButtonHelp)
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: [.command])
         }
@@ -360,18 +370,41 @@ struct ChatView: View {
     private var canSend: Bool {
         let hasContent = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !pendingAttachments.isEmpty
-        let visionBlocked = appModel.composerHint(for: pendingAttachments)?.kind == .warning
-            && pendingAttachments.contains { $0.kind == .image || $0.kind == .video || $0.kind == .audio }
-            && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return hasContent
-            && !visionBlocked
+            && !attachmentWarningBlocksSend
+            && appModel.selectedModel != nil
             && !appModel.isLoadingModel
             && inferenceService.isModelLoaded
             && !inferenceService.isStoppingGeneration
     }
 
+    private var attachmentWarningBlocksSend: Bool {
+        appModel.composerHint(for: pendingAttachments)?.kind == .warning
+            && pendingAttachments.contains { $0.kind == .image || $0.kind == .video || $0.kind == .audio }
+            && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var inferenceBusy: Bool {
         inferenceService.isGenerating || inferenceService.isStoppingGeneration
+    }
+
+    private var sendButtonHelp: String {
+        if appModel.selectedModel == nil {
+            return "Önce bir model seçin"
+        }
+        if appModel.isLoadingModel {
+            return "Model hazırlanıyor"
+        }
+        if !inferenceService.isModelLoaded {
+            return "Model bellekte değil"
+        }
+        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && pendingAttachments.isEmpty {
+            return "Mesaj yazın veya dosya ekleyin"
+        }
+        if attachmentWarningBlocksSend {
+            return "Ek dosya bu modelle uyumlu değil"
+        }
+        return "Gönder"
     }
 
     @ViewBuilder

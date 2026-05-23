@@ -73,7 +73,12 @@ struct ComposerToolsView: View {
         panel.nameFieldStringValue = "\(appModel.currentSession.title).md"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            try? markdown.write(to: url, atomically: true, encoding: .utf8)
+            do {
+                try markdown.write(to: url, atomically: true, encoding: .utf8)
+                appModel.setStatusMessage("Sohbet dışa aktarıldı")
+            } catch {
+                appModel.reportUserFacingError(error, context: "Sohbet dışa aktarılamadı")
+            }
         }
     }
 

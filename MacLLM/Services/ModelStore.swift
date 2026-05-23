@@ -23,13 +23,13 @@ final class ModelStore: @unchecked Sendable {
     private let fileManager = FileManager.default
 
     var appSupportURL: URL {
-        let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let base = applicationSupportBaseURL()
         return base.appendingPathComponent("MacLLM", isDirectory: true)
     }
 
     /// Eski MacSistem verilerini MacLLM klasörüne taşır (bir kez).
     func migrateLegacyStorageIfNeeded() {
-        let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let base = applicationSupportBaseURL()
         let legacy = base.appendingPathComponent("MacSistem", isDirectory: true)
         let modern = base.appendingPathComponent("MacLLM", isDirectory: true)
         guard fileManager.fileExists(atPath: legacy.path),
@@ -43,6 +43,15 @@ final class ModelStore: @unchecked Sendable {
 
     var metadataURL: URL {
         appSupportURL.appendingPathComponent("installed-models.json")
+    }
+
+    private func applicationSupportBaseURL() -> URL {
+        if let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            return base
+        }
+        return fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
     }
 
     func ensureDirectories() throws {
