@@ -7,6 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3634BDF18D0494707DB7BC1F /* AgentTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0ECCE5253631AA274321851 /* AgentTool.swift */; };
+		860AB563F10049C4D4792C50 /* ProjectWorkspaceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50A67DB9EFB2B1D09BFA7DC /* ProjectWorkspaceService.swift */; };
+		776A41E73E0E896618952BDF /* DiffEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD08A06830FEE818BD94369 /* DiffEngine.swift */; };
+		7D7F02DA8F3D1173C02A3161 /* CodeSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73C77A4ED8F080819D757D /* CodeSearchService.swift */; };
+		040910D643669D2155EF4A57 /* WorkspaceContextAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62347C01E88BAACBDA06370 /* WorkspaceContextAssembler.swift */; };
+		0C6E661DC4D60600CDD23D9B /* AgentToolExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835295DE4FD8FC7901AD7508 /* AgentToolExecutor.swift */; };
+		4B14155EF42098ABEFD89CFC /* LocalAPIServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4F32E0D527F9539FE947FE1 /* LocalAPIServer.swift */; };
+		30035B6DAF8BA14EDCB5F5AC /* DiffViewerCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB577D0356C6D876FB3DAB1A /* DiffViewerCardView.swift */; };
+		3994CCBED231DF316C5DC9A6 /* TerminalActionCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4418DF0E2C57949DA1ECFD3B /* TerminalActionCardView.swift */; };
+		E139A3FA142147E59C92BA8B /* WorkspaceSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD0EF08BF7C24669B680453 /* WorkspaceSidebarView.swift */; };
 		8C9877607A164DA1878BD1E0 /* MacLLMApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA2AA3EDDBC4A69BAB4397E /* MacLLMApp.swift */; };
 		A7A99EE3375642C29F2F7169 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B6C85AC7F348ACA7051F08 /* AppModel.swift */; };
 		7477E9263C9D4EFFAF3D5379 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9A0E41EC5A4EF6830D9A55 /* Models.swift */; };
@@ -115,6 +125,16 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C0ECCE5253631AA274321851 /* AgentTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTool.swift; sourceTree = "<group>"; };
+		E50A67DB9EFB2B1D09BFA7DC /* ProjectWorkspaceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectWorkspaceService.swift; sourceTree = "<group>"; };
+		2CD08A06830FEE818BD94369 /* DiffEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffEngine.swift; sourceTree = "<group>"; };
+		DA73C77A4ED8F080819D757D /* CodeSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSearchService.swift; sourceTree = "<group>"; };
+		D62347C01E88BAACBDA06370 /* WorkspaceContextAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceContextAssembler.swift; sourceTree = "<group>"; };
+		835295DE4FD8FC7901AD7508 /* AgentToolExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentToolExecutor.swift; sourceTree = "<group>"; };
+		B4F32E0D527F9539FE947FE1 /* LocalAPIServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAPIServer.swift; sourceTree = "<group>"; };
+		DB577D0356C6D876FB3DAB1A /* DiffViewerCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffViewerCardView.swift; sourceTree = "<group>"; };
+		4418DF0E2C57949DA1ECFD3B /* TerminalActionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalActionCardView.swift; sourceTree = "<group>"; };
+		EDD0EF08BF7C24669B680453 /* WorkspaceSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSidebarView.swift; sourceTree = "<group>"; };
 		5FA2AA3EDDBC4A69BAB4397E /* MacLLMApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLLMApp.swift; sourceTree = "<group>"; };
 		B2B6C85AC7F348ACA7051F08 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		1D9A0E41EC5A4EF6830D9A55 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
@@ -224,6 +244,16 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		7715DF81F499AF0656B36299 /* Workspace */ = {
+			isa = PBXGroup;
+			children = (
+				DB577D0356C6D876FB3DAB1A /* DiffViewerCardView.swift */,
+				4418DF0E2C57949DA1ECFD3B /* TerminalActionCardView.swift */,
+				EDD0EF08BF7C24669B680453 /* WorkspaceSidebarView.swift */,
+			);
+			path = Workspace;
+			sourceTree = "<group>";
+		};
 		A1B2C3D4E5F647A8B9C0D1E2 = {
 			isa = PBXGroup;
 			children = (
@@ -281,6 +311,7 @@
 		F7A8B9C0D1E24CF3A4B5C6D7 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				C0ECCE5253631AA274321851 /* AgentTool.swift */,
 				81EAD4B2487550B92EE9647C /* AppNotifications.swift */,
 				5103FD16488E5C14BBC6D42F /* AppSettingsOpener.swift */,
 				9B79DD571E09FADDFA33C7B6 /* AppTheme.swift */,
@@ -301,6 +332,12 @@
 		A8B9C0D1E2F354D4A5B6C7D8 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				B4F32E0D527F9539FE947FE1 /* LocalAPIServer.swift */,
+				835295DE4FD8FC7901AD7508 /* AgentToolExecutor.swift */,
+				D62347C01E88BAACBDA06370 /* WorkspaceContextAssembler.swift */,
+				DA73C77A4ED8F080819D757D /* CodeSearchService.swift */,
+				2CD08A06830FEE818BD94369 /* DiffEngine.swift */,
+				E50A67DB9EFB2B1D09BFA7DC /* ProjectWorkspaceService.swift */,
 				4F766A880E2386F713CB0C42 /* AppUpdateService.swift */,
 				CDDC76DF1B26721E4D107273 /* AttachmentStore.swift */,
 				1C80A5DBD8EA387855CA4A8E /* ChatImporter.swift */,
@@ -348,6 +385,7 @@
 		C0D1E2F3A4B575F6A7B8C9D0 /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				7715DF81F499AF0656B36299 /* Workspace */,
 				E2F3A4B5C6D78798A0B1C2D3 /* Main */,
 				F3A4B5C6D7E898A0B1C2D3E4 /* Chat */,
 				A4B5C6D7E8F9A0B1C2D3E4F5 /* Models */,

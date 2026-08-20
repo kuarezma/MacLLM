@@ -3,7 +3,7 @@ import SwiftUI
 /// Toolbar indirme mini menüsü.
 struct DownloadManagerPopover: View {
     @ObservedObject var downloadService: HuggingFaceDownloadService
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     @Binding var showAllDownloadsSheet: Bool
 
     private var visibleDownloads: [DownloadTaskInfo] {

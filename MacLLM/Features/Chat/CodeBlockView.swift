@@ -1,11 +1,15 @@
 import SwiftUI
 import AppKit
 
+@MainActor
+final class CodeBlockUIState: ObservableObject {
+    @Published var copied = false
+}
+
 struct CodeBlockView: View {
     let language: String?
     let code: String
-
-    @State private var copied = false
+    @StateObject private var ui = CodeBlockUIState()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -23,14 +27,14 @@ struct CodeBlockView: View {
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(code, forType: .string)
-                    copied = true
+                    ui.copied = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        copied = false
+                        ui.copied = false
                     }
                 } label: {
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    Image(systemName: ui.copied ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(copied ? .green : AppTheme.secondaryText)
+                        .foregroundStyle(ui.copied ? .green : AppTheme.secondaryText)
                         .frame(width: 24, height: 24)
                 }
                 .buttonStyle(.plain)

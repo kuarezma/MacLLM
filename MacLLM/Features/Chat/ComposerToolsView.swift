@@ -2,25 +2,30 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+@MainActor
+final class ComposerToolsUIState: ObservableObject {
+    @Published var webSearchEnabled = WebSearchPreferences.isEnabled
+}
+
 struct ComposerToolsView: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     var isDisabled: Bool = false
-    @State private var webSearchEnabled = WebSearchPreferences.isEnabled
+    @StateObject private var ui = ComposerToolsUIState()
 
     var body: some View {
         HStack(spacing: 2) {
             Button {
-                webSearchEnabled.toggle()
-                WebSearchPreferences.isEnabled = webSearchEnabled
+                ui.webSearchEnabled.toggle()
+                WebSearchPreferences.isEnabled = ui.webSearchEnabled
             } label: {
-                Image(systemName: webSearchEnabled ? "globe.americas.fill" : "globe")
+                Image(systemName: ui.webSearchEnabled ? "globe.americas.fill" : "globe")
                     .font(.system(size: 14, weight: .medium))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(webSearchEnabled ? AppTheme.accent : AppTheme.secondaryText)
+            .foregroundStyle(ui.webSearchEnabled ? AppTheme.accent : AppTheme.secondaryText)
             .disabled(isDisabled)
-            .help(webSearchEnabled ? "Web araması açık — sonraki mesaja bağlam eklenir" : "Web araması")
+            .help(ui.webSearchEnabled ? "Web araması açık — sonraki mesaja bağlam eklenir" : "Web araması")
 
             Menu {
                 Button {
@@ -61,7 +66,7 @@ struct ComposerToolsView: View {
             .help("Araçlar")
         }
         .onAppear {
-            webSearchEnabled = WebSearchPreferences.isEnabled
+            ui.webSearchEnabled = WebSearchPreferences.isEnabled
         }
     }
 

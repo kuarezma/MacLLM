@@ -1,19 +1,23 @@
 import SwiftUI
 
+@MainActor
+final class OnlineModelSearchUIState: ObservableObject {
+    @Published var searchText = ""
+    @Published var results: [HFModelSummary] = []
+    @Published var isSearching = false
+    @Published var searchError: String?
+    @Published var searchTask: Task<Void, Never>?
+}
+
 /// Hugging Face Hub araması — depo listesi; detay için `ModelHubDetailView`.
 struct OnlineModelSearchView: View {
-    @Environment(AppModel.self) private var appModel
-
-    @State private var searchText = ""
-    @State private var results: [HFModelSummary] = []
-    @State private var isSearching = false
-    @State private var searchError: String?
-    @State private var searchTask: Task<Void, Never>?
+    @EnvironmentObject private var appModel: AppModel
+    @StateObject private var ui = OnlineModelSearchUIState()
 
     var body: some View {
         VStack(spacing: 0) {
             searchBar
-            if let searchError {
+            if let searchError = ui.searchError {
                 Text(searchError)
                     .font(.caption)
                     .foregroundStyle(.red)
@@ -26,7 +30,7 @@ struct OnlineModelSearchView: View {
                         .foregroundStyle(.secondary)
                 }
                 Section("Hub") {
-                    if results.isEmpty && !isSearching {
+                    if ui.results.isEmpty && !ui.isSearching {
                         ContentUnavailableView {
                             Label("Arama yapın", systemImage: "cloud")
                         } description: {
@@ -45,9 +49,9 @@ struct OnlineModelSearchView: View {
     }
 
     private var filteredResults: [HFModelSummary] {
-        let local = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard local.count >= 2, !results.isEmpty else { return results }
-        return results.filter { model in
+        let local = ui.searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard local.count >= 2, !ui.results.isEmpty else { return ui.results }
+        return ui.results.filter { model in
             model.repoId.lowercased().contains(local)
                 || model.displayTags.joined(separator: " ").lowercased().contains(local)
         }
@@ -57,11 +61,11 @@ struct OnlineModelSearchView: View {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Hugging Face Hub'ta ara…", text: $searchText)
+            TextField("Hugging Face Hub'ta ara…", text: $ui.searchText)
                 .textFieldStyle(.plain)
                 .onSubmit { scheduleSearch() }
-                .onChange(of: searchText) { _, _ in scheduleSearch() }
-            if isSearching {
+                .onChange(of: ui.searchText) { _, _ in scheduleSearch() }
+            if ui.isSearching {
                 ProgressView().controlSize(.small)
             } else {
                 Button("Ara") { scheduleSearch() }
@@ -76,8 +80,8 @@ struct OnlineModelSearchView: View {
     }
 
     private func scheduleSearch() {
-        searchTask?.cancel()
-        searchTask = Task {
+        ui.searchTask?.cancel()
+        ui.searchTask = Task {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             await runSearch()
@@ -85,20 +89,20 @@ struct OnlineModelSearchView: View {
     }
 
     private func runSearch() async {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = ui.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.count < 2 {
-            results = []
-            searchError = nil
-            isSearching = false
+            ui.results = []
+            ui.searchError = nil
+            ui.isSearching = false
             return
         }
-        isSearching = true
-        searchError = nil
-        defer { isSearching = false }
+        ui.isSearching = true
+        ui.searchError = nil
+        defer { ui.isSearching = false }
         do {
-            results = try await HuggingFaceHubService.shared.searchModels(query: query)
+            ui.results = try await HuggingFaceHubService.shared.searchModels(query: query)
         } catch {
-            searchError = UserErrorFormatter.details(for: error).displayText
+            ui.searchError = UserErrorFormatter.details(for: error).displayText
         }
     }
 }

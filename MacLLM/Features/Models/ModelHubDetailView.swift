@@ -1,27 +1,31 @@
 import SwiftUI
 import AppKit
 
+@MainActor
+final class ModelHubDetailUIState: ObservableObject {
+    @Published var detail: HFRepoDetail?
+    @Published var readmeText: String?
+    @Published var isLoading = true
+    @Published var loadError: String?
+    @Published var sortOrder: HubQuantSort = .recommended
+    @Published var quantFilter: HubQuantFilter = .all
+    @Published var readmeExpanded = false
+    @Published var fileSearchText = ""
+}
+
 /// Hugging Face deposu — quant tablosu, README ve etiketler (Hub görünümü).
 struct ModelHubDetailView: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
 
     let repo: HFModelSummary
+    @StateObject private var ui = ModelHubDetailUIState()
+    @Environment(\.presentationMode) private var presentationMode
 
-    @State private var detail: HFRepoDetail?
-    @State private var readmeText: String?
-    @State private var isLoading = true
-    @State private var loadError: String?
-    @State private var sortOrder: HubQuantSort = .recommended
-    @State private var quantFilter: HubQuantFilter = .all
-    @State private var readmeExpanded = false
-    @State private var fileSearchText = ""
-    @Environment(\.dismiss) private var dismiss
-
-    private var files: [HFGGUFile] { detail?.files ?? [] }
+    private var files: [HFGGUFile] { ui.detail?.files ?? [] }
     private var modelFiles: [HFGGUFile] { files.filter(\.isModelWeights) }
     private var mmprojFile: HFGGUFile? { MmprojDiscovery.findInRepo(files: files) }
-    private var gated: Bool { detail?.gated == true || repo.gated }
+    private var gated: Bool { ui.detail?.gated == true || repo.gated }
 
     private var fitLevelsByFileId: [String: ModelFitLevel] {
         let profile = appModel.systemProfile
@@ -38,10 +42,10 @@ struct ModelHubDetailView: View {
     private var displayedFiles: [HFGGUFile] {
         HubFileListLogic.filterAndSort(
             files: modelFiles,
-            filter: quantFilter,
-            sort: sortOrder,
+            filter: ui.quantFilter,
+            sort: ui.sortOrder,
             fitLevels: fitLevelsByFileId,
-            searchQuery: fileSearchText
+            searchQuery: ui.fileSearchText
         )
     }
 
@@ -62,11 +66,11 @@ struct ModelHubDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if isLoading {
+                if ui.isLoading {
                     ProgressView("Depo yükleniyor…")
                         .frame(maxWidth: .infinity)
                         .padding(40)
-                } else if let loadError {
+                } else if let loadError = ui.loadError {
                     ContentUnavailableView {
                         Label("Yüklenemedi", systemImage: "exclamationmark.triangle")
                     } description: {
@@ -108,7 +112,7 @@ struct ModelHubDetailView: View {
     @ViewBuilder
     private var quantTable: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let detail {
+            if let detail = ui.detail {
                 repoMetaBar(detail)
             }
 
@@ -134,7 +138,7 @@ struct ModelHubDetailView: View {
                         .padding(.vertical, 16)
                 } else if displayedFiles.isEmpty {
                     Text(
-                        fileSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ui.fileSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             ? "Seçilen filtreye uygun quant yok."
                             : "Aramanızla eşleşen quant yok."
                     )
@@ -160,7 +164,7 @@ struct ModelHubDetailView: View {
                                     if let model = installedModel(for: file) {
                                         await appModel.selectModel(model)
                                         appModel.showCatalog = false
-                                        dismiss()
+                                        presentationMode.wrappedValue.dismiss()
                                     }
                                 }
                             }
@@ -182,11 +186,11 @@ struct ModelHubDetailView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("Quant veya dosya adı ara…", text: $fileSearchText)
+                TextField("Quant veya dosya adı ara…", text: $ui.fileSearchText)
                     .textFieldStyle(.roundedBorder)
-                if !fileSearchText.isEmpty {
+                if !ui.fileSearchText.isEmpty {
                     Button {
-                        fileSearchText = ""
+                        ui.fileSearchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
@@ -199,15 +203,15 @@ struct ModelHubDetailView: View {
                 HStack(spacing: 8) {
                     ForEach(HubQuantFilter.allCases) { filter in
                         Button {
-                            quantFilter = filter
+                            ui.quantFilter = filter
                         } label: {
                             Text(filter.label)
                                 .font(.caption)
-                                .fontWeight(quantFilter == filter ? .semibold : .regular)
+                                .fontWeight(ui.quantFilter == filter ? .semibold : .regular)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                                 .background(
-                                    quantFilter == filter
+                                    ui.quantFilter == filter
                                         ? Color.accentColor.opacity(0.2)
                                         : Color.primary.opacity(0.06)
                                 )
@@ -219,7 +223,7 @@ struct ModelHubDetailView: View {
             }
 
             HStack(spacing: 12) {
-                Picker("Sırala", selection: $sortOrder) {
+                Picker("Sırala", selection: $ui.sortOrder) {
                     ForEach(HubQuantSort.allCases) { order in
                         Text(order.label).tag(order)
                     }
@@ -233,10 +237,10 @@ struct ModelHubDetailView: View {
 
                 Spacer()
 
-                if recommendedFileId != nil, quantFilter != .macFriendly {
+                if recommendedFileId != nil, ui.quantFilter != .macFriendly {
                     Button("Önerilene git") {
-                        quantFilter = .all
-                        sortOrder = .recommended
+                        ui.quantFilter = .all
+                        ui.sortOrder = .recommended
                     }
                     .font(.caption)
                     .buttonStyle(.link)
@@ -259,18 +263,18 @@ struct ModelHubDetailView: View {
     @ViewBuilder
     private func sortableHeader(_ column: HubTableColumn) -> some View {
         Button {
-            sortOrder = HubFileListLogic.sortForColumnTap(column, current: sortOrder)
+            ui.sortOrder = HubFileListLogic.sortForColumnTap(column, current: ui.sortOrder)
         } label: {
             HStack(spacing: 4) {
                 Text(column.title)
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(
-                        HubFileListLogic.isActiveSort(sortOrder, for: column) ? Color.accentColor : .secondary
+                        HubFileListLogic.isActiveSort(ui.sortOrder, for: column) ? Color.accentColor : .secondary
                     )
                     .textCase(.uppercase)
-                if HubFileListLogic.isActiveSort(sortOrder, for: column) {
-                    Image(systemName: sortIndicator(for: sortOrder, column: column))
+                if HubFileListLogic.isActiveSort(ui.sortOrder, for: column) {
+                    Image(systemName: sortIndicator(for: ui.sortOrder, column: column))
                         .font(.caption2)
                         .foregroundStyle(Color.accentColor)
                 }
@@ -344,7 +348,7 @@ struct ModelHubDetailView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
 
-            if let tags = detail?.tags, !tags.isEmpty {
+            if let tags = ui.detail?.tags, !tags.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("tags:")
                         .font(.caption)
@@ -354,16 +358,16 @@ struct ModelHubDetailView: View {
                 .padding(.horizontal, 20)
             }
 
-            if let readmeText, !readmeText.isEmpty {
+            if let readmeText = ui.readmeText, !readmeText.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     ReadmeMarkdownView(
-                        markdown: readmeExpanded ? readmeText : readmePreview(readmeText),
-                        maxHeight: readmeExpanded ? 560 : 320
+                        markdown: ui.readmeExpanded ? readmeText : readmePreview(readmeText),
+                        maxHeight: ui.readmeExpanded ? 560 : 320
                     )
                     if readmeText.count > 3200 || readmeText.components(separatedBy: "\n").count > 40 {
-                        Button(readmeExpanded ? "Daha az göster" : "Tamamını göster") {
+                        Button(ui.readmeExpanded ? "Daha az göster" : "Tamamını göster") {
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                readmeExpanded.toggle()
+                                ui.readmeExpanded.toggle()
                             }
                         }
                         .font(.caption)
@@ -371,7 +375,7 @@ struct ModelHubDetailView: View {
                     }
                 }
                 .padding(.horizontal, 20)
-            } else if !isLoading {
+            } else if !ui.isLoading {
                 Text("README bulunamadı.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -397,26 +401,26 @@ struct ModelHubDetailView: View {
     // MARK: - Actions
 
     private func loadRepo() async {
-        isLoading = true
-        loadError = nil
-        defer { isLoading = false }
+        ui.isLoading = true
+        ui.loadError = nil
+        defer { ui.isLoading = false }
         do {
             async let detailTask = HuggingFaceHubService.shared.fetchRepoDetail(repoId: repo.repoId)
             async let readmeTask = HuggingFaceHubService.shared.fetchReadme(repoId: repo.repoId)
             let (fetchedDetail, fetchedReadme) = try await (detailTask, readmeTask)
-            detail = fetchedDetail
-            readmeText = fetchedReadme
+            ui.detail = fetchedDetail
+            ui.readmeText = fetchedReadme
             if fetchedDetail.files.isEmpty {
-                loadError = "Bu depoda .gguf dosyası bulunamadı."
+                ui.loadError = "Bu depoda .gguf dosyası bulunamadı."
             }
         } catch {
-            loadError = UserErrorFormatter.details(for: error).displayText
+            ui.loadError = UserErrorFormatter.details(for: error).displayText
         }
     }
 
     private func download(_ file: HFGGUFile) async {
         if gated && (HuggingFaceCredentials.token ?? "").isEmpty {
-            loadError = "Kilitli model — Ayarlar'dan Hugging Face token ekleyin."
+            ui.loadError = "Kilitli model — Ayarlar'dan Hugging Face token ekleyin."
             return
         }
         await appModel.downloadModel(

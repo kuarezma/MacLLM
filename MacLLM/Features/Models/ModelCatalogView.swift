@@ -9,24 +9,29 @@ enum ModelCatalogTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+@MainActor
+final class ModelCatalogUIState: ObservableObject {
+    @Published var tab: ModelCatalogTab = .hub
+    @Published var showDownloadsPopover = false
+    @Published var showAllDownloadsSheet = false
+    @Published var showImporter = false
+    @Published var pendingImportURL: URL?
+    @Published var pendingImportName = ""
+    @Published var showOverwriteImportConfirm = false
+    @Published var isImportingGGUF = false
+    @Published var manualRepoId = ""
+    @Published var manualFilename = ""
+}
+
 struct ModelCatalogView: View {
-    @Environment(AppModel.self) private var appModel
-    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appModel: AppModel
+    @Environment(\.presentationMode) private var presentationMode
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
 
-    @State private var tab: ModelCatalogTab = .hub
-    @State private var showDownloadsPopover = false
-    @State private var showAllDownloadsSheet = false
-    @State private var showImporter = false
-    @State private var pendingImportURL: URL?
-    @State private var pendingImportName = ""
-    @State private var showOverwriteImportConfirm = false
-    @State private var isImportingGGUF = false
-    @State private var manualRepoId = ""
-    @State private var manualFilename = ""
+    @StateObject private var ui = ModelCatalogUIState()
 
     var body: some View {
-        @Bindable var model = appModel
+        let model = appModel
 
         NavigationStack {
             VStack(spacing: 0) {
@@ -38,7 +43,7 @@ struct ModelCatalogView: View {
                     .frame(maxHeight: min(220, CGFloat(downloadService.activeDownloads.count) * 88 + 40))
                 }
 
-                Picker("Sekme", selection: $tab) {
+                Picker("Sekme", selection: $ui.tab) {
                     ForEach(ModelCatalogTab.allCases) { t in
                         Text(t.rawValue).tag(t)
                     }
@@ -47,7 +52,7 @@ struct ModelCatalogView: View {
                 .padding(.horizontal, AppTheme.contentPadding)
                 .padding(.vertical, 12)
 
-                switch tab {
+                switch ui.tab {
                 case .hub:
                     ModelHubBrowserView()
                 case .recommended:
@@ -62,18 +67,18 @@ struct ModelCatalogView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Kapat") { dismiss() }
+                    Button("Kapat") { presentationMode.wrappedValue.dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     DownloadToolbarButton(
                         downloadService: downloadService,
-                        isPresented: $showDownloadsPopover,
-                        showAllDownloadsSheet: $showAllDownloadsSheet
+                        isPresented: $ui.showDownloadsPopover,
+                        showAllDownloadsSheet: $ui.showAllDownloadsSheet
                     )
                 }
             }
             .fileImporter(
-                isPresented: $showImporter,
+                isPresented: $ui.showImporter,
                 allowedContentTypes: [UTType(filenameExtension: "gguf") ?? .data],
                 allowsMultipleSelection: false
             ) { result in
@@ -87,7 +92,7 @@ struct ModelCatalogView: View {
                 }
             }
             .overlay {
-                if isImportingGGUF {
+                if ui.isImportingGGUF {
                     ZStack {
                         Color.black.opacity(0.25)
                         VStack(spacing: 12) {
@@ -101,20 +106,20 @@ struct ModelCatalogView: View {
                     }
                 }
             }
-            .disabled(isImportingGGUF)
-            .alert("Model zaten var", isPresented: $showOverwriteImportConfirm) {
+            .disabled(ui.isImportingGGUF)
+            .alert("Model zaten var", isPresented: $ui.showOverwriteImportConfirm) {
                 Button("İptal", role: .cancel) {
-                    pendingImportURL = nil
-                    pendingImportName = ""
+                    ui.pendingImportURL = nil
+                    ui.pendingImportName = ""
                 }
                 Button("Üzerine Yaz", role: .destructive) {
-                    guard let url = pendingImportURL else { return }
+                    guard let url = ui.pendingImportURL else { return }
                     startImport(url: url, model: model, replaceExisting: true)
                 }
             } message: {
-                Text("«\(pendingImportName)» klasörde zaten var. Üzerine yazılsın mı?")
+                Text("«\(ui.pendingImportName)» klasörde zaten var. Üzerine yazılsın mı?")
             }
-            .sheet(isPresented: $showAllDownloadsSheet) {
+            .sheet(isPresented: $ui.showAllDownloadsSheet) {
                 NavigationStack {
                     ScrollView {
                         ActiveDownloadsPanel(downloadService: downloadService, style: .full)
@@ -130,9 +135,9 @@ struct ModelCatalogView: View {
 
     private func handleImportSelection(url: URL, model: AppModel) {
         if model.ggufImportDestinationExists(for: url) {
-            pendingImportURL = url
-            pendingImportName = url.lastPathComponent
-            showOverwriteImportConfirm = true
+            ui.pendingImportURL = url
+            ui.pendingImportName = url.lastPathComponent
+            ui.showOverwriteImportConfirm = true
         } else {
             startImport(url: url, model: model, replaceExisting: false)
         }
@@ -140,11 +145,11 @@ struct ModelCatalogView: View {
 
     private func startImport(url: URL, model: AppModel, replaceExisting: Bool) {
         Task {
-            isImportingGGUF = true
+            ui.isImportingGGUF = true
             defer {
-                isImportingGGUF = false
-                pendingImportURL = nil
-                pendingImportName = ""
+                ui.isImportingGGUF = false
+                ui.pendingImportURL = nil
+                ui.pendingImportName = ""
             }
             await model.importGGUF(from: url, replaceExisting: replaceExisting)
         }
@@ -217,7 +222,7 @@ struct ModelCatalogView: View {
         List {
             Section("GGUF dosyası içe aktar") {
                 Button {
-                    showImporter = true
+                    ui.showImporter = true
                 } label: {
                     Label("Dosyadan içe aktar…", systemImage: "doc.badge.plus")
                 }
@@ -225,34 +230,34 @@ struct ModelCatalogView: View {
             }
 
             Section("Hugging Face bağlantısı") {
-                TextField("repo-id (ör. bartowski/Llama-3.2-3B-Instruct-GGUF)", text: $manualRepoId)
-                TextField("dosya adı (ör. model.Q4_K_M.gguf)", text: $manualFilename)
+                TextField("repo-id (ör. bartowski/Llama-3.2-3B-Instruct-GGUF)", text: $ui.manualRepoId)
+                TextField("dosya adı (ör. model.Q4_K_M.gguf)", text: $ui.manualFilename)
                 Button("Çevrimiçi indir") {
-                    guard !manualRepoId.isEmpty, !manualFilename.isEmpty else { return }
+                    guard !ui.manualRepoId.isEmpty, !ui.manualFilename.isEmpty else { return }
                     let entry = CatalogEntry(
-                        id: "manual-\(manualFilename)",
-                        name: manualFilename,
-                        description: manualRepoId,
-                        repoId: manualRepoId,
-                        filename: manualFilename,
+                        id: "manual-\(ui.manualFilename)",
+                        name: ui.manualFilename,
+                        description: ui.manualRepoId,
+                        repoId: ui.manualRepoId,
+                        filename: ui.manualFilename,
                         estimatedSizeBytes: 3_000_000_000,
                         chatTemplate: HuggingFaceHubService.guessChatTemplate(
-                            repoId: manualRepoId,
-                            filename: manualFilename
+                            repoId: ui.manualRepoId,
+                            filename: ui.manualFilename
                         ),
                         ramHintGB: 8
                     )
                     Task { await model.downloadModel(entry) }
                 }
-                .buttonStyle(AccentPrimaryButtonStyle(disabled: manualRepoId.isEmpty || manualFilename.isEmpty))
-                .disabled(manualRepoId.isEmpty || manualFilename.isEmpty)
+                .buttonStyle(AccentPrimaryButtonStyle(disabled: ui.manualRepoId.isEmpty || ui.manualFilename.isEmpty))
+                .disabled(ui.manualRepoId.isEmpty || ui.manualFilename.isEmpty)
             }
         }
     }
 }
 
 struct CatalogEntryRow: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
     let entry: CatalogEntry
     var recommendation: ScoredCatalogEntry?

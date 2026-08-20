@@ -35,12 +35,17 @@ struct SettingsCard<Content: View>: View {
     }
 }
 
+@MainActor
+final class SettingsNavRowUIState: ObservableObject {
+    @Published var hovered = false
+}
+
 struct SettingsNavRow: View {
     let icon: String
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    @State private var hovered = false
+    @StateObject private var ui = SettingsNavRowUIState()
 
     var body: some View {
         Button(action: action) {
@@ -61,12 +66,12 @@ struct SettingsNavRow: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(isSelected ? AppTheme.accent.opacity(0.12) : (hovered ? AppTheme.subtleInteractiveFill : Color.clear))
+            .background(isSelected ? AppTheme.accent.opacity(0.12) : (ui.hovered ? AppTheme.subtleInteractiveFill : Color.clear))
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous))
         }
         .buttonStyle(.plain)
-        .animation(AppTheme.fadeQuick, value: hovered)
-        .onHover { hovered = $0 }
+        .animation(AppTheme.fadeQuick, value: ui.hovered)
+        .onHover { ui.hovered = $0 }
     }
 }
 

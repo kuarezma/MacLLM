@@ -182,4 +182,31 @@ swiftc \
   Tests/UserErrorFormatterTests.swift
 "$FORMATTER_BIN"
 
+DIFF_BIN="$ROOT/build/unit-test-diff-engine"
+echo "==> DiffEngineTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -Onone \
+  -o "$DIFF_BIN" \
+  MacLLM/Services/DiffEngine.swift \
+  Tests/DiffEngineTests.swift
+"$DIFF_BIN"
+
+AGENT_BIN="$ROOT/build/unit-test-agent-executor"
+echo "==> AgentToolExecutorTests"
+swiftc \
+  -sdk "$SDK" \
+  -target arm64-apple-macos14.0 \
+  -Onone \
+  -o "$AGENT_BIN" \
+  MacLLM/Core/AgentTool.swift \
+  MacLLM/Services/DiffEngine.swift \
+  MacLLM/Services/ProjectWorkspaceService.swift \
+  MacLLM/Services/CodeSearchService.swift \
+  MacLLM/Services/WorkspaceContextAssembler.swift \
+  MacLLM/Services/AgentToolExecutor.swift \
+  Tests/AgentToolExecutorTests.swift
+"$AGENT_BIN"
+
 echo "==> unit tests başarılı"

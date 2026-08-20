@@ -93,6 +93,7 @@ SOURCES=(
   MacLLM/Core/AppSettingsOpener.swift
   MacLLM/Core/GenerationStats.swift
   MacLLM/Core/ReasoningContentSplitter.swift
+  MacLLM/Core/AgentTool.swift
   MacLLM/Services/AppUpdateService.swift
   MacLLM/Services/ModelStore.swift
   MacLLM/Services/ModelCatalogService.swift
@@ -116,6 +117,12 @@ SOURCES=(
   MacLLM/Services/ChatImporter.swift
   MacLLM/Services/ChatHistoryStore.swift
   MacLLM/Services/ChatProjectStore.swift
+  MacLLM/Services/ProjectWorkspaceService.swift
+  MacLLM/Services/DiffEngine.swift
+  MacLLM/Services/CodeSearchService.swift
+  MacLLM/Services/WorkspaceContextAssembler.swift
+  MacLLM/Services/AgentToolExecutor.swift
+  MacLLM/Services/LocalAPIServer.swift
   MacLLM/Services/InferenceService.swift
   MacLLM/Services/InferenceMessageBuilder.swift
   MacLLM/Services/AttachmentStore.swift
@@ -143,6 +150,9 @@ SOURCES=(
   MacLLM/Features/Chat/ChatComposerAttachments.swift
   MacLLM/Features/Chat/StreamingTextBuffer.swift
   MacLLM/Features/Chat/MessageAttachmentsView.swift
+  MacLLM/Features/Workspace/DiffViewerCardView.swift
+  MacLLM/Features/Workspace/TerminalActionCardView.swift
+  MacLLM/Features/Workspace/WorkspaceSidebarView.swift
   MacLLM/Features/Models/DownloadProgressView.swift
   MacLLM/Features/Models/ActiveDownloadsPanel.swift
   MacLLM/Features/Models/ModelCatalogView.swift
@@ -171,6 +181,7 @@ swiftc \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
   -O \
+  -Xfrontend -external-plugin-path -Xfrontend /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins#/Library/Developer/CommandLineTools/usr/bin/swift-plugin-server \
   -F "$FW_DIR" \
   -F "$APP/Contents/Frameworks" \
   -framework llama \
@@ -178,6 +189,7 @@ swiftc \
   -framework Accelerate \
   -framework SwiftUI \
   -framework AppKit \
+  -framework Network \
   -framework Combine \
   -framework UniformTypeIdentifiers \
   -framework AVFoundation \

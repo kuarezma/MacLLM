@@ -110,6 +110,25 @@ enum AppTheme {
         Color.clear
     }
 
+    // MARK: - Code & Workspace Theming
+
+    static let diffAdditionBg = Color(red: 0.16, green: 0.72, blue: 0.38).opacity(0.14)
+    static let diffAdditionText = Color(red: 0.22, green: 0.82, blue: 0.44)
+    static let diffAdditionGutter = Color(red: 0.16, green: 0.72, blue: 0.38).opacity(0.25)
+    
+    static let diffDeletionBg = Color(red: 0.94, green: 0.28, blue: 0.32).opacity(0.13)
+    static let diffDeletionText = Color(red: 0.96, green: 0.42, blue: 0.46)
+    static let diffDeletionGutter = Color(red: 0.94, green: 0.28, blue: 0.32).opacity(0.25)
+
+    static let terminalBackground = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(calibratedRed: 0.06, green: 0.07, blue: 0.11, alpha: 1)
+            : NSColor(calibratedRed: 0.12, green: 0.13, blue: 0.18, alpha: 1)
+    }))
+    static let terminalHeaderBg = Color.black.opacity(0.25)
+    static let terminalBorder = Color.white.opacity(0.12)
+    static let codeGutterBackground = Color.primary.opacity(0.025)
+
     // MARK: - Components
 
     static func badge(_ text: String, color: Color) -> some View {

@@ -1,13 +1,35 @@
 import SwiftUI
 
+@MainActor
+final class ChatHeaderUIState: ObservableObject {
+    @Published var settingsHovered = false
+}
+
 struct ChatHeaderView: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     @EnvironmentObject private var inferenceService: InferenceService
-    @State private var settingsHovered = false
+    @StateObject private var ui = ChatHeaderUIState()
 
     var body: some View {
         HStack(spacing: 12) {
             Spacer(minLength: 0)
+
+            if let wsURL = ProjectWorkspaceService.shared.activeWorkspaceRootURL {
+                HStack(spacing: 5) {
+                    Image(systemName: "folder.fill.badge.gearshape")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.accent)
+                    Text(wsURL.lastPathComponent)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.primaryText)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(AppTheme.accent.opacity(0.1), in: Capsule())
+                .overlay(Capsule().strokeBorder(AppTheme.accent.opacity(0.2), lineWidth: 0.5))
+                .help("Aktif Çalışma Alanı: \(wsURL.path)")
+            }
 
             modelMenu
 
@@ -16,18 +38,18 @@ struct ChatHeaderView: View {
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(settingsHovered ? AppTheme.accent : AppTheme.primaryText)
+                    .foregroundStyle(ui.settingsHovered ? AppTheme.accent : AppTheme.primaryText)
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
             .background {
                 Circle()
-                    .fill(settingsHovered ? AppTheme.accent.opacity(0.16) : Color.primary.opacity(0.06))
+                    .fill(ui.settingsHovered ? AppTheme.accent.opacity(0.16) : Color.primary.opacity(0.06))
             }
             .appHitTarget(minWidth: 40, minHeight: 40)
             .help("Ayarlar")
             .accessibilityLabel("Ayarlar")
-            .onHover { settingsHovered = $0 }
+            .onHover { ui.settingsHovered = $0 }
 
             AnimatedStatusDot(color: statusColor, pulse: shouldPulse)
 

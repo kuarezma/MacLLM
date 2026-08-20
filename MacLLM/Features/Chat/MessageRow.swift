@@ -1,8 +1,16 @@
 import SwiftUI
 import AppKit
 
+@MainActor
+final class MessageRowUIState: ObservableObject {
+    @Published var thoughtExpanded = false
+    @Published var hovered = false
+    @Published var isEditing = false
+    @Published var editDraft = ""
+}
+
 struct MessageRow: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     @EnvironmentObject private var inferenceService: InferenceService
 
     let message: ChatMessage
@@ -13,10 +21,7 @@ struct MessageRow: View {
     var generationStats: GenerationStats?
     var reserveStatsSpace: Bool = false
 
-    @State private var thoughtExpanded = false
-    @State private var hovered = false
-    @State private var isEditing = false
-    @State private var editDraft = ""
+    @StateObject private var ui = MessageRowUIState()
     @FocusState private var editFocused: Bool
 
     private var isUser: Bool { message.role == .user }
@@ -44,7 +49,7 @@ struct MessageRow: View {
             Spacer(minLength: 0)
             VStack(alignment: isUser ? .trailing : .leading, spacing: 8) {
                 messageBody
-                if !showsTypingIndicator, !isEditing {
+                if !showsTypingIndicator, !ui.isEditing {
                     messageActions
                 }
                 if message.role == .assistant, reserveStatsSpace || generationStats != nil {
@@ -58,13 +63,13 @@ struct MessageRow: View {
             .frame(maxWidth: AppTheme.maxChatContentWidth, alignment: isUser ? .trailing : .leading)
             Spacer(minLength: 0)
         }
-        .onHover { hovered = $0 }
+        .onHover { ui.hovered = $0 }
     }
 
     @ViewBuilder
     private var messageBody: some View {
         VStack(alignment: isUser ? .trailing : .leading, spacing: 8) {
-            if !message.attachments.isEmpty, !isEditing {
+            if !message.attachments.isEmpty, !ui.isEditing {
                 MessageAttachmentsView(attachments: message.attachments, sessionId: sessionId)
             }
 
@@ -78,7 +83,7 @@ struct MessageRow: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-            } else if isUser, isEditing {
+            } else if isUser, ui.isEditing {
                 editingView
             } else if isUser {
                 Text(displayContent)
@@ -102,7 +107,7 @@ struct MessageRow: View {
     @ViewBuilder
     private var editingView: some View {
         VStack(alignment: .trailing, spacing: 8) {
-            TextField("Mesajınız", text: $editDraft, axis: .vertical)
+            TextField("Mesajınız", text: $ui.editDraft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...8)
                 .focused($editFocused)
@@ -115,26 +120,26 @@ struct MessageRow: View {
                         .strokeBorder(AppTheme.accent.opacity(0.5), lineWidth: 1)
                 )
                 .onAppear {
-                    editDraft = message.content
+                    ui.editDraft = message.content
                     editFocused = true
                 }
 
             HStack(spacing: 8) {
                 Button("İptal") {
-                    isEditing = false
+                    ui.isEditing = false
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AppTheme.secondaryText)
 
                 Button("Kaydet") {
                     Task {
-                        await appModel.editUserMessage(id: message.id, newText: editDraft)
-                        isEditing = false
+                        await appModel.editUserMessage(id: message.id, newText: ui.editDraft)
+                        ui.isEditing = false
                     }
                 }
                 .buttonStyle(AccentPrimaryButtonStyle())
                 .tint(AppTheme.accent)
-                .disabled(editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(ui.editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }
@@ -153,7 +158,7 @@ struct MessageRow: View {
             ChatErrorBanner(title: "Yanıt üretilemedi", detail: errorDetail)
         } else {
             if let thought = contentSplit.thought, !thought.isEmpty {
-                DisclosureGroup(isExpanded: $thoughtExpanded) {
+                DisclosureGroup(isExpanded: $ui.thoughtExpanded) {
                     Text(thought)
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.secondaryText)
@@ -195,8 +200,8 @@ struct MessageRow: View {
             actionButton("doc.on.doc", help: "Kopyala") { copyMessage() }
             if message.role == .user {
                 actionButton("pencil", help: "Düzenle") {
-                    editDraft = message.content
-                    isEditing = true
+                    ui.editDraft = message.content
+                    ui.isEditing = true
                 }
             }
             if message.role == .assistant {
@@ -208,7 +213,7 @@ struct MessageRow: View {
                 Task { await appModel.deleteMessage(id: message.id) }
             }
         }
-        .opacity(hovered ? 1 : 0.35)
+        .opacity(ui.hovered ? 1 : 0.35)
         .disabled(actionsDisabled)
     }
 

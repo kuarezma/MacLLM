@@ -6,6 +6,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case model = "Model"
     case sampling = "Örnekleme"
     case chat = "Sohbet"
+    case localServer = "API Sunucusu"
     case huggingFace = "Hugging Face"
 
     var id: String { rawValue }
@@ -16,6 +17,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .model: return "cpu"
         case .sampling: return "slider.horizontal.3"
         case .chat: return "bubble.left.and.bubble.right"
+        case .localServer: return "server.rack"
         case .huggingFace: return "cloud"
         }
     }
@@ -26,22 +28,24 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .model: return "Bağlam, GPU, CPU"
         case .sampling: return "Sıcaklık, top-p, mirostat"
         case .chat: return "Sistem istemi, stop, limit"
+        case .localServer: return "Yerel OpenAI & Ollama API"
         case .huggingFace: return "İndirme, token"
         }
     }
 }
 
 @MainActor
+final class SettingsUIState: ObservableObject {
+    @Published var selectedTab: SettingsTab = .general
+    @Published var stopText: String = ""
+}
+
 struct SettingsView: View {
-    @Environment(AppModel.self) private var appModel
-    @Environment(AppUpdateController.self) private var appUpdate
-    @State private var tab: SettingsTab = .general
-    @State private var stopText = ""
-    @State private var settingsBaseline = InferenceSettings.default
+    @EnvironmentObject private var appModel: AppModel
+    private var appUpdate = AppUpdateController.shared
+    @StateObject private var ui = SettingsUIState()
 
     var body: some View {
-        @Bindable var model = appModel
-
         HStack(spacing: 0) {
             settingsSidebar
 
@@ -50,7 +54,7 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                        switch tab {
+                        switch ui.selectedTab {
                         case .general:
                             generalSection(model: appModel)
                         case .model:
@@ -59,6 +63,8 @@ struct SettingsView: View {
                             samplingSection(model: appModel)
                         case .chat:
                             chatSection(model: appModel)
+                        case .localServer:
+                            localServerSection()
                         case .huggingFace:
                             huggingFaceSection()
                         }
@@ -73,13 +79,12 @@ struct SettingsView: View {
         .frame(minWidth: 760, minHeight: 560)
         .background(AppTheme.sidebarBackground)
         .onAppear {
-            settingsBaseline = model.settings
-            syncStopText(from: model.settings)
+            syncStopText(from: appModel.settings)
         }
         .onDisappear {
             guard !AppShutdown.isShuttingDown else { return }
-            model.settings.stopSequencesText = stopText
-            model.saveSettingsIfNeeded(comparedTo: settingsBaseline)
+            appModel.settings.stopSequencesText = ui.stopText
+            appModel.saveSettings(silent: true)
         }
     }
 
@@ -100,9 +105,9 @@ struct SettingsView: View {
                     SettingsNavRow(
                         icon: item.icon,
                         title: item.rawValue,
-                        isSelected: tab == item
+                        isSelected: ui.selectedTab == item
                     ) {
-                        tab = item
+                        ui.selectedTab = item
                     }
                 }
             }
@@ -122,9 +127,9 @@ struct SettingsView: View {
     private var settingsHeader: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(tab.rawValue)
+                Text(ui.selectedTab.rawValue)
                     .font(.title2.weight(.semibold))
-                Text(tab.subtitle)
+                Text(ui.selectedTab.subtitle)
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -139,9 +144,8 @@ struct SettingsView: View {
             .buttonStyle(SecondaryButtonStyle())
             .foregroundStyle(AppTheme.primaryText)
             Button("Kaydet") {
-                appModel.settings.stopSequencesText = stopText
-                appModel.saveSettingsIfNeeded(comparedTo: settingsBaseline)
-                settingsBaseline = appModel.settings
+                appModel.settings.stopSequencesText = ui.stopText
+                appModel.saveSettings(reloadModel: true)
             }
             .keyboardShortcut("s", modifiers: .command)
             .buttonStyle(AccentPrimaryButtonStyle())
@@ -159,8 +163,6 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func generalSection(model: AppModel) -> some View {
-        @Bindable var updates = appUpdate
-
         SettingsCard("Uygulama") {
             SettingsInfoRow(label: "Sürüm", value: appUpdate.currentVersion)
             SettingsInfoRow(label: "Bu Mac", value: model.systemProfile.displaySummary)
@@ -189,7 +191,10 @@ struct SettingsView: View {
         }
 
         SettingsCard("Güncellemeler") {
-            Toggle("Açılışta güncellemeleri kontrol et", isOn: $updates.autoCheckEnabled)
+            Toggle("Açılışta güncellemeleri kontrol et", isOn: Binding(
+                get: { appUpdate.autoCheckEnabled },
+                set: { appUpdate.autoCheckEnabled = $0 }
+            ))
             if let last = appUpdate.lastCheckDate {
                 SettingsInfoRow(
                     label: "Son kontrol",
@@ -255,7 +260,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func modelSection(model: AppModel) -> some View {
-        let bindable = Bindable(model)
+        let bindable = model
 
         if let profile = model.activeProfile {
             SettingsCard("Yüklü model", subtitle: profile.displayName) {
@@ -344,7 +349,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func samplingSection(model: AppModel) -> some View {
-        let bindable = Bindable(model)
+        let bindable = model
 
         SettingsCard("Mirostat") {
             Picker("Mod", selection: bindable.int32Binding(\.mirostat)) {
@@ -408,7 +413,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func chatSection(model: AppModel) -> some View {
-        let bindable = Bindable(model)
+        let bindable = model
 
         SettingsCard("Üretim limiti", subtitle: "num_predict") {
             Stepper(
@@ -425,10 +430,10 @@ struct SettingsView: View {
         }
 
         SettingsCard("Durdurma dizileri", subtitle: "stop") {
-            SettingsTextEditor(text: $stopText, minHeight: 88, monospaced: true)
+            SettingsTextEditor(text: $ui.stopText, minHeight: 88, monospaced: true)
             SettingsCaption(text: "Her satır bir stop dizisi. Örn. </s>")
             Button("Varsayılan stop listesi") {
-                stopText = InferenceSettings.ollamaDefaults.stopSequencesText
+                ui.stopText = InferenceSettings.ollamaDefaults.stopSequencesText
             }
             .buttonStyle(.plain)
             .foregroundStyle(AppTheme.accent)
@@ -462,54 +467,132 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private func localServerSection() -> some View {
+        let server = LocalAPIServer.shared
+
+        SettingsCard("Yerel API Sunucusu", subtitle: "OpenAI ve Ollama uyumlu yerel REST API") {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(server.isRunning ? Color.green : Color.secondary.opacity(0.5))
+                            .frame(width: 8, height: 8)
+                        Text(server.isRunning ? "Çalışıyor" : "Durduruldu")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(server.isRunning ? .green : .secondary)
+                    }
+                    Text(server.endpointURL)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if server.isRunning {
+                    Button("Durdur") {
+                        server.stop()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                } else {
+                    Button("Başlat") {
+                        server.start(on: server.port)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.accent)
+                }
+            }
+
+            Divider()
+
+            HStack {
+                Text("Port:")
+                Picker("", selection: Binding(
+                    get: { server.port },
+                    set: { newPort in
+                        server.port = newPort
+                        if server.isRunning {
+                            server.stop()
+                            server.start(on: newPort)
+                        }
+                    }
+                )) {
+                    Text("11434 (Ollama Varsayılan)").tag(UInt16(11434))
+                    Text("8080 (Llama.cpp Varsayılan)").tag(UInt16(8080))
+                    Text("1234 (LM Studio Varsayılan)").tag(UInt16(1234))
+                    Text("5001 (Özel)").tag(UInt16(5001))
+                }
+                .frame(width: 220)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Desteklenen Endpoint'ler:")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Group {
+                    Text("• POST /v1/chat/completions (OpenAI uyumlu)")
+                    Text("• GET  /v1/models (Model listesi)")
+                    Text("• POST /api/chat (Ollama uyumlu)")
+                    Text("• GET  /api/tags (Ollama model listesi)")
+                }
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(AppTheme.primaryText.opacity(0.8))
+            }
+            .padding(.top, 4)
+
+            SettingsCaption(
+                text: "Bu sunucu açıkken Cursor, VSCode Continue, Open-WebUI veya terminal curl istekleri doğrudan MacLLM üzerinden yanıtlanır."
+            )
+        }
+    }
+
     private func syncStopText(from settings: InferenceSettings) {
-        stopText = settings.stopSequencesText
+        ui.stopText = settings.stopSequencesText
     }
 }
 
-// MARK: - Bindable helpers
+// MARK: - AppModel binding helpers
 
 @MainActor
-private extension Bindable where Value == AppModel {
+private extension AppModel {
     func intBinding(_ keyPath: WritableKeyPath<InferenceSettings, UInt32>) -> Binding<Int> {
         Binding(
-            get: { Int(wrappedValue.settings[keyPath: keyPath]) },
-            set: { wrappedValue.settings[keyPath: keyPath] = UInt32($0) }
+            get: { Int(self.settings[keyPath: keyPath]) },
+            set: { self.settings[keyPath: keyPath] = UInt32($0) }
         )
     }
 
     func int32Binding(_ keyPath: WritableKeyPath<InferenceSettings, Int32>) -> Binding<Int> {
         Binding(
-            get: { Int(wrappedValue.settings[keyPath: keyPath]) },
-            set: { wrappedValue.settings[keyPath: keyPath] = Int32($0) }
+            get: { Int(self.settings[keyPath: keyPath]) },
+            set: { self.settings[keyPath: keyPath] = Int32($0) }
         )
     }
 
     func uint32Binding(_ keyPath: WritableKeyPath<InferenceSettings, UInt32>) -> Binding<Int> {
         Binding(
-            get: { Int(wrappedValue.settings[keyPath: keyPath]) },
-            set: { wrappedValue.settings[keyPath: keyPath] = UInt32($0) }
+            get: { Int(self.settings[keyPath: keyPath]) },
+            set: { self.settings[keyPath: keyPath] = UInt32($0) }
         )
     }
 
     func floatBinding(_ keyPath: WritableKeyPath<InferenceSettings, Float>) -> Binding<Float> {
         Binding(
-            get: { wrappedValue.settings[keyPath: keyPath] },
-            set: { wrappedValue.settings[keyPath: keyPath] = $0 }
+            get: { self.settings[keyPath: keyPath] },
+            set: { self.settings[keyPath: keyPath] = $0 }
         )
     }
 
     func stringBinding(_ keyPath: WritableKeyPath<InferenceSettings, String>) -> Binding<String> {
         Binding(
-            get: { wrappedValue.settings[keyPath: keyPath] },
-            set: { wrappedValue.settings[keyPath: keyPath] = $0 }
+            get: { self.settings[keyPath: keyPath] },
+            set: { self.settings[keyPath: keyPath] = $0 }
         )
     }
 
     func boolBinding(_ keyPath: WritableKeyPath<InferenceSettings, Bool>) -> Binding<Bool> {
         Binding(
-            get: { wrappedValue.settings[keyPath: keyPath] },
-            set: { wrappedValue.settings[keyPath: keyPath] = $0 }
+            get: { self.settings[keyPath: keyPath] },
+            set: { self.settings[keyPath: keyPath] = $0 }
         )
     }
 }

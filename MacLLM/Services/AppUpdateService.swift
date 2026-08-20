@@ -26,8 +26,7 @@ struct AppReleaseInfo: Identifiable, Equatable, Sendable {
 }
 
 @MainActor
-@Observable
-final class AppUpdateController {
+final class AppUpdateController: ObservableObject {
     static let shared = AppUpdateController()
 
     private static let repo = "kuarezma/MacLLM"
@@ -35,12 +34,12 @@ final class AppUpdateController {
     private static let autoCheckKey = "appUpdateAutoCheck"
     private static let lastCheckKey = "appUpdateLastCheckDate"
 
-    var availableUpdate: AppReleaseInfo?
-    var isChecking = false
-    var isDownloading = false
-    var downloadProgress: Double = 0
-    var downloadStatus: String?
-    var lastCheckDate: Date?
+    @Published var availableUpdate: AppReleaseInfo?
+    @Published var isChecking = false
+    @Published var isDownloading = false
+    @Published var downloadProgress: Double = 0
+    @Published var downloadStatus: String?
+    @Published var lastCheckDate: Date?
     private var activeDownloadContext: AppUpdateDownloadContext?
     var autoCheckEnabled: Bool {
         get {

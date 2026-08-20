@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ImportedModelFlashBannerView: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
         if appModel.showImportedFlashBanner {

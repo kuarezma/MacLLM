@@ -4,6 +4,9 @@ struct ChatProject: Codable, Identifiable, Hashable {
     var id: UUID
     var name: String
     var systemPrompt: String
+    var rootDirectoryBookmark: Data?
+    var rootDirectoryPath: String?
+    var workspaceRules: String?
     var createdAt: Date
     var updatedAt: Date
 
@@ -11,18 +14,24 @@ struct ChatProject: Codable, Identifiable, Hashable {
         id: UUID = UUID(),
         name: String,
         systemPrompt: String = "",
+        rootDirectoryBookmark: Data? = nil,
+        rootDirectoryPath: String? = nil,
+        workspaceRules: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
         self.id = id
         self.name = name
         self.systemPrompt = systemPrompt
+        self.rootDirectoryBookmark = rootDirectoryBookmark
+        self.rootDirectoryPath = rootDirectoryPath
+        self.workspaceRules = workspaceRules
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, systemPrompt, createdAt, updatedAt
+        case id, name, systemPrompt, rootDirectoryBookmark, rootDirectoryPath, workspaceRules, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -30,6 +39,9 @@ struct ChatProject: Codable, Identifiable, Hashable {
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
         systemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt) ?? ""
+        rootDirectoryBookmark = try c.decodeIfPresent(Data.self, forKey: .rootDirectoryBookmark)
+        rootDirectoryPath = try c.decodeIfPresent(String.self, forKey: .rootDirectoryPath)
+        workspaceRules = try c.decodeIfPresent(String.self, forKey: .workspaceRules)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
     }

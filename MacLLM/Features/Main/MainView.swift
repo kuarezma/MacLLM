@@ -1,47 +1,69 @@
 import SwiftUI
 
+@MainActor
+final class MainUIState: ObservableObject {
+    @Published var showDownloadsPopover: Bool = false
+    @Published var showAllDownloadsSheet: Bool = false
+    @Published var showWorkspaceInspector: Bool = false
+}
+
 struct MainView: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     @EnvironmentObject private var inferenceService: InferenceService
-    @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var showDownloadsPopover = false
-    @State private var showAllDownloadsSheet = false
-    @State private var sidebarSearchFocused = false
+    private let downloadService = HuggingFaceDownloadService.shared
+    @StateObject private var ui = MainUIState()
 
     var body: some View {
-        @Bindable var model = appModel
+        let model = appModel
 
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            JanSidebarView(showDownloadsPopover: $showDownloadsPopover)
+        NavigationSplitView {
+            JanSidebarView(showDownloadsPopover: $ui.showDownloadsPopover)
             .navigationSplitViewColumnWidth(min: 220, ideal: AppTheme.sidebarWidth, max: 320)
         } detail: {
             VStack(spacing: 0) {
                 AppUpdateBannerView()
                 ImportedModelFlashBannerView()
-                ChatView(showDownloadsPopover: $showDownloadsPopover)
+                ChatView(showDownloadsPopover: $ui.showDownloadsPopover)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .inspector(isPresented: $ui.showWorkspaceInspector) {
+            WorkspaceSidebarView()
+                .inspectorColumnWidth(min: 240, ideal: 280, max: 380)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
+                if model.selectedProjectId != nil {
+                    Button {
+                        ui.showWorkspaceInspector.toggle()
+                    } label: {
+                        Image(systemName: "sidebar.right")
+                    }
+                    .help(ui.showWorkspaceInspector ? "Çalışma alanını gizle" : "Çalışma alanı dosya ağacı")
+                }
                 if showsToolbarActivity {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
                         Text(toolbarActivityText)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.secondaryText)
                     }
                 }
                 DownloadToolbarButton(
                     downloadService: downloadService,
-                    isPresented: $showDownloadsPopover,
-                    showAllDownloadsSheet: $showAllDownloadsSheet
+                    isPresented: $ui.showDownloadsPopover,
+                    showAllDownloadsSheet: $ui.showAllDownloadsSheet
                 )
             }
         }
-        .sheet(isPresented: $showAllDownloadsSheet) {
+        .sheet(isPresented: $ui.showDownloadsPopover) {
+            DownloadManagerPopover(
+                downloadService: downloadService,
+                showAllDownloadsSheet: $ui.showAllDownloadsSheet
+            )
+        }
+        .sheet(isPresented: $ui.showAllDownloadsSheet) {
             NavigationStack {
                 ScrollView {
                     ActiveDownloadsPanel(downloadService: downloadService, style: .full)
@@ -51,21 +73,33 @@ struct MainView: View {
                 .frame(minWidth: 480, minHeight: 360)
             }
         }
-        .sheet(isPresented: $model.showCatalog) {
+        .sheet(isPresented: Binding(
+            get: { model.showCatalog },
+            set: { model.showCatalog = $0 }
+        )) {
             ModelCatalogView()
         }
-        .sheet(isPresented: $model.showNewProjectSheet) {
+        .sheet(isPresented: Binding(
+            get: { model.showNewProjectSheet },
+            set: { model.showNewProjectSheet = $0 }
+        )) {
             NewProjectSheet()
-                .environment(appModel)
+                .environmentObject(appModel)
         }
-        .sheet(isPresented: $model.showSystemPromptSheet) {
+        .sheet(isPresented: Binding(
+            get: { model.showSystemPromptSheet },
+            set: { model.showSystemPromptSheet = $0 }
+        )) {
             SystemPromptSheet()
-                .environment(appModel)
+                .environmentObject(appModel)
         }
-        .sheet(isPresented: $model.showProjectPromptSheet) {
+        .sheet(isPresented: Binding(
+            get: { model.showProjectPromptSheet },
+            set: { model.showProjectPromptSheet = $0 }
+        )) {
             if let projectId = model.projectPromptEditId {
                 ProjectPromptSheet(projectId: projectId)
-                    .environment(appModel)
+                    .environmentObject(appModel)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -130,59 +164,63 @@ private extension View {
 
 // MARK: - Jan-style sidebar
 
+@MainActor
+final class JanSidebarUIState: ObservableObject {
+    @Published var sessionSearchText = ""
+    @Published var searchedSessions: [ChatSession] = []
+    @Published var modelsExpanded = false
+    @Published var sessionPendingDelete: ChatSession?
+    @Published var sessionsPendingDeleteAll = false
+    @Published var modelPendingDelete: InstalledModel?
+    @Published var hoveredSessionId: UUID?
+    @Published var selectedSessionId: UUID?
+}
+
 struct JanSidebarView: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     @EnvironmentObject private var inferenceService: InferenceService
     @Binding var showDownloadsPopover: Bool
-
-    @State private var sessionSearchText = ""
-    @State private var searchedSessions: [ChatSession] = []
-    @State private var modelsExpanded = false
-    @State private var sessionPendingDelete: ChatSession?
-    @State private var sessionsPendingDeleteAll = false
-    @State private var modelPendingDelete: InstalledModel?
-    @State private var hoveredSessionId: UUID?
-    @State private var selectedSessionId: UUID?
+    @StateObject private var ui = JanSidebarUIState()
     @FocusState private var sessionSearchFocused: Bool
 
     private var sessionsToShow: [ChatSession] {
-        sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        ui.sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? appModel.filteredSessions
-            : searchedSessions
+            : ui.searchedSessions
     }
 
     private var sessionDeleteAlertPresented: Binding<Bool> {
         Binding(
-            get: { sessionPendingDelete != nil },
+            get: { ui.sessionPendingDelete != nil },
             set: { isPresented in
-                if !isPresented { sessionPendingDelete = nil }
+                if !isPresented { ui.sessionPendingDelete = nil }
             }
         )
     }
 
     var body: some View {
-        @Bindable var model = appModel
+        let model = appModel
         sidebarList(model: model)
             .listStyle(.sidebar)
             .navigationTitle("")
             .toolbar { sidebarToolbar }
             .background(AppTheme.sidebarBackground)
             .onChange(of: model.sessions.count) { _, _ in
-                if !sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    performSessionSearch(query: sessionSearchText)
+                if !ui.sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    performSessionSearch(query: ui.sessionSearchText)
                 }
-                if !model.sessions.contains(where: { $0.id == selectedSessionId }) {
-                    selectedSessionId = model.currentSession.id
+                if !model.sessions.contains(where: { $0.id == ui.selectedSessionId }) {
+                    ui.selectedSessionId = model.currentSession.id
                 }
             }
-            .onAppear { selectedSessionId = model.currentSession.id }
+            .onAppear { ui.selectedSessionId = model.currentSession.id }
             .onChange(of: model.currentSession.id) { _, newId in
-                if selectedSessionId != newId { selectedSessionId = newId }
+                if ui.selectedSessionId != newId { ui.selectedSessionId = newId }
             }
-            .onChange(of: selectedSessionId) { _, newId in
+            .onChange(of: ui.selectedSessionId) { _, newId in
                 guard let newId, newId != model.currentSession.id else { return }
                 guard let session = model.sessions.first(where: { $0.id == newId })
-                    ?? searchedSessions.first(where: { $0.id == newId }) else { return }
+                    ?? ui.searchedSessions.first(where: { $0.id == newId }) else { return }
                 Task { await model.loadSession(session) }
             }
             .onChange(of: model.selectedModelId) { _, newId in
@@ -202,24 +240,24 @@ struct JanSidebarView: View {
                 sessionSearchFocused = true
             }
             .onDeleteCommand {
-                guard let selectedSessionId else { return }
-                if let session = model.sessions.first(where: { $0.id == selectedSessionId })
-                    ?? searchedSessions.first(where: { $0.id == selectedSessionId }) {
-                    sessionPendingDelete = session
+                guard let selectedId = ui.selectedSessionId else { return }
+                if let session = model.sessions.first(where: { $0.id == selectedId })
+                    ?? ui.searchedSessions.first(where: { $0.id == selectedId }) {
+                    ui.sessionPendingDelete = session
                 }
             }
-            .alert("Bu sohbet silinsin mi?", isPresented: sessionDeleteAlertPresented, presenting: sessionPendingDelete) { session in
+            .alert("Bu sohbet silinsin mi?", isPresented: sessionDeleteAlertPresented, presenting: ui.sessionPendingDelete) { session in
                 Button("Sil", role: .destructive) {
                     Task {
                         await model.deleteSession(session)
-                        sessionPendingDelete = nil
+                        ui.sessionPendingDelete = nil
                     }
                 }
-                Button("İptal", role: .cancel) { sessionPendingDelete = nil }
+                Button("İptal", role: .cancel) { ui.sessionPendingDelete = nil }
             } message: { session in
                 Text("“\(session.title)” kalıcı olarak silinecek.")
             }
-            .alert("Listedeki sohbetler silinsin mi?", isPresented: $sessionsPendingDeleteAll) {
+            .alert("Listedeki sohbetler silinsin mi?", isPresented: $ui.sessionsPendingDeleteAll) {
                 Button("Hepsini sil", role: .destructive) {
                     let targets = sessionsToShow
                     Task { await model.deleteSessions(targets) }
@@ -228,14 +266,14 @@ struct JanSidebarView: View {
             } message: {
                 Text("\(sessionsToShow.count) sohbet kalıcı olarak silinecek. Bu işlem geri alınamaz.")
             }
-            .alert("Model diskten silinsin mi?", isPresented: modelDeleteAlertPresented, presenting: modelPendingDelete) { installed in
+            .alert("Model diskten silinsin mi?", isPresented: modelDeleteAlertPresented, presenting: ui.modelPendingDelete) { installed in
                 Button("Sil", role: .destructive) {
                     Task {
                         await model.deleteModel(installed)
-                        modelPendingDelete = nil
+                        ui.modelPendingDelete = nil
                     }
                 }
-                Button("İptal", role: .cancel) { modelPendingDelete = nil }
+                Button("İptal", role: .cancel) { ui.modelPendingDelete = nil }
             } message: { installed in
                 Text("\(installed.name) dosyası silinecek. Bu işlem geri alınamaz.")
             }
@@ -243,9 +281,9 @@ struct JanSidebarView: View {
 
     private var modelDeleteAlertPresented: Binding<Bool> {
         Binding(
-            get: { modelPendingDelete != nil },
+            get: { ui.modelPendingDelete != nil },
             set: { isPresented in
-                if !isPresented { modelPendingDelete = nil }
+                if !isPresented { ui.modelPendingDelete = nil }
             }
         )
     }
@@ -268,7 +306,7 @@ struct JanSidebarView: View {
 
     @ViewBuilder
     private func sidebarList(model: AppModel) -> some View {
-        List(selection: $selectedSessionId) {
+        List(selection: $ui.selectedSessionId) {
             Section {
                 sidebarNavRow("square.and.pencil", title: "Yeni Sohbet", shortcut: "⌘N") {
                     Task { await model.newChat() }
@@ -291,6 +329,7 @@ struct JanSidebarView: View {
                 Section("Projeler") {
                     Button {
                         model.selectedProjectId = nil
+                        model.syncActiveWorkspace()
                     } label: {
                         HStack {
                             Image(systemName: "tray.full")
@@ -311,11 +350,12 @@ struct JanSidebarView: View {
                     ForEach(model.projects) { project in
                         Button {
                             model.selectedProjectId = project.id
+                            model.syncActiveWorkspace()
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "folder")
+                                Image(systemName: project.rootDirectoryPath != nil ? "folder.fill.badge.gearshape" : "folder")
                                     .font(.caption)
-                                    .foregroundStyle(AppTheme.secondaryText)
+                                    .foregroundStyle(project.rootDirectoryPath != nil ? AppTheme.accent : AppTheme.secondaryText)
                                 Text(project.name)
                                     .lineLimit(1)
                                     .fontWeight(model.selectedProjectId == project.id ? .semibold : .regular)
@@ -329,7 +369,7 @@ struct JanSidebarView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            Button("Proje sistemi istemi…") {
+                            Button("Proje ve çalışma alanı ayarları…") {
                                 model.projectPromptEditId = project.id
                                 model.showProjectPromptSheet = true
                             }
@@ -342,7 +382,7 @@ struct JanSidebarView: View {
             }
 
             Section {
-                TextField("Sohbetlerde ara…", text: $sessionSearchText)
+                TextField("Sohbetlerde ara…", text: $ui.sessionSearchText)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
@@ -352,7 +392,7 @@ struct JanSidebarView: View {
                             .strokeBorder(AppTheme.border, lineWidth: 1)
                     }
                     .focused($sessionSearchFocused)
-                    .onChange(of: sessionSearchText) { _, query in
+                    .onChange(of: ui.sessionSearchText) { _, query in
                         performSessionSearch(query: query)
                     }
 
@@ -374,7 +414,7 @@ struct JanSidebarView: View {
                     Text("Sohbetler")
                     Spacer()
                     Button("Hepsini sil") {
-                        sessionsPendingDeleteAll = true
+                        ui.sessionsPendingDeleteAll = true
                     }
                     .buttonStyle(.plain)
                     .font(.caption.weight(.medium))
@@ -384,7 +424,7 @@ struct JanSidebarView: View {
             }
 
             Section {
-                DisclosureGroup("Modeller", isExpanded: $modelsExpanded) {
+                DisclosureGroup("Modeller", isExpanded: $ui.modelsExpanded) {
                     if model.installedModels.isEmpty {
                         Button("Model Hub…") { model.showCatalog = true }
                             .font(.caption)
@@ -403,7 +443,7 @@ struct JanSidebarView: View {
                             .buttonStyle(.plain)
                             .contextMenu {
                                 Button("Diskten Sil", role: .destructive) {
-                                    modelPendingDelete = installed
+                                    ui.modelPendingDelete = installed
                                 }
                             }
                         }
@@ -432,7 +472,7 @@ struct JanSidebarView: View {
 
     private func sessionRow(_ session: ChatSession) -> some View {
         let isCurrent = session.id == appModel.currentSession.id
-        let isHovered = hoveredSessionId == session.id
+        let isHovered = ui.hoveredSessionId == session.id
 
         return HStack(spacing: 8) {
             Text(session.title)
@@ -442,7 +482,7 @@ struct JanSidebarView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
-                sessionPendingDelete = session
+                ui.sessionPendingDelete = session
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 11, weight: .semibold))
@@ -476,7 +516,7 @@ struct JanSidebarView: View {
             }
         }
         .onHover { hovering in
-            hoveredSessionId = hovering ? session.id : nil
+            ui.hoveredSessionId = hovering ? session.id : nil
         }
         .tag(session.id)
         .contextMenu {
@@ -491,7 +531,7 @@ struct JanSidebarView: View {
                 }
             }
             Button("Sil", role: .destructive) {
-                sessionPendingDelete = session
+                ui.sessionPendingDelete = session
             }
         }
     }
@@ -534,7 +574,7 @@ struct JanSidebarView: View {
     private func performSessionSearch(query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            searchedSessions = []
+            ui.searchedSessions = []
             return
         }
         Task {
@@ -544,7 +584,7 @@ struct JanSidebarView: View {
                 if let projectId = appModel.selectedProjectId {
                     results = results.filter { $0.projectId == projectId }
                 }
-                searchedSessions = results
+                ui.searchedSessions = results
             }
         }
     }

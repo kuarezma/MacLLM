@@ -1,5 +1,10 @@
 import SwiftUI
 
+@MainActor
+final class HubQuantRowUIState: ObservableObject {
+    @Published var showInfo = false
+}
+
 /// Hub tablosu — tek GGUF satırı (Model | Format | Boyut | Bilgi | İndir).
 struct HubQuantRowView: View {
     let file: HFGGUFile
@@ -12,7 +17,7 @@ struct HubQuantRowView: View {
     let onDownload: () -> Void
     var onUse: (() -> Void)?
 
-    @State private var showInfo = false
+    @StateObject private var ui = HubQuantRowUIState()
 
     private var tokenMissing: Bool {
         gated && (HuggingFaceCredentials.token ?? "").isEmpty
@@ -68,7 +73,7 @@ struct HubQuantRowView: View {
     @ViewBuilder
     private var infoButton: some View {
         Button {
-            showInfo.toggle()
+            ui.showInfo.toggle()
         } label: {
             Image(systemName: "info.circle")
                 .font(.body)
@@ -78,7 +83,7 @@ struct HubQuantRowView: View {
         .buttonStyle(.plain)
         .appHitTarget(minWidth: 28, minHeight: 28)
         .help("Model bilgisi")
-        .popover(isPresented: $showInfo, arrowEdge: .bottom) {
+        .popover(isPresented: $ui.showInfo, arrowEdge: .bottom) {
             infoPopoverContent
         }
     }

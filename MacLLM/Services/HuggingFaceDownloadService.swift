@@ -213,7 +213,7 @@ final class HuggingFaceDownloadService: ObservableObject {
                     return
                 }
                 ctx.continuation = continuation
-                ctx.task = Task {
+                ctx.task = Task { [weak self, weak ctx] in
                     do {
                         try Task.checkCancellation()
                         try await RangeDownloadEngine.downloadParallel(
@@ -235,11 +235,11 @@ final class HuggingFaceDownloadService: ObservableObject {
                         )
                         try GGUFFileValidator.validateDownload(at: destination, expectedBytes: totalBytes)
                         await MainActor.run {
-                            self.finishParallelDownload(entryId: entry.id, entry: entry, result: .success(destination))
+                            self?.finishParallelDownload(entryId: entry.id, entry: entry, result: .success(destination))
                         }
                     } catch {
                         await MainActor.run {
-                            self.finishParallelDownload(entryId: entry.id, entry: entry, result: .failure(error))
+                            self?.finishParallelDownload(entryId: entry.id, entry: entry, result: .failure(error))
                         }
                     }
                 }

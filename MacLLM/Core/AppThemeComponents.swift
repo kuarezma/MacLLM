@@ -115,13 +115,11 @@ struct ModernScaleButtonStyle: ButtonStyle {
 }
 
 struct SidebarNavButtonStyle: ButtonStyle {
-    @State private var hovered = false
-
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         let shadows = ButtonChrome3D.raisedShadows(
             glow: AppTheme.glowSecondary,
-            hovered: hovered,
+            hovered: false,
             pressed: pressed
         )
 
@@ -134,22 +132,16 @@ struct SidebarNavButtonStyle: ButtonStyle {
                     .fill(
                         pressed
                             ? AppTheme.accentSecondary.opacity(0.2)
-                            : hovered
-                                ? Color.primary.opacity(0.09)
-                                : Color.clear
+                            : Color.clear
                     )
                     .shadow(color: shadows.0, radius: shadows.1, y: shadows.2)
             }
-            .scaleEffect(pressed ? 0.98 : hovered ? 1.01 : 1)
+            .scaleEffect(pressed ? 0.98 : 1)
             .animation(AppTheme.fadeQuick, value: pressed)
-            .animation(AppTheme.springSoft, value: hovered)
-            .onHover { hovered = $0 }
     }
 }
 
 struct PromptChipButtonStyle: ButtonStyle {
-    @State private var hovered = false
-
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
@@ -159,24 +151,17 @@ struct PromptChipButtonStyle: ButtonStyle {
                     .fill(.ultraThinMaterial)
                     .overlay {
                         RoundedRectangle(cornerRadius: AppTheme.panelRadius, style: .continuous)
-                            .strokeBorder(
-                                hovered ? AppTheme.accent.opacity(0.4) : AppTheme.border,
-                                lineWidth: 1
-                            )
+                            .strokeBorder(AppTheme.border, lineWidth: 1)
                     }
                     .shadow(color: .black.opacity(pressed ? 0.1 : 0.18), radius: pressed ? 2 : 5, y: pressed ? 1 : 3)
             }
-            .appTopHighlight(cornerRadius: AppTheme.panelRadius, opacity: hovered ? 0.2 : 0.12)
-            .scaleEffect(pressed ? 0.97 : hovered ? 1.01 : 1)
+            .appTopHighlight(cornerRadius: AppTheme.panelRadius, opacity: 0.12)
+            .scaleEffect(pressed ? 0.97 : 1)
             .animation(AppTheme.springSnappy, value: pressed)
-            .animation(AppTheme.springSoft, value: hovered)
-            .onHover { hovered = $0 }
     }
 }
 
 struct AccentIconButtonStyle: ButtonStyle {
-    @State private var hovered = false
-
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
@@ -186,7 +171,7 @@ struct AccentIconButtonStyle: ButtonStyle {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.primary.opacity(hovered ? 0.14 : 0.08),
+                                Color.primary.opacity(0.08),
                                 Color.primary.opacity(0.04)
                             ],
                             startPoint: .topLeading,
@@ -195,22 +180,19 @@ struct AccentIconButtonStyle: ButtonStyle {
                     )
                     .shadow(color: .black.opacity(pressed ? 0.1 : 0.2), radius: pressed ? 2 : 5, y: pressed ? 1 : 3)
             }
-            .scaleEffect(pressed ? 0.94 : hovered ? 1.04 : 1)
+            .scaleEffect(pressed ? 0.94 : 1)
             .animation(AppTheme.fadeQuick, value: pressed)
-            .animation(AppTheme.springSoft, value: hovered)
-            .onHover { hovered = $0 }
     }
 }
 
 struct AccentPrimaryButtonStyle: ButtonStyle {
     var disabled: Bool = false
-    @State private var hovered = false
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         let shadows = ButtonChrome3D.raisedShadows(
             glow: AppTheme.glowAccent,
-            hovered: hovered && !disabled,
+            hovered: false,
             pressed: pressed
         )
 
@@ -233,17 +215,13 @@ struct AccentPrimaryButtonStyle: ButtonStyle {
                     .shadow(color: shadows.3, radius: shadows.4, y: shadows.5)
             }
             .appTopHighlight(cornerRadius: 12, opacity: disabled ? 0 : 0.32)
-            .scaleEffect(pressed ? 0.97 : hovered && !disabled ? 1.02 : 1)
+            .scaleEffect(pressed ? 0.97 : 1)
             .offset(y: pressed ? 1 : 0)
             .animation(AppTheme.springSnappy, value: pressed)
-            .animation(AppTheme.springSoft, value: hovered)
-            .onHover { hovered = $0 }
     }
 }
 
 struct SecondaryButtonStyle: ButtonStyle {
-    @State private var hovered = false
-
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
@@ -263,19 +241,15 @@ struct SecondaryButtonStyle: ButtonStyle {
             .scaleEffect(pressed ? 0.97 : 1)
             .offset(y: pressed ? 1 : 0)
             .animation(AppTheme.springSnappy, value: pressed)
-            .animation(AppTheme.fadeQuick, value: hovered)
-            .onHover { hovered = $0 }
     }
 }
 
 struct DestructiveButtonStyle: ButtonStyle {
-    @State private var hovered = false
-
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         let shadows = ButtonChrome3D.raisedShadows(
             glow: Color.red.opacity(0.4),
-            hovered: hovered,
+            hovered: false,
             pressed: pressed
         )
 
@@ -295,17 +269,14 @@ struct DestructiveButtonStyle: ButtonStyle {
                     .shadow(color: shadows.3, radius: shadows.4, y: shadows.5)
             }
             .appTopHighlight(cornerRadius: 11, opacity: 0.22)
-            .scaleEffect(pressed ? 0.97 : hovered ? 1.02 : 1)
+            .scaleEffect(pressed ? 0.97 : 1)
             .offset(y: pressed ? 1 : 0)
             .animation(AppTheme.springSnappy, value: pressed)
-            .animation(AppTheme.springSoft, value: hovered)
-            .onHover { hovered = $0 }
     }
 }
 
 struct SendCircleButtonStyle: ButtonStyle {
     var enabled: Bool = true
-    @State private var hovered = false
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
@@ -323,23 +294,19 @@ struct SendCircleButtonStyle: ButtonStyle {
                             .strokeBorder(Color.white.opacity(enabled ? 0.2 : 0), lineWidth: 1)
                     }
                     .shadow(
-                        color: enabled ? AppTheme.glowAccent.opacity(hovered ? 0.5 : 0.3) : .clear,
-                        radius: hovered ? 12 : 8,
+                        color: enabled ? AppTheme.glowAccent.opacity(0.35) : .clear,
+                        radius: 8,
                         y: pressed ? 1 : 3
                     )
                     .shadow(color: .black.opacity(enabled ? 0.25 : 0), radius: 6, y: 3)
             }
             .appTopHighlight(cornerRadius: 18, opacity: enabled ? 0.35 : 0)
-            .scaleEffect(pressed ? 0.94 : hovered && enabled ? 1.05 : 1)
+            .scaleEffect(pressed ? 0.94 : 1)
             .animation(AppTheme.springSnappy, value: pressed)
-            .animation(AppTheme.springSoft, value: hovered)
-            .onHover { hovered = $0 }
     }
 }
 
 struct StopCircleButtonStyle: ButtonStyle {
-    @State private var hovered = false
-
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
@@ -353,10 +320,8 @@ struct StopCircleButtonStyle: ButtonStyle {
                     }
                     .shadow(color: .black.opacity(0.2), radius: pressed ? 2 : 5, y: pressed ? 1 : 3)
             }
-            .scaleEffect(pressed ? 0.94 : hovered ? 1.04 : 1)
+            .scaleEffect(pressed ? 0.94 : 1)
             .animation(AppTheme.springSnappy, value: pressed)
-            .animation(AppTheme.springSoft, value: hovered)
-            .onHover { hovered = $0 }
     }
 }
 
@@ -387,35 +352,17 @@ struct AnimatedStatusDot: View {
     let color: Color
     var pulse: Bool = false
 
-    @State private var animating = false
-
     var body: some View {
         ZStack {
             if pulse {
                 Circle()
                     .fill(color.opacity(0.35))
                     .frame(width: 14, height: 14)
-                    .scaleEffect(animating ? 1.35 : 0.85)
-                    .opacity(animating ? 0 : 0.7)
             }
             Circle()
                 .fill(color)
                 .frame(width: 8, height: 8)
                 .shadow(color: color.opacity(0.55), radius: 4)
-        }
-        .onAppear {
-            guard pulse else { return }
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: false)) {
-                animating = true
-            }
-        }
-        .onChange(of: pulse) { _, active in
-            animating = false
-            if active {
-                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: false)) {
-                    animating = true
-                }
-            }
         }
     }
 }

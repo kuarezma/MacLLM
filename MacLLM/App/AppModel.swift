@@ -5,37 +5,36 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
-@Observable
-final class AppModel {
+final class AppModel: ObservableObject {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "MacLLM", category: "AppModel")
     private static func makeDiagnosticID() -> String {
         String(UUID().uuidString.prefix(8)).uppercased()
     }
-    var installedModels: [InstalledModel] = []
-    var catalogEntries: [CatalogEntry] = []
-    var modelRecommendations: [ScoredCatalogEntry] = []
-    var systemProfile: MacSystemProfile = .current()
-    var selectedModelId: String?
-    var currentSession: ChatSession
-    var sessions: [ChatSession] = []
-    var settings: InferenceSettings = .default
-    var statusMessage: String?
-    var isLoadingModel = false
-    var showCatalog = false
-    var showNewProjectSheet = false
-    var showSystemPromptSheet = false
-    var showProjectPromptSheet = false
-    var projectPromptEditId: UUID?
-    var projects: [ChatProject] = []
-    var selectedProjectId: UUID?
-    var contextTokenCount: Int = 0
-    var contextTokenCountIsEstimate = true
-    var activeProfile: LoadedModelProfile?
-    @ObservationIgnored let streamingBuffer: StreamingTextBuffer
-    var suppressAutoModelLoad = false
-    var showLaunchLoadPrompt = false
-    var launchLoadCandidate: InstalledModel?
-    var showImportedFlashBanner = false
+    @Published var installedModels: [InstalledModel] = []
+    @Published var catalogEntries: [CatalogEntry] = []
+    @Published var modelRecommendations: [ScoredCatalogEntry] = []
+    @Published var systemProfile: MacSystemProfile = .current()
+    @Published var selectedModelId: String?
+    @Published var currentSession: ChatSession
+    @Published var sessions: [ChatSession] = []
+    @Published var settings: InferenceSettings = .default
+    @Published var statusMessage: String?
+    @Published var isLoadingModel = false
+    @Published var showCatalog = false
+    @Published var showNewProjectSheet = false
+    @Published var showSystemPromptSheet = false
+    @Published var showProjectPromptSheet = false
+    @Published var projectPromptEditId: UUID?
+    @Published var projects: [ChatProject] = []
+    @Published var selectedProjectId: UUID?
+    @Published var contextTokenCount: Int = 0
+    @Published var contextTokenCountIsEstimate = true
+    @Published var activeProfile: LoadedModelProfile?
+    let streamingBuffer: StreamingTextBuffer
+    @Published var suppressAutoModelLoad = false
+    @Published var showLaunchLoadPrompt = false
+    @Published var launchLoadCandidate: InstalledModel?
+    @Published var showImportedFlashBanner = false
 
     private let modelStore = ModelStore.shared
     private var statusClearTask: Task<Void, Never>?
@@ -665,6 +664,14 @@ final class AppModel {
             if !projectPrompt.isEmpty {
                 parts.append(projectPrompt)
             }
+            if let rootPath = project.rootDirectoryPath, !rootPath.isEmpty {
+                let workspaceInstructions = AgentToolPrompt.systemInstructions(
+                    workspacePath: rootPath,
+                    workspaceRules: project.workspaceRules
+                )
+                let treeSummary = WorkspaceContextAssembler.buildWorkspaceTreeSummary(maxFiles: 40)
+                parts.append(workspaceInstructions + "\n\n" + treeSummary)
+            }
         }
         let global = settings.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !global.isEmpty {
@@ -673,15 +680,40 @@ final class AppModel {
         return parts.joined(separator: "\n\n")
     }
 
-    func createProject(named name: String, systemPrompt: String = "") {
+    func syncActiveWorkspace() {
+        let projectId = currentSession.projectId ?? selectedProjectId
+        guard let projectId, let project = projects.first(where: { $0.id == projectId }) else {
+            ProjectWorkspaceService.shared.stopAccessingCurrentWorkspace()
+            return
+        }
+        _ = ProjectWorkspaceService.shared.activateWorkspace(
+            bookmarkData: project.rootDirectoryBookmark,
+            fallbackPath: project.rootDirectoryPath
+        )
+    }
+
+    func createProject(
+        named name: String,
+        systemPrompt: String = "",
+        rootDirectoryBookmark: Data? = nil,
+        rootDirectoryPath: String? = nil,
+        workspaceRules: String? = nil
+    ) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let project = ChatProject(name: trimmed, systemPrompt: systemPrompt)
+        let project = ChatProject(
+            name: trimmed,
+            systemPrompt: systemPrompt,
+            rootDirectoryBookmark: rootDirectoryBookmark,
+            rootDirectoryPath: rootDirectoryPath,
+            workspaceRules: workspaceRules
+        )
         do {
             try projectStore.save(project)
             projects.insert(project, at: 0)
             selectedProjectId = project.id
             currentSession.projectId = project.id
+            syncActiveWorkspace()
             setStatusMessage("Proje oluşturuldu: \(trimmed)")
         } catch {
             reportError(error, context: "Proje oluşturulamadı")
@@ -699,6 +731,34 @@ final class AppModel {
             setStatusMessage("Proje istemi güncellendi")
         } catch {
             reportError(error, context: "Proje istemi güncellenemedi")
+        }
+    }
+
+    func updateProjectDetails(
+        projectId: UUID,
+        prompt: String,
+        rootDirectoryBookmark: Data?,
+        rootDirectoryPath: String?,
+        workspaceRules: String? = nil
+    ) {
+        guard let index = projects.firstIndex(where: { $0.id == projectId }) else { return }
+        var project = projects[index]
+        project.systemPrompt = prompt
+        project.rootDirectoryBookmark = rootDirectoryBookmark
+        project.rootDirectoryPath = rootDirectoryPath
+        if let workspaceRules {
+            project.workspaceRules = workspaceRules
+        }
+        project.updatedAt = .now
+        do {
+            try projectStore.save(project)
+            projects[index] = project
+            if selectedProjectId == projectId || currentSession.projectId == projectId {
+                syncActiveWorkspace()
+            }
+            setStatusMessage("Proje ayarları güncellendi")
+        } catch {
+            reportError(error, context: "Proje ayarları güncellenemedi")
         }
     }
 
@@ -1034,12 +1094,18 @@ final class AppModel {
             currentSession.messages.dropLast().map { $0 },
             maxContextTokens: effectiveContextLength
         )
-        if let webContext,
-           let userIndex = messagesForInference.lastIndex(where: { $0.role == .user }) {
+
+        // @file zenginleştirmesi
+        if let userIndex = messagesForInference.lastIndex(where: { $0.role == .user }) {
             var userMessage = messagesForInference[userIndex]
-            userMessage.content += "\n\n" + webContext
+            let (enrichedContent, _) = WorkspaceContextAssembler.enrichUserMessageWithMentionedFiles(userMessage.content)
+            userMessage.content = enrichedContent
+            if let webContext {
+                userMessage.content += "\n\n" + webContext
+            }
             messagesForInference[userIndex] = userMessage
         }
+
         let systemPrompt = effectiveSystemPrompt()
         streamingBuffer.begin(sessionId: activeSessionId, messageId: assistantMessageId)
         let stream = inferenceService.streamResponse(
@@ -1073,6 +1139,13 @@ final class AppModel {
                 logger.info(
                     "Send message success session=\(activeSessionId.uuidString) elapsed=\(Int(Date().timeIntervalSince(sendStartedAt) * 1000))ms"
                 )
+
+                // Araç çağrılarını işle (Codex / Agent Tools)
+                let toolCalls = AgentToolExecutor.shared.parseToolCalls(from: finalText)
+                AgentToolExecutor.shared.stageModifications(from: toolCalls)
+                for call in toolCalls where call.tool.isReadOnly {
+                    _ = AgentToolExecutor.shared.executeSafeToolCall(call)
+                }
             }
         } catch is CancellationError {
             await finishCancelledSend(

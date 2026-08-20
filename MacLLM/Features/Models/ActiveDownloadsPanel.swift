@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Tüm aktif ve yakın zamanda biten indirmeleri gösterir.
 struct ActiveDownloadsPanel: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     @ObservedObject var downloadService: HuggingFaceDownloadService
     var style: Style = .full
 

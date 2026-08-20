@@ -1,21 +1,27 @@
 import SwiftUI
 
+@MainActor
+final class ChatUIState: ObservableObject {
+    @Published var inputText = ""
+    @Published var pendingAttachments: [MessageAttachment] = []
+    @Published var showFileImporter = false
+    @Published var messageSearchText = ""
+    @Published var searchMatchIndex = 0
+    @Published var lastStreamingScrollAt: Date = .distantPast
+}
+
 struct ChatView: View {
     @Binding var showDownloadsPopover: Bool
-    @Environment(AppModel.self) private var appModel
-    @Environment(StreamingTextBuffer.self) private var streamingBuffer
+    @EnvironmentObject private var appModel: AppModel
+    private var streamingBuffer: StreamingTextBuffer { appModel.streamingBuffer }
     @EnvironmentObject private var inferenceService: InferenceService
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
-    @State private var inputText = ""
-    @State private var pendingAttachments: [MessageAttachment] = []
-    @State private var showFileImporter = false
-    @State private var messageSearchText = ""
-    @State private var searchMatchIndex = 0
-    @State private var lastStreamingScrollAt: Date = .distantPast
+    @ObservedObject private var toolExecutor = AgentToolExecutor.shared
+    @StateObject private var ui = ChatUIState()
     @FocusState private var inputFocused: Bool
 
     var body: some View {
-        @Bindable var model = appModel
+        let model = appModel
 
         VStack(spacing: 0) {
             DownloadSlimBar(
@@ -56,11 +62,11 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .appCanvasBackground()
         .navigationTitle("")
-        .searchable(text: $messageSearchText, prompt: "Bu sohbette ara")
+        .searchable(text: $ui.messageSearchText, prompt: "Bu sohbette ara")
         .toolbar {
             if !matchingMessageIds.isEmpty {
                 ToolbarItemGroup(placement: .automatic) {
-                    Text("\(searchMatchIndex + 1)/\(matchingMessageIds.count)")
+                    Text("\(ui.searchMatchIndex + 1)/\(matchingMessageIds.count)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Button { stepSearchMatch(delta: -1) } label: {
@@ -156,11 +162,41 @@ struct ChatView: View {
                         )
                         .id(message.id)
                     }
+
+                    if !toolExecutor.pendingPatches.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Önerilen Kod Değişiklikleri (Diff)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.secondaryText)
+                            ForEach(toolExecutor.pendingPatches) { patch in
+                                DiffViewerCardView(patch: patch)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+
+                    if !toolExecutor.pendingCommands.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Terminal Eylemleri")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.secondaryText)
+                            ForEach(toolExecutor.pendingCommands) { cmd in
+                                TerminalActionCardView(command: cmd)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
                 }
                 .padding(.horizontal, AppTheme.contentPadding)
                 .padding(.vertical, 16)
                 .frame(maxWidth: AppTheme.maxChatContentWidth)
                 .frame(maxWidth: .infinity)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("InsertFileMentionToComposer"))) { notif in
+                if let mention = notif.userInfo?["mention"] as? String {
+                    ui.inputText += mention
+                    inputFocused = true
+                }
             }
             .defaultScrollAnchor(.bottom)
             .scrollBounceBehavior(.basedOnSize, axes: .vertical)
@@ -179,22 +215,22 @@ struct ChatView: View {
                 guard inferenceService.isGenerating else { return }
                 guard messageSearchNeedle.isEmpty else { return }
                 let now = Date()
-                guard now.timeIntervalSince(lastStreamingScrollAt) >= 0.12 else { return }
-                lastStreamingScrollAt = now
+                guard now.timeIntervalSince(ui.lastStreamingScrollAt) >= 0.12 else { return }
+                ui.lastStreamingScrollAt = now
                 scrollToBottom(proxy: proxy, animated: false)
             }
-            .onChange(of: messageSearchText) { _, _ in
-                searchMatchIndex = 0
+            .onChange(of: ui.messageSearchText) { _, _ in
+                ui.searchMatchIndex = 0
                 scrollToSearchMatch(proxy: proxy)
             }
-            .onChange(of: searchMatchIndex) { _, _ in
+            .onChange(of: ui.searchMatchIndex) { _, _ in
                 scrollToSearchMatch(proxy: proxy)
             }
             .onChange(of: inferenceService.isGenerating) { _, isGenerating in
                 if !isGenerating {
                     model.scheduleContextTokenRefresh()
                 } else {
-                    lastStreamingScrollAt = .distantPast
+                    ui.lastStreamingScrollAt = .distantPast
                 }
             }
             .task {
@@ -206,12 +242,12 @@ struct ChatView: View {
     @ViewBuilder
     private func janComposer(model: AppModel) -> some View {
         VStack(spacing: 0) {
-            if !pendingAttachments.isEmpty {
+            if !ui.pendingAttachments.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(pendingAttachments) { attachment in
+                        ForEach(ui.pendingAttachments) { attachment in
                             PendingAttachmentChip(attachment: attachment) {
-                                pendingAttachments.removeAll { $0.id == attachment.id }
+                                ui.pendingAttachments.removeAll { $0.id == attachment.id }
                             }
                         }
                     }
@@ -220,7 +256,7 @@ struct ChatView: View {
                 .frame(height: AppTheme.composerAccessoryHeight)
             }
 
-            if let hint = model.composerHint(for: pendingAttachments) {
+            if let hint = model.composerHint(for: ui.pendingAttachments) {
                 composerHintRibbon(hint: hint) {
                     model.showCatalog = true
                 }
@@ -258,7 +294,7 @@ struct ChatView: View {
             handleDrop(providers, model: model)
         }
         .fileImporter(
-            isPresented: $showFileImporter,
+            isPresented: $ui.showFileImporter,
             allowedContentTypes: ChatAttachmentImporter.contentTypes(for: model.activeProfile),
             allowsMultipleSelection: true
         ) { result in
@@ -271,11 +307,11 @@ struct ChatView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 4) {
                 composerIconButton("plus", help: "Dosya ekle") {
-                    showFileImporter = true
+                    ui.showFileImporter = true
                 }
                 .disabled(inferenceBusy)
 
-                TextField("Bir şey sorun…", text: $inputText, axis: .vertical)
+                TextField("Bir şey sorun…", text: $ui.inputText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .lineLimit(1...12)
                     .focused($inputFocused)
@@ -368,8 +404,8 @@ struct ChatView: View {
     }
 
     private var canSend: Bool {
-        let hasContent = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !pendingAttachments.isEmpty
+        let hasContent = !ui.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !ui.pendingAttachments.isEmpty
         return hasContent
             && !attachmentWarningBlocksSend
             && appModel.selectedModel != nil
@@ -379,9 +415,9 @@ struct ChatView: View {
     }
 
     private var attachmentWarningBlocksSend: Bool {
-        appModel.composerHint(for: pendingAttachments)?.kind == .warning
-            && pendingAttachments.contains { $0.kind == .image || $0.kind == .video || $0.kind == .audio }
-            && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        appModel.composerHint(for: ui.pendingAttachments)?.kind == .warning
+            && ui.pendingAttachments.contains { $0.kind == .image || $0.kind == .video || $0.kind == .audio }
+            && ui.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var inferenceBusy: Bool {
@@ -398,7 +434,7 @@ struct ChatView: View {
         if !inferenceService.isModelLoaded {
             return "Model bellekte değil"
         }
-        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && pendingAttachments.isEmpty {
+        if ui.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && ui.pendingAttachments.isEmpty {
             return "Mesaj yazın veya dosya ekleyin"
         }
         if attachmentWarningBlocksSend {
@@ -504,7 +540,7 @@ struct ChatView: View {
     }
 
     private var messageSearchNeedle: String {
-        messageSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        ui.messageSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var matchingMessageIds: [UUID] {
@@ -526,13 +562,13 @@ struct ChatView: View {
     private func stepSearchMatch(delta: Int) {
         let count = matchingMessageIds.count
         guard count > 0 else { return }
-        searchMatchIndex = (searchMatchIndex + delta + count) % count
+        ui.searchMatchIndex = (ui.searchMatchIndex + delta + count) % count
     }
 
     private func scrollToSearchMatch(proxy: ScrollViewProxy) {
         let ids = matchingMessageIds
         guard !ids.isEmpty else { return }
-        let index = min(max(searchMatchIndex, 0), ids.count - 1)
+        let index = min(max(ui.searchMatchIndex, 0), ids.count - 1)
         withAnimation(.easeOut(duration: 0.2)) {
             proxy.scrollTo(ids[index], anchor: .center)
         }
@@ -568,7 +604,7 @@ struct ChatView: View {
                             &attachment,
                             sessionId: model.currentSession.id
                         )
-                        pendingAttachments.append(attachment)
+                        ui.pendingAttachments.append(attachment)
                     } catch {
                         model.setStatusMessage(UserErrorFormatter.message(for: error), persistent: true)
                     }
@@ -602,11 +638,11 @@ struct ChatView: View {
 
     private func send() {
         guard !inferenceBusy else { return }
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
-        let attachments = pendingAttachments
-        inputText = ""
-        pendingAttachments = []
+        let text = ui.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty || !ui.pendingAttachments.isEmpty else { return }
+        let attachments = ui.pendingAttachments
+        ui.inputText = ""
+        ui.pendingAttachments = []
         Task {
             await appModel.sendMessage(text, pendingAttachments: attachments)
         }

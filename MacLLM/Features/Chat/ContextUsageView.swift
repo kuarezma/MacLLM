@@ -1,12 +1,17 @@
 import SwiftUI
 
+@MainActor
+final class ContextUsageUIState: ObservableObject {
+    @Published var showDetail = false
+}
+
 struct ContextUsageView: View {
     let usedTokens: Int
     let maxTokens: Int
     var trainingContextTokens: Int? = nil
     var exceedsTrainingContext: Bool = false
     var isEstimate: Bool = false
-    @State private var showDetail = false
+    @StateObject private var ui = ContextUsageUIState()
 
     private var fraction: Double {
         guard maxTokens > 0 else { return 0 }
@@ -32,7 +37,7 @@ struct ContextUsageView: View {
 
     var body: some View {
         Button {
-            showDetail.toggle()
+            ui.showDetail.toggle()
         } label: {
             ZStack {
                 Circle()
@@ -59,7 +64,7 @@ struct ContextUsageView: View {
         .buttonStyle(ModernScaleButtonStyle())
         .appHitTarget(minWidth: 36, minHeight: 36)
         .help(helpText)
-        .popover(isPresented: $showDetail, arrowEdge: .top) {
+        .popover(isPresented: $ui.showDetail, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(percentText)

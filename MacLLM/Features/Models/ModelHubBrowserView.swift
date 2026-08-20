@@ -3,17 +3,23 @@ import AppKit
 
 /// LM Studio tarzı split Hub — sol arama listesi, sağ detay paneli.
 @MainActor
-struct ModelHubBrowserView: View {
-    @Environment(AppModel.self) private var appModel
-    @Environment(\.dismiss) private var dismiss
+final class ModelHubBrowserUIState: ObservableObject {
+    @Published var searchText = ""
+    @Published var results: [HFModelSummary] = []
+    @Published var selectedRepo: HFModelSummary?
+    @Published var isSearching = false
+    @Published var searchError: String?
+    @Published var sortOrder: HubSearchSort = .bestMatch
+    @Published var searchTask: Task<Void, Never>?
+}
 
-    @State private var searchText = ""
-    @State private var results: [HFModelSummary] = []
-    @State private var selectedRepo: HFModelSummary?
-    @State private var isSearching = false
-    @State private var searchError: String?
-    @State private var sortOrder: HubSearchSort = .bestMatch
-    @State private var searchTask: Task<Void, Never>?
+/// LM Studio tarzı split Hub — sol arama listesi, sağ detay paneli.
+@MainActor
+struct ModelHubBrowserView: View {
+    @EnvironmentObject private var appModel: AppModel
+    @Environment(\.presentationMode) private var presentationMode
+
+    @StateObject private var ui = ModelHubBrowserUIState()
 
     private let sidebarWidth: CGFloat = 340
 
@@ -39,18 +45,18 @@ struct ModelHubBrowserView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
 
-            if let searchError {
+            if let searchError = ui.searchError {
                 Text(searchError)
                     .font(.caption)
                     .foregroundStyle(.red)
                     .padding(.horizontal, 12)
             }
 
-            if isSearching, results.isEmpty {
+            if ui.isSearching, ui.results.isEmpty {
                 Spacer()
                 ProgressView("Aranıyor…")
                 Spacer()
-            } else if results.isEmpty {
+            } else if ui.results.isEmpty {
                 Spacer()
                 ContentUnavailableView {
                     Label("Model ara", systemImage: "magnifyingglass")
@@ -61,14 +67,14 @@ struct ModelHubBrowserView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(results) { model in
+                        ForEach(ui.results) { model in
                             HubSearchResultRow(
                                 model: model,
-                                isSelected: selectedRepo?.id == model.id,
+                                isSelected: ui.selectedRepo?.id == model.id,
                                 profile: appModel.systemProfile
                             )
                             .contentShape(Rectangle())
-                            .onTapGesture { selectedRepo = model }
+                            .onTapGesture { ui.selectedRepo = model }
                             Divider().padding(.leading, HubSearchRowLayout.dividerLeadingInset)
                         }
                     }
@@ -84,13 +90,13 @@ struct ModelHubBrowserView: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(AppTheme.secondaryText)
-            TextField("Model ara…", text: $searchText)
+            TextField("Model ara…", text: $ui.searchText)
                 .textFieldStyle(.plain)
                 .onSubmit { scheduleSearch() }
-                .onChange(of: searchText) { _, _ in scheduleSearch() }
-            if !searchText.isEmpty {
+                .onChange(of: ui.searchText) { _, _ in scheduleSearch() }
+            if !ui.searchText.isEmpty {
                 Button {
-                    searchText = ""
+                    ui.searchText = ""
                     scheduleSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -98,7 +104,7 @@ struct ModelHubBrowserView: View {
                 }
                 .buttonStyle(.plain)
             }
-            if isSearching {
+            if ui.isSearching {
                 ProgressView().controlSize(.small)
             }
         }
@@ -114,7 +120,7 @@ struct ModelHubBrowserView: View {
 
     private var filterBar: some View {
         HStack(spacing: 8) {
-            Text("\(results.count) model")
+            Text("\(ui.results.count) model")
                 .font(.caption)
                 .foregroundStyle(AppTheme.secondaryText)
 
@@ -125,10 +131,10 @@ struct ModelHubBrowserView: View {
             Menu {
                 ForEach(HubSearchSort.allCases) { sort in
                     Button {
-                        sortOrder = sort
+                        ui.sortOrder = sort
                         scheduleSearch()
                     } label: {
-                        if sortOrder == sort {
+                        if ui.sortOrder == sort {
                             Label(sort.label, systemImage: "checkmark")
                         } else {
                             Text(sort.label)
@@ -137,7 +143,7 @@ struct ModelHubBrowserView: View {
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Text(sortOrder.label)
+                    Text(ui.sortOrder.label)
                         .font(.caption)
                     Image(systemName: "chevron.down")
                         .font(.caption2)
@@ -170,8 +176,8 @@ struct ModelHubBrowserView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        if let selectedRepo {
-            HubDetailPane(repo: selectedRepo, onUseModel: { dismiss() })
+        if let selectedRepo = ui.selectedRepo {
+            HubDetailPane(repo: selectedRepo, onUseModel: { presentationMode.wrappedValue.dismiss() })
         } else {
             VStack(spacing: 12) {
                 Image(systemName: "square.grid.2x2")
@@ -186,8 +192,8 @@ struct ModelHubBrowserView: View {
     }
 
     private func scheduleSearch() {
-        searchTask?.cancel()
-        searchTask = Task {
+        ui.searchTask?.cancel()
+        ui.searchTask = Task {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             await runSearch()
@@ -195,28 +201,28 @@ struct ModelHubBrowserView: View {
     }
 
     private func runSearch() async {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = ui.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.count < 2 {
-            results = []
-            selectedRepo = nil
-            searchError = nil
-            isSearching = false
+            ui.results = []
+            ui.selectedRepo = nil
+            ui.searchError = nil
+            ui.isSearching = false
             return
         }
-        isSearching = true
-        searchError = nil
-        defer { isSearching = false }
+        ui.isSearching = true
+        ui.searchError = nil
+        defer { ui.isSearching = false }
         do {
             let fetched = try await HuggingFaceHubService.shared.searchModels(
                 query: query,
-                sort: sortOrder
+                sort: ui.sortOrder
             )
-            results = fetched
-            if selectedRepo == nil || !fetched.contains(where: { $0.id == selectedRepo?.id }) {
-                selectedRepo = fetched.first
+            ui.results = fetched
+            if ui.selectedRepo == nil || !fetched.contains(where: { $0.id == ui.selectedRepo?.id }) {
+                ui.selectedRepo = fetched.first
             }
         } catch {
-            searchError = UserErrorFormatter.details(for: error).displayText
+            ui.searchError = UserErrorFormatter.details(for: error).displayText
         }
     }
 }
@@ -402,24 +408,29 @@ private struct HubSearchStatusIcons: View {
 }
 
 @MainActor
+final class HubDetailPaneUIState: ObservableObject {
+    @Published var detail: HFRepoDetail?
+    @Published var readmeText: String?
+    @Published var isLoading = true
+    @Published var loadError: String?
+    @Published var selectedFileId: String?
+    @Published var readmeExpanded = false
+}
+
+@MainActor
 struct HubDetailPane: View {
-    @Environment(AppModel.self) private var appModel
+    @EnvironmentObject private var appModel: AppModel
     @ObservedObject private var downloadService = HuggingFaceDownloadService.shared
 
     let repo: HFModelSummary
     var onUseModel: (() -> Void)?
 
-    @State private var detail: HFRepoDetail?
-    @State private var readmeText: String?
-    @State private var isLoading = true
-    @State private var loadError: String?
-    @State private var selectedFileId: String?
-    @State private var readmeExpanded = false
+    @StateObject private var ui = HubDetailPaneUIState()
 
-    private var files: [HFGGUFile] { detail?.files ?? [] }
+    private var files: [HFGGUFile] { ui.detail?.files ?? [] }
     private var modelFiles: [HFGGUFile] { files.filter(\.isModelWeights) }
     private var mmprojFile: HFGGUFile? { MmprojDiscovery.findInRepo(files: files) }
-    private var gated: Bool { detail?.gated == true || repo.gated }
+    private var gated: Bool { ui.detail?.gated == true || repo.gated }
 
     private var fitLevelsByFileId: [String: ModelFitLevel] {
         Dictionary(uniqueKeysWithValues: assessmentsByFileId.map { ($0.key, $0.value.fit) })
@@ -440,7 +451,7 @@ struct HubDetailPane: View {
 
     private var recommendedFile: HFGGUFile? {
         guard !modelFiles.isEmpty else { return nil }
-        if let id = selectedFileId, let file = modelFiles.first(where: { $0.id == id }) { return file }
+        if let id = ui.selectedFileId, let file = modelFiles.first(where: { $0.id == id }) { return file }
         if let ideal = modelFiles.first(where: { fitLevelsByFileId[$0.id] == .ideal }) { return ideal }
         if let workable = modelFiles.first(where: { fitLevelsByFileId[$0.id] == .workable }) { return workable }
         return modelFiles.first
@@ -449,11 +460,11 @@ struct HubDetailPane: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if isLoading {
+                if ui.isLoading {
                     ProgressView("Depo yükleniyor…")
                         .frame(maxWidth: .infinity)
                         .padding(48)
-                } else if let loadError {
+                } else if let loadError = ui.loadError {
                     ContentUnavailableView("Yüklenemedi", systemImage: "exclamationmark.triangle", description: Text(loadError))
                         .padding(40)
                 } else {
@@ -506,8 +517,8 @@ struct HubDetailPane: View {
             }
 
             HStack(spacing: 16) {
-                Label(ModelMetadataParser.formatCount(detail?.downloads ?? repo.downloads), systemImage: "arrow.down.circle")
-                Label(ModelMetadataParser.formatCount(detail?.likes ?? repo.likes), systemImage: "heart")
+                Label(ModelMetadataParser.formatCount(ui.detail?.downloads ?? repo.downloads), systemImage: "arrow.down.circle")
+                Label(ModelMetadataParser.formatCount(ui.detail?.likes ?? repo.likes), systemImage: "heart")
                 if let updated = ModelMetadataParser.relativeDate(repo.lastModified) {
                     Label(updated, systemImage: "clock")
                 }
@@ -518,7 +529,7 @@ struct HubDetailPane: View {
             .font(.caption)
             .foregroundStyle(AppTheme.secondaryText)
 
-            if let description = detail?.description ?? repo.summary, !description.isEmpty {
+            if let description = ui.detail?.description ?? repo.summary, !description.isEmpty {
                 Text(description)
                     .font(.body)
                     .foregroundStyle(AppTheme.primaryText)
@@ -530,17 +541,17 @@ struct HubDetailPane: View {
     @ViewBuilder
     private var metadataGrid: some View {
         HStack(spacing: 12) {
-            if let params = repo.parameterSizeBadge ?? detail?.parameterSizeBadge {
+            if let params = repo.parameterSizeBadge ?? ui.detail?.parameterSizeBadge {
                 HubMetaChip(title: "Params", value: params)
             }
             if let arch = repo.architecture {
                 HubMetaChip(title: "Arch", value: arch)
             }
-            if let domain = detail?.pipelineTag ?? repo.pipelineTag {
+            if let domain = ui.detail?.pipelineTag ?? repo.pipelineTag {
                 HubMetaChip(title: "Domain", value: domain)
             }
             HubMetaChip(title: "Format", value: "GGUF", accent: .blue)
-            if let license = detail?.license {
+            if let license = ui.detail?.license {
                 HubMetaChip(title: "License", value: license)
             }
             Spacer()
@@ -549,7 +560,7 @@ struct HubDetailPane: View {
 
     @ViewBuilder
     private var capabilitiesSection: some View {
-        let caps = ModelMetadataParser.capabilityTags(from: detail?.tags ?? repo.tags)
+        let caps = ModelMetadataParser.capabilityTags(from: ui.detail?.tags ?? repo.tags)
         if !caps.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Capabilities")
@@ -618,7 +629,7 @@ struct HubDetailPane: View {
             ForEach(modelFiles) { file in
                 let assessment = assessmentsByFileId[file.id]
                 Button {
-                    selectedFileId = file.id
+                    ui.selectedFileId = file.id
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
@@ -723,7 +734,7 @@ struct HubDetailPane: View {
 
     @ViewBuilder
     private var readmeSection: some View {
-        if let readmeText, !readmeText.isEmpty {
+        if let readmeText = ui.readmeText, !readmeText.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Model kartı")
                     .font(.caption.weight(.semibold))
@@ -731,13 +742,13 @@ struct HubDetailPane: View {
                     .textCase(.uppercase)
 
                 ReadmeMarkdownView(
-                    markdown: readmeExpanded ? readmeText : String(readmeText.prefix(2000)),
-                    maxHeight: readmeExpanded ? 480 : 240
+                    markdown: ui.readmeExpanded ? readmeText : String(readmeText.prefix(2000)),
+                    maxHeight: ui.readmeExpanded ? 480 : 240
                 )
 
                 if readmeText.count > 2000 {
-                    Button(readmeExpanded ? "Daha az" : "Tamamını göster") {
-                        withAnimation { readmeExpanded.toggle() }
+                    Button(ui.readmeExpanded ? "Daha az" : "Tamamını göster") {
+                        withAnimation { ui.readmeExpanded.toggle() }
                     }
                     .font(.caption)
                     .buttonStyle(.link)
@@ -762,24 +773,24 @@ struct HubDetailPane: View {
     }
 
     private func loadRepo() async {
-        isLoading = true
-        loadError = nil
-        selectedFileId = nil
-        defer { isLoading = false }
+        ui.isLoading = true
+        ui.loadError = nil
+        ui.selectedFileId = nil
+        defer { ui.isLoading = false }
         do {
             async let detailTask = HuggingFaceHubService.shared.fetchRepoDetail(repoId: repo.repoId)
             async let readmeTask = HuggingFaceHubService.shared.fetchReadme(repoId: repo.repoId)
             let (fetchedDetail, fetchedReadme) = try await (detailTask, readmeTask)
-            detail = fetchedDetail
-            readmeText = fetchedReadme
+            ui.detail = fetchedDetail
+            ui.readmeText = fetchedReadme
             if let best = recommendedFileIdAfterLoad(files: fetchedDetail.files) {
-                selectedFileId = best
+                ui.selectedFileId = best
             }
             if fetchedDetail.files.isEmpty {
-                loadError = "Bu depoda .gguf dosyası bulunamadı."
+                ui.loadError = "Bu depoda .gguf dosyası bulunamadı."
             }
         } catch {
-            loadError = UserErrorFormatter.details(for: error).displayText
+            ui.loadError = UserErrorFormatter.details(for: error).displayText
         }
     }
 

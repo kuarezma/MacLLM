@@ -1,17 +1,21 @@
 import SwiftUI
 
+@MainActor
+final class MessageMarkdownUIState: ObservableObject {
+    @Published var cachedHash: Int = 0
+    @Published var cachedBlocks: [MarkdownBlock] = []
+}
+
 struct MessageMarkdownView: View {
     let text: String
     var isStreaming: Bool = false
-
-    @State private var cachedHash: Int = 0
-    @State private var cachedBlocks: [MarkdownBlock] = []
+    @StateObject private var ui = MessageMarkdownUIState()
 
     private var blocks: [MarkdownBlock] {
         if isStreaming { return [] }
         let hash = text.hashValue
-        if hash == cachedHash, !cachedBlocks.isEmpty {
-            return cachedBlocks
+        if hash == ui.cachedHash, !ui.cachedBlocks.isEmpty {
+            return ui.cachedBlocks
         }
         return MarkdownContentParser.blocks(from: text)
     }
@@ -51,13 +55,13 @@ struct MessageMarkdownView: View {
         }
         .onChange(of: text) { _, newValue in
             guard !isStreaming else { return }
-            cachedHash = newValue.hashValue
-            cachedBlocks = MarkdownContentParser.blocks(from: newValue)
+            ui.cachedHash = newValue.hashValue
+            ui.cachedBlocks = MarkdownContentParser.blocks(from: newValue)
         }
         .onAppear {
             guard !isStreaming else { return }
-            cachedHash = text.hashValue
-            cachedBlocks = MarkdownContentParser.blocks(from: text)
+            ui.cachedHash = text.hashValue
+            ui.cachedBlocks = MarkdownContentParser.blocks(from: text)
         }
     }
 }

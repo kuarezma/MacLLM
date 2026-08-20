@@ -1,13 +1,12 @@
 import Foundation
-import Observation
+import Combine
 
 @MainActor
-@Observable
-final class StreamingTextBuffer {
-    var text: String = ""
-    var sessionId: UUID?
-    var messageId: UUID?
-    var isActive: Bool = false
+final class StreamingTextBuffer: ObservableObject {
+    @Published var text: String = ""
+    @Published var sessionId: UUID?
+    @Published var messageId: UUID?
+    @Published var isActive: Bool = false
 
     private var pendingText = ""
     private var publishTask: Task<Void, Never>?

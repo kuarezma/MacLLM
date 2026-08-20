@@ -4,16 +4,14 @@ import UserNotifications
 @main
 struct MacLLMApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var shell = AppShell()
-    @State private var appUpdate = AppUpdateController.shared
+    private let shell = AppShell()
+    private let appUpdate = AppUpdateController.shared
     @StateObject private var inferenceService = InferenceService.shared
 
     var body: some Scene {
         WindowGroup {
             MainView()
-                .environment(shell.appModel)
-                .environment(shell.streamingBuffer)
-                .environment(appUpdate)
+                .environmentObject(shell.appModel)
                 .environmentObject(inferenceService)
                 .frame(minWidth: 960, minHeight: 640)
                 .tint(AppTheme.accent)
@@ -56,8 +54,7 @@ struct MacLLMApp: App {
 
         Settings {
             SettingsView()
-                .environment(shell.appModel)
-                .environment(appUpdate)
+                .environmentObject(shell.appModel)
                 .environmentObject(inferenceService)
         }
     }

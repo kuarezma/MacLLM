@@ -65,6 +65,39 @@
       "chatTemplate": "llama3",
       "ramHintGB": 10,
       "minPhysicalRamGB": 16
+    },
+    {
+      "id": "qwen2.5-coder-1.5b-instruct-q4",
+      "name": "Qwen 2.5 Coder 1.5B (Q4_K_M)",
+      "description": "Hafif & hızlı yerel kodlama asistanı — 8 GB RAM için ideal.",
+      "repoId": "bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+      "filename": "Qwen2.5-Coder-1.5B-Instruct-Q4_K_M.gguf",
+      "estimatedSizeBytes": 1100000000,
+      "chatTemplate": "chatml",
+      "ramHintGB": 3,
+      "minPhysicalRamGB": 8
+    },
+    {
+      "id": "qwen2.5-coder-7b-instruct-q4",
+      "name": "Qwen 2.5 Coder 7B (Q4_K_M)",
+      "description": "Kod geliştirme, diff ve hata ayıklamada lider açık kaynak model.",
+      "repoId": "bartowski/Qwen2.5-Coder-7B-Instruct-GGUF",
+      "filename": "Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf",
+      "estimatedSizeBytes": 4700000000,
+      "chatTemplate": "chatml",
+      "ramHintGB": 8,
+      "minPhysicalRamGB": 12
+    },
+    {
+      "id": "deepseek-r1-distill-qwen-7b-q4",
+      "name": "DeepSeek R1 Distill Qwen 7B (Q4_K_M)",
+      "description": "Düşünce zinciri ve derin mantıksal problem çözme modeli.",
+      "repoId": "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF",
+      "filename": "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+      "estimatedSizeBytes": 4700000000,
+      "chatTemplate": "chatml",
+      "ramHintGB": 8,
+      "minPhysicalRamGB": 12
     }
   ]
 }

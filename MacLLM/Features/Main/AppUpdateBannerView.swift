@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AppUpdateBannerView: View {
-    @Environment(AppUpdateController.self) private var appUpdate
+    @ObservedObject private var appUpdate = AppUpdateController.shared
 
     var body: some View {
         if let update = appUpdate.availableUpdate {
